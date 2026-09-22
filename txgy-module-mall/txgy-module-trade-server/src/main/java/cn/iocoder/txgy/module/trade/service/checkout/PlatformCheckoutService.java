@@ -61,11 +61,9 @@ import static cn.iocoder.txgy.module.trade.enums.ErrorCodeConstants.PLATFORM_CHE
 /**
  * 平台跨租户结算服务。
  *
- * <p>当前版本完整实现服务端商品归属重读、按租户/店铺拆分、按真实租户运费模板核算和金额预览，
- * 并允许提交不可支付的规划草稿。
- * 原因是普通 {@code TradeOrderUpdateService#createOrder} 会在每个子单创建后立即创建独立支付单，并执行
- * 单租户优惠、地址和库存副作用；在原子子订单与聚合支付尚未建立前直接复用会产生可支付半成品。
- * 因此本服务绝不根据客户端传入租户、店铺或金额；规划草稿不会写业务订单、支付事实或库存副作用。</p>
+ * <p>服务端重读商品归属，按租户和店铺核算运费并保存不可变快照；提交后由
+ * {@link PlatformCheckoutOrderService} 生成正式子订单和统一支付单。客户端传入的租户、店铺和金额
+ * 均不作为交易依据。</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -77,10 +75,8 @@ public class PlatformCheckoutService {
     static final String DRAFT_AGGREGATE_STATUS = "DRAFT_ONLY";
     static final String DRAFT_PAY_STATUS = "NOT_PAYABLE";
     static final String DRAFT_PLAN_STATUS = "DRAFT_ONLY";
-    static final String SUBMIT_BLOCK_REASON =
-            "原子子订单与聚合支付尚未接通，当前预览金额不能用于支付";
     static final String DRAFT_BLOCK_REASON =
-            "仅保存经服务端复核的拆单规划；尚未生成业务订单、支付单或库存占用";
+            "等待生成正式店铺订单";
 
     private final PlatformCartMapper cartMapper;
     private final ProductPublicSkuApi publicSkuApi;
@@ -92,6 +88,7 @@ public class PlatformCheckoutService {
     private final PlatformCheckoutPlanItemMapper planItemMapper;
     private final TradeNoRedisDAO tradeNoRedisDAO;
     private final PlatformCheckoutFreightService freightService;
+    private final PlatformCheckoutOrderService orderService;
 
     @Transactional(readOnly = true)
     public AppPlatformCheckoutPreviewRespVO preview(Long legacyMemberId, Long sourceTenantId,
@@ -101,9 +98,7 @@ public class PlatformCheckoutService {
         return buildPreview(context.platformAccountId(), request.getCartItemIds(), context.address());
     }
 
-    /**
-     * 幂等保存不可支付的拆单规划快照。这里不创建真实订单/支付单、不扣库存，也不清购物车。
-     */
+    /** 幂等保存拆单快照，并生成正式店铺子订单和统一支付单。 */
     @Transactional(rollbackFor = Exception.class)
     public AppPlatformCheckoutDetailRespVO submit(Long legacyMemberId, Long sourceTenantId,
                                                    AppPlatformCheckoutSubmitReqVO request) {
@@ -120,7 +115,7 @@ public class PlatformCheckoutService {
                     requestDigest.getBytes(StandardCharsets.US_ASCII))) {
                 throw exception(PLATFORM_CHECKOUT_IDEMPOTENCY_CONFLICT);
             }
-            return loadDetail(existing);
+            return loadDetail(orderService.formalize(existing, legacyMemberId, sourceTenantId));
         }
 
         AppPlatformCheckoutPreviewRespVO preview = buildPreview(platformAccountId, cartItemIds, context.address());
@@ -148,8 +143,8 @@ public class PlatformCheckoutService {
             return loadDetail(claimed);
         }
 
-        PlanSnapshot snapshot = persistPlanSnapshot(claimed, preview);
-        return buildDetail(claimed, List.of(), List.of(), snapshot.plans(), snapshot.items());
+        persistPlanSnapshot(claimed, preview);
+        return loadDetail(orderService.formalize(claimed, legacyMemberId, sourceTenantId));
     }
 
     @Transactional(readOnly = true)
@@ -239,7 +234,6 @@ public class PlatformCheckoutService {
         } else {
             blockingReasons.add("部分租户或店铺运费未能由服务端核定，请按明细处理");
         }
-        blockingReasons.add(SUBMIT_BLOCK_REASON);
         return new AppPlatformCheckoutPreviewRespVO()
                 .setPlatformAccountId(platformAccountId).setCurrency(CURRENCY_CNY)
                 .setValidItemCount(validItemCount).setTotalQuantity(totalQuantity)
@@ -247,7 +241,7 @@ public class PlatformCheckoutService {
                 .setPayAmount(payAmount).setFreightReady(freightReady)
                 .setValidationPassed(failedItems.isEmpty() && freightReady)
                 .setAddress(toAddress(address))
-                .setSubmittable(false).setBlockingReasons(List.copyOf(blockingReasons))
+                .setSubmittable(failedItems.isEmpty() && freightReady).setBlockingReasons(List.copyOf(blockingReasons))
                 .setTenantGroups(tenantGroups.values().stream().map(TenantAccumulator::toResponse).toList())
                 .setFailedItems(List.copyOf(failedItems));
     }
@@ -571,7 +565,8 @@ public class PlatformCheckoutService {
                 .setFailureReason(checkout.getFailureReason()).setRemark(checkout.getRemark())
                 .setPlatformPayOrderId(checkout.getPlatformPayOrderId())
                 .setPlatformPayOrderNo(checkout.getPlatformPayOrderNo())
-                .setAddress(toAddress(checkout)).setPayable(false)
+                .setAddress(toAddress(checkout)).setPayable(checkout.getPlatformPayOrderId() != null
+                        && "UNPAID".equals(checkout.getPayStatus()))
                 .setPlanningOnly(DRAFT_AGGREGATE_STATUS.equals(derivedAggregateStatus))
                 .setCreateTime(checkout.getCreateTime())
                 .setChildOrders(orders.stream().map(PlatformCheckoutService::toChildOrder).toList())

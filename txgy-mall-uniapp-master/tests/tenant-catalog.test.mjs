@@ -26,7 +26,7 @@ test('failed catalog rejects without caching a fabricated product list', async (
   h.response({ code: 0, data: { list: [] } }); assert.deepEqual((await h.load()).products, []); assert.equal(h.calls(), 2);
 });
 
-test('tenant-specific categories retain every product and omit empty categories', async () => {
+test('tenant-specific categories group populated leaves under their root and omit empty roots', async () => {
   const h = harness();
   h.tenant('2009');
   h.categories({ code: 0, data: [
@@ -40,8 +40,9 @@ test('tenant-specific categories retain every product and omit empty categories'
     { id: 2, name: '聚氨酯面漆', categoryId: 940003 },
   ] } });
   const catalog = await h.load();
-  assert.deepEqual(catalog.categories.map(item => item.name), ['底漆与中间漆', '防腐面漆']);
-  assert.deepEqual(catalog.products.map(item => item.categoryKey), ['category-940002', 'category-940003']);
+  assert.deepEqual(catalog.categories.map(item => item.name), ['全部商品', '防腐材料']);
+  assert.deepEqual(catalog.categories[1].categoryIds, [940002, 940003]);
+  assert.deepEqual(catalog.products.map(item => item.categoryKey), ['category-group-940001', 'category-group-940001']);
 });
 
 test('an old tenant catalog response cannot populate the newly selected tenant cache', async () => {

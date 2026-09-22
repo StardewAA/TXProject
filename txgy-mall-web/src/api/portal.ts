@@ -44,13 +44,13 @@ export interface PortalHotTenant extends PortalTenant {
 }
 
 export const portalApi = {
-  getProducts: (params: { pageNo: number; pageSize: number; keyword?: string; categoryId?: Identifier }) =>
+  getProducts: (params: { pageNo: number; pageSize: number; keyword?: string; categoryId?: Identifier; sortField?: 'price' | 'sales'; sortAsc?: boolean }) =>
     request<PageResult<PortalProduct>>({ url: '/mall/portal/products', params, scope: 'entry' }),
   getHotTenants: (window: '7d' | '30d', limit = 12) =>
     request<PortalHotTenant[]>({ url: '/mall/portal/tenants/hot', params: { window, limit }, scope: 'entry' }),
   getTenant: (tenantSlug: string) =>
     request<PortalTenant>({ url: `/mall/tenants/${encodeURIComponent(tenantSlug)}`, scope: 'entry' }),
-  getTenantProducts: (tenantSlug: string, params: { pageNo: number; pageSize: number; keyword?: string; categoryId?: Identifier }) =>
+  getTenantProducts: (tenantSlug: string, params: { pageNo: number; pageSize: number; keyword?: string; categoryId?: Identifier; sortField?: 'price' | 'sales'; sortAsc?: boolean }) =>
     request<PageResult<PortalProduct>>({ url: `/mall/tenants/${encodeURIComponent(tenantSlug)}/products`, params, scope: 'entry' }),
   getProduct: (spuId: Identifier) =>
     request<PortalProduct>({ url: `/mall/portal/products/${encodeURIComponent(String(spuId))}`, scope: 'entry' }),

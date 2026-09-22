@@ -34,15 +34,19 @@ let pollTimer = 0
 let channelsKey = ''
 let disposed = false
 let lastPoll = 0
+const platformCheckoutEntry = computed(() => typeof route.query.platformCheckout === 'string' && route.query.platformCheckout.trim() !== '')
 const returnPath = computed(() => {
   const redirect = route.query.redirect
   return typeof redirect === 'string' && /^\/(?!\/)/.test(redirect)
-    ? redirect : route.query.orderId ? `/member/orders/${route.query.orderId}` : '/member/orders'
+    ? redirect
+    : platformCheckoutEntry.value
+      ? '/member/platform-checkouts'
+      : route.query.orderId ? `/member/orders/${route.query.orderId}` : '/member/orders'
 })
 const amount = computed(() => Number(order.value?.price ?? order.value?.amount ?? 0))
 const walletEntry = computed(() => isWalletCashierEntry(route.query))
-const requiresTradeOrder = computed(() => !walletEntry.value)
-const routeKey = computed(() => `${route.params.orderId}|${route.query.orderId || ''}|${returnPath.value}`)
+const requiresTradeOrder = computed(() => !walletEntry.value && !platformCheckoutEntry.value)
+const routeKey = computed(() => `${route.params.orderId}|${route.query.orderId || ''}|${route.query.platformCheckout || ''}|${returnPath.value}`)
 const clock = usePaymentClock(() => load())
 const deadlineState = computed(() => cashierPaymentState(order.value, clock.now.value, tradeOrder.value, requiresTradeOrder.value))
 

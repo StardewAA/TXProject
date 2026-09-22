@@ -27,6 +27,8 @@ public class AppPortalProductRespVO {
     private String description;
     private String picUrl;
     private Long categoryId;
+    private String categoryName;
+    private String categoryGroupName;
     /** 最低公开售价，单位：分。 */
     private Integer price;
     private Integer salesCount;

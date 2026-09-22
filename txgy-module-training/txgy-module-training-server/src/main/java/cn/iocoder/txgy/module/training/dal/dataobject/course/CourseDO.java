@@ -57,9 +57,13 @@ public class CourseDO extends TenantBaseDO {
      */
     private String subtitle;
     /**
-     * 课程简介
+     * 课程简介（课程概述）
      */
     private String summary;
+    /**
+     * 授课目标
+     */
+    private String objectives;
     /**
      * 封面图 URL
      */

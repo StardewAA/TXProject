@@ -49,7 +49,7 @@ class MallPortalCatalogServiceTest {
         sku.setPicUrl("sku.png");
         sku.setPrice(1299);
         when(mapper.countProducts(null, "coating", 88L)).thenReturn(1L);
-        when(mapper.selectProducts(null, "coating", 88L, 10L, 10)).thenReturn(List.of(row));
+        when(mapper.selectProducts(null, "coating", 88L, null, null, 10L, 10)).thenReturn(List.of(row));
         when(mapper.selectPublicSkus(List.of(501L))).thenReturn(List.of(sku));
 
         PageResult<AppPortalProductRespVO> result = service.getProducts(request);

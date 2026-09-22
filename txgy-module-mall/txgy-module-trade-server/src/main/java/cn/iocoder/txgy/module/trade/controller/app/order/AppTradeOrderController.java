@@ -19,6 +19,7 @@ import cn.iocoder.txgy.module.trade.service.aftersale.AfterSaleService;
 import cn.iocoder.txgy.module.trade.service.delivery.DeliveryExpressService;
 import cn.iocoder.txgy.module.trade.service.order.TradeOrderQueryService;
 import cn.iocoder.txgy.module.trade.service.order.TradeOrderUpdateService;
+import cn.iocoder.txgy.module.trade.service.checkout.PlatformCheckoutOrderService;
 import cn.iocoder.txgy.module.trade.service.order.TradeOrderPaymentDeadlineService;
 import cn.iocoder.txgy.module.trade.service.price.TradePriceService;
 import com.google.common.collect.Maps;
@@ -54,6 +55,8 @@ public class AppTradeOrderController {
 
     @Resource
     private TradeOrderUpdateService tradeOrderUpdateService;
+    @Resource
+    private PlatformCheckoutOrderService platformCheckoutOrderService;
     @Resource
     private TradeOrderQueryService tradeOrderQueryService;
     @Resource
@@ -122,8 +125,12 @@ public class AppTradeOrderController {
     @Operation(summary = "更新订单为已支付") // 由 pay-module 支付服务，进行回调，可见 PayNotifyJob
     @PermitAll
     public CommonResult<Boolean> updateOrderPaid(@RequestBody PayOrderNotifyReqDTO notifyReqDTO) {
-        tradeOrderUpdateService.updateOrderPaid(Long.valueOf(notifyReqDTO.getMerchantOrderId()),
-                notifyReqDTO.getPayOrderId());
+        Long merchantOrderId = Long.valueOf(notifyReqDTO.getMerchantOrderId());
+        if (merchantOrderId < 0) {
+            platformCheckoutOrderService.updatePaid(-merchantOrderId, notifyReqDTO.getPayOrderId());
+        } else {
+            tradeOrderUpdateService.updateOrderPaid(merchantOrderId, notifyReqDTO.getPayOrderId());
+        }
         return success(true);
     }
 

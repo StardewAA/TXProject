@@ -22,7 +22,7 @@ class MallPortalCatalogMapperContractTest {
     @Test
     void productQueriesUseExplicitPublicProjectionAndFullEligibilityBoundary() throws Exception {
         String pageSql = sql("selectProducts", String.class, String.class, Long.class,
-                long.class, int.class);
+                String.class, Boolean.class, long.class, int.class);
         String countSql = sql("countProducts", String.class, String.class, Long.class);
         String skuSql = sql("selectPublicSkus", java.util.List.class);
         String detailSql = sql("selectProductById", String.class, Long.class);
@@ -44,6 +44,10 @@ class MallPortalCatalogMapperContractTest {
         assertTrue(detailSql.contains("spu.id = #{spuid}"));
         assertTrue(detailSql.contains("pt.tenant_slug = #{tenantslug}"));
         assertTrue(pageSql.contains("pt.tenant_slug = #{tenantslug}"));
+        assertTrue(pageSql.contains("sortfield == 'price'"));
+        assertTrue(pageSql.contains("sortfield == 'sales'"));
+        assertTrue(pageSql.contains("order by spu.price asc"));
+        assertTrue(pageSql.contains("order by salescount desc"));
     }
 
     @Test
@@ -54,8 +58,9 @@ class MallPortalCatalogMapperContractTest {
 
         assertTenantBoundary(tenantSql);
         assertTenantBoundary(hotSql);
+        assertTrue(hotSql.contains("left join mall_tenant_sales_daily ts"));
         assertTrue(hotSql.contains("ts.statistic_date between #{fromdate} and #{todate}"));
-        assertTrue(hotSql.contains("sum(ts.valid_quantity)"));
+        assertTrue(hotSql.contains("coalesce(sum(ts.valid_quantity), 0)"));
         assertTrue(hotSql.contains("exists (select 1 from product_spu spu"));
         assertTrue(hotSql.contains("pe.audit_status = 1"));
         assertTrue(hotSql.contains("ps.status = 0"));
@@ -63,8 +68,9 @@ class MallPortalCatalogMapperContractTest {
         assertTrue(hotSql.contains("spu.review_status = 20"));
         assertSaleableSkuBoundary(hotSql);
         assertFalse(hotSql.contains("&gt;"));
-        assertTrue(hotSql.contains("order by sum(ts.valid_quantity) desc, sum(ts.paid_amount) desc,"));
-        assertTrue(hotSql.contains("sum(ts.paid_order_count) desc, pt.tenant_id asc"));
+        assertFalse(hotSql.contains("having sum(ts.valid_quantity) > 0"));
+        assertTrue(hotSql.contains("order by coalesce(sum(ts.valid_quantity), 0) desc,"));
+        assertTrue(hotSql.contains("coalesce(sum(ts.paid_order_count), 0) desc, pt.tenant_id asc"));
     }
 
     private static void assertEligibility(String sql) {

@@ -32,6 +32,9 @@ public class CourseSaveReqVO {
     @Schema(description = "课程简介")
     private String summary;
 
+    @Schema(description = "授课目标")
+    private String objectives;
+
     @Schema(description = "封面图 URL", example = "https://example.com/cover.png")
     @Size(max = 500, message = "封面地址长度不能超过 500 个字符")
     private String coverUrl;

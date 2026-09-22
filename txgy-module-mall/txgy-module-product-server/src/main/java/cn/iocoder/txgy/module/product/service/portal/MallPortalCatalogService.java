@@ -96,7 +96,7 @@ public class MallPortalCatalogService {
         }
         long offset = Math.multiplyExact((long) request.getPageNo() - 1L, request.getPageSize().longValue());
         List<MallPortalCatalogMapper.PortalProductRow> rows = mapper.selectProducts(tenantSlug, keyword,
-                request.getCategoryId(), offset, request.getPageSize());
+                request.getCategoryId(), request.getSortField(), request.getSortAsc(), offset, request.getPageSize());
         if (rows.isEmpty()) {
             return PageResult.empty(total);
         }
@@ -162,6 +162,8 @@ public class MallPortalCatalogService {
                 .setDescription(row.getDescription())
                 .setPicUrl(row.getPicUrl())
                 .setCategoryId(row.getCategoryId())
+                .setCategoryName(row.getCategoryName())
+                .setCategoryGroupName(row.getCategoryGroupName())
                 .setPrice(row.getPrice())
                 .setSalesCount(row.getSalesCount())
                 .setSaleable(!skus.isEmpty())

@@ -186,6 +186,13 @@ const coreRoutes: RouteRecordRaw[] = [
             meta: { title: '课程中心', hideInMenu: true },
           },
           {
+            name: 'PortalTrainingCourseDetail',
+            path: 'courses/detail',
+            component: () =>
+              import('#/views/portal/training/courses/detail.vue'),
+            meta: { title: '课程详情', hideInMenu: true },
+          },
+          {
             name: 'PortalTrainingLearning',
             path: 'learning',
             component: () =>

@@ -26,9 +26,9 @@ public class AppPlatformCheckoutDetailRespVO {
     private Long platformPayOrderId;
     private String platformPayOrderNo;
     private AppPlatformCheckoutAddressRespVO address;
-    /** 聚合支付尚未接通前始终为 false。 */
+    /** 当前结算单是否可以继续支付。 */
     private Boolean payable;
-    /** true 表示仅固化了不可支付的拆单规划，尚未生成业务订单。 */
+    /** true 表示仅固化了拆单规划，尚未生成业务订单。 */
     private Boolean planningOnly;
     private LocalDateTime createTime;
     private List<ChildOrder> childOrders;

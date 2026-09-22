@@ -60,27 +60,25 @@
               class="catalog-product"
               @tap="openProduct(product)"
             >
-              <view class="catalog-cover" :style="{ background: productGradient(product) }">
+              <view class="catalog-cover">
                 <image
                   v-if="product.picUrl"
                   class="catalog-cover-image"
                   :src="sheep.$url.cdn(product.picUrl)"
                   mode="aspectFill"
                 />
-                <text class="catalog-code">{{ product.code }}</text>
-                <text class="catalog-unit">{{ product.unit }}</text>
+                <text class="catalog-code">SPU-{{ product.spuId }}</text>
+                <text class="catalog-unit">{{ product.skus.length }} 个规格</text>
                 <text class="catalog-cover-label">产品档案</text>
               </view>
               <view class="catalog-product-body">
                 <text class="catalog-product-name">{{ product.name }}</text>
-                <text class="catalog-product-spec">{{ product.spec }}</text>
+                <text class="catalog-product-spec">{{ product.tenantName }} · {{ product.shopName }}</text>
                 <view class="catalog-price-row">
                   <text class="catalog-price">¥{{ formatPrice(product.price) }}</text>
-                  <text class="catalog-price-unit">/{{ product.unit }}</text>
+                  <text class="catalog-price-unit">起</text>
                 </view>
-                <text class="catalog-stock" :class="{ 'catalog-stock-empty': product.stock <= 0 }">
-                  {{ product.stock > 0 ? `库存 ${product.stock}` : '暂时缺货' }}
-                </text>
+                <text class="catalog-stock">跨租户公开可售</text>
               </view>
             </view>
           </view>
@@ -104,7 +102,8 @@
   import { onLoad, onShow, onPullDownRefresh } from '@dcloudio/uni-app';
   import sheep from '@/sheep';
   import { getMallCategory } from '@/sheep/data/mall-catalog';
-  import { loadMallCatalog } from '@/sheep/data/mall-catalog-runtime';
+  import PortalApi from '@/sheep/api/product/portal';
+  import { normalizePortalPage, portalProductDetailPath } from '@/sheep/helper/platform-portal.mjs';
 
   const state = reactive({
     activeMenu: 0,
@@ -112,6 +111,7 @@
   const products = ref([]);
   const catalogCategories = ref([]);
   const catalogSource = ref('loading');
+  const categoryColors = ['#0f766e', '#2563eb', '#7c3aed', '#c2410c', '#15803d', '#475569', '#0284c7'];
 
   const safeArea = sheep.$platform.device?.safeArea || {
     height: typeof window === 'undefined' ? 667 : window.innerHeight,
@@ -122,12 +122,16 @@
   );
   const activeProducts = computed(() =>
     activeCategory.value && Array.isArray(products.value)
-      ? products.value.filter((product) => product?.categoryKey === activeCategory.value.key)
+      ? activeCategory.value.key === 'all'
+        ? products.value
+        : products.value.filter((product) => product?.categoryKey === activeCategory.value.key)
       : [],
   );
 
   const categoryProductCount = (categoryKey) =>
-    (Array.isArray(products.value) ? products.value : []).filter(
+    categoryKey === 'all'
+      ? (Array.isArray(products.value) ? products.value : []).length
+      : (Array.isArray(products.value) ? products.value : []).filter(
       (product) => product?.categoryKey === categoryKey,
     ).length;
   const categoryColor = (categoryKey) =>
@@ -138,10 +142,9 @@
     const color = typeof item === 'string' ? categoryColor(item) : item?.color || '#0f766e';
     return `linear-gradient(135deg, ${color} 0%, #0f172a 100%)`;
   };
-  const productGradient = (product) => categoryGradient(product?.categoryKey);
   const formatPrice = (price) => {
     const value = Number(price);
-    return Number.isFinite(value) ? value.toFixed(2) : '0.00';
+    return Number.isSafeInteger(value) && value >= 0 ? (value / 100).toFixed(2) : '0.00';
   };
 
   const onMenu = (index) => {
@@ -149,8 +152,8 @@
   };
 
   const openProduct = (product) => {
-    if (product?.id) {
-      sheep.$router.go('/pages/goods/index', { id: product.id });
+    if (product?.spuId && product?.tenantSlug) {
+      sheep.$router.go(portalProductDetailPath({ tenantSlug: product.tenantSlug, spuId: product.spuId }));
       return;
     }
     uni.showToast({
@@ -160,15 +163,46 @@
   };
 
   async function loadCatalog(force = false) {
+    catalogSource.value = 'loading';
     try {
-      const result = await loadMallCatalog(force);
-      if (Array.isArray(result?.products)) {
-        products.value = result.products.filter(Boolean);
-        catalogCategories.value = Array.isArray(result?.categories) ? result.categories.filter(Boolean) : [];
-        if (state.activeMenu >= catalogCategories.value.length) state.activeMenu = 0;
-        catalogSource.value = 'api';
-        applyCategoryParam();
-      }
+      const pageSize = 100;
+      const firstResponse = await PortalApi.getProducts({ pageNo: 1, pageSize });
+      if (firstResponse?.code !== 0) throw new Error('平台商品暂无法加载');
+      const firstPage = normalizePortalPage(firstResponse.data);
+      const pageCount = Math.ceil(firstPage.total / pageSize);
+      const remainingResponses = pageCount > 1
+        ? await Promise.all(Array.from({ length: pageCount - 1 }, (_, index) =>
+            PortalApi.getProducts({ pageNo: index + 2, pageSize })))
+        : [];
+      const allProducts = [...firstPage.list];
+      remainingResponses.forEach((response) => {
+        if (response?.code !== 0) throw new Error('平台商品分页加载失败');
+        allProducts.push(...normalizePortalPage(response.data).list);
+      });
+      const groups = new Map();
+      allProducts.forEach((product) => {
+        const name = String(product.categoryGroupName || product.categoryName || '其他材料').trim();
+        const key = `portal-${name}`;
+        if (!groups.has(key)) groups.set(key, { key, name, count: 0 });
+        groups.get(key).count++;
+      });
+      products.value = allProducts.map((product) => {
+        const name = String(product.categoryGroupName || product.categoryName || '其他材料').trim();
+        return { ...product, categoryKey: `portal-${name}` };
+      });
+      catalogCategories.value = [
+        { key: 'all', name: '全部商品', group: '全平台公开商品', icon: '全部', color: '#0f766e', hint: `${allProducts.length} 款在售商品` },
+        ...[...groups.values()].map((group, index) => ({
+          ...group,
+          group: group.name,
+          icon: group.name.slice(0, 2),
+          color: categoryColors[index % categoryColors.length],
+          hint: `${group.count} 款在售商品`,
+        })),
+      ];
+      if (state.activeMenu >= catalogCategories.value.length) state.activeMenu = 0;
+      catalogSource.value = 'api';
+      applyCategoryParam();
     } catch (error) {
       products.value = [];
       catalogSource.value = 'error';
@@ -186,7 +220,9 @@
     let index = catalogCategories.value.findIndex((item) => item.key === params.categoryKey);
     const categoryId = Number(params.categoryId || params.id);
     if (index < 0 && Number.isFinite(categoryId) && categoryId > 0) {
-      index = catalogCategories.value.findIndex((item) => Number(item.apiId) === categoryId);
+      index = catalogCategories.value.findIndex((item) =>
+        Number(item.apiId) === categoryId || item.categoryIds?.includes(categoryId),
+      );
     }
     if (index >= 0) {
       state.activeMenu = index;
@@ -394,13 +430,10 @@
 
   .catalog-cover {
     height: 144rpx;
-    padding: 16rpx;
     box-sizing: border-box;
-    display: flex;
     position: relative;
-    flex-direction: column;
-    justify-content: space-between;
-    color: rgba(255, 255, 255, 0.92);
+    overflow: hidden;
+    background: #eef2f1;
   }
 
   .catalog-cover-image {
@@ -408,8 +441,7 @@
     inset: 0;
     width: 100%;
     height: 100%;
-    opacity: 0.28;
-    mix-blend-mode: screen;
+    opacity: 1;
   }
 
   .catalog-code,
@@ -420,20 +452,36 @@
   }
 
   .catalog-code {
-    color: rgba(255, 255, 255, 0.72);
+    position: absolute;
+    top: 10rpx;
+    left: 10rpx;
+    padding: 4rpx 7rpx;
+    border-radius: 6rpx;
+    background: rgba(15, 23, 42, 0.72);
+    color: #fff;
     font-size: 17rpx;
     letter-spacing: 1rpx;
   }
 
   .catalog-unit {
-    align-self: flex-end;
+    position: absolute;
+    top: 10rpx;
+    right: 10rpx;
     padding: 4rpx 10rpx;
-    border: 1rpx solid rgba(255, 255, 255, 0.4);
     border-radius: 999rpx;
+    background: rgba(15, 23, 42, 0.72);
+    color: #fff;
     font-size: 17rpx;
   }
 
   .catalog-cover-label {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    padding: 9rpx 10rpx;
+    background: rgba(15, 23, 42, 0.72);
+    color: #fff;
     font-size: 19rpx;
     font-weight: 600;
   }

@@ -266,7 +266,7 @@
         </detail-tabbar>
         <su-fixed v-else bottom placeholder bg="bg-white">
           <view class="portal-action-bar ss-flex ss-col-center">
-            <button class="ss-reset-button portal-back-button" @tap="openPlatformProducts">平台商品</button>
+            <button class="ss-reset-button portal-service-button" @tap="openPortalService">店铺客服</button>
             <button class="ss-reset-button portal-cart-button" @tap="openPlatformCart">购物车</button>
             <button class="ss-reset-button portal-shop-button" :disabled="state.portalCartBusy" @tap="addPortalCart">
               {{ state.portalCartBusy ? '正在加入' : '加入平台购物车' }}
@@ -329,6 +329,7 @@
     portalProductListPath,
   } from '@/sheep/helper/platform-portal.mjs';
   import { platformCartPath } from '@/sheep/helper/platform-commerce.mjs';
+  import { chatEntry } from '@/sheep/helper/kefu-chat.mjs';
 
   onPageScroll(() => {});
   import OrderApi from '@/sheep/api/trade/order';
@@ -408,6 +409,20 @@
     sheep.$router.go(platformCartPath());
   }
 
+  function openPortalService() {
+    if (!isLogin.value) {
+      showAuthModal('accountLogin');
+      return;
+    }
+    const skuId = Number(state.selectedSku?.id);
+    if (!Number.isSafeInteger(skuId) || skuId <= 0) {
+      sheep.$helper.toast('请先选择要咨询的商品规格');
+      return;
+    }
+    sheep.$router.go('/pages/chat/service',
+      chatEntry(state.goodsInfo?.shopId, 'PRODUCT', state.goodsInfo?.id, skuId, state.goodsInfo?.tenantId));
+  }
+
   async function addPortalCart() {
     if (state.portalCartBusy) return;
     if (!isLogin.value) {
@@ -442,7 +457,9 @@
   function openProductShop() {
     if (state.portal) {
       if (state.tenantSlug) {
-        sheep.$router.go(portalProductListPath({ tenantSlug: state.tenantSlug }));
+        // Keep this as an explicit platform route. The public storefront is a filtered view of
+        // the cross-tenant catalog and must never trigger the legacy tenant-entry switch guard.
+        sheep.$router.go('/pages/goods/list', { portal: 1, tenantSlug: state.tenantSlug });
       }
       return;
     }
@@ -1062,7 +1079,7 @@
       font-size: 27rpx;
     }
 
-    .portal-back-button {
+    .portal-service-button {
       width: 150rpx;
       color: #156b52;
       background: #e2f3eb;

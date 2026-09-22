@@ -20,6 +20,12 @@ test('switchTab validates tenant before stripping query and stamps committed bro
   h.hooks.get('switchTab').invoke(options);assert.equal(options.url,'/pages/index/user');
   h.hooks.get('switchTab').success();assert.equal(h.stamps(),1);
 });
+test('platform storefront navigation discards tenant hints without invoking tenant switching',()=>{
+  const h=harness(), options={url:'/pages/goods/list?portal=1&tenantSlug=tenant-2024&tenantId=2024'};
+  h.hooks.get('navigateTo').invoke(options);
+  assert.equal(options.url,'/pages/goods/list?portal=1&tenantSlug=tenant-2024');
+  assert.equal(h.messages.length,0);
+});
 test('all navigation entry points reject wrong tenant and complete failed callbacks',()=>{
   const h=harness();
   for(const method of ['navigateTo','redirectTo','reLaunch','switchTab']) {

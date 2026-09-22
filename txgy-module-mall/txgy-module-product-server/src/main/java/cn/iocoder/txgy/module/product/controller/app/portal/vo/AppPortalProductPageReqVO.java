@@ -3,6 +3,7 @@ package cn.iocoder.txgy.module.product.controller.app.portal.vo;
 import cn.iocoder.txgy.framework.common.pojo.PageParam;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -19,4 +20,11 @@ public class AppPortalProductPageReqVO extends PageParam {
     @Schema(description = "商品分类编号", example = "10")
     @Positive(message = "商品分类编号必须大于 0")
     private Long categoryId;
+
+    @Schema(description = "排序字段：price 或 sales", example = "price")
+    @Pattern(regexp = "price|sales", message = "商品排序字段无效")
+    private String sortField;
+
+    @Schema(description = "是否升序；未指定时按字段默认顺序", example = "true")
+    private Boolean sortAsc;
 }

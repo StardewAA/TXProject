@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 import { platformCheckoutApi, type PlatformCheckoutDetail, type PlatformCheckoutSummary } from '@/api/platform-commerce'
 import EmptyState from '@/components/EmptyState.vue'
@@ -7,6 +8,7 @@ import MemberPage from '@/components/MemberPage.vue'
 import { formatMoney } from '@/utils/format'
 
 const rows = ref<PlatformCheckoutSummary[]>([])
+const router = useRouter()
 const total = ref(0)
 const pageNo = ref(1)
 const loading = ref(false)
@@ -16,7 +18,7 @@ const detailVisible = ref(false)
 const detailLoading = ref(false)
 
 const payStatusLabels: Record<string, string> = {
-  NOT_PAYABLE: '暂不可支付', WAITING: '待支付', PAID: '已支付', PART_PAID: '部分支付',
+  NOT_PAYABLE: '暂不可支付', WAITING: '待支付', UNPAID: '待支付', PAID: '已支付', PART_PAID: '部分支付',
   REFUNDED: '已退款', PART_REFUNDED: '部分退款', CLOSED: '已关闭',
 }
 const aggregateStatusLabels: Record<string, string> = {
@@ -63,17 +65,17 @@ async function openDetail(row: { checkoutNo?: string }) {
   }
 }
 
+async function continuePayment() {
+  if (!detail.value?.payable || !detail.value.platformPayOrderId) return
+  await router.push(`/pay/${detail.value.platformPayOrderId}?platformCheckout=${encodeURIComponent(detail.value.checkoutNo)}`)
+}
+
 onMounted(load)
 </script>
 
 <template>
   <MemberPage title="平台结算记录" description="查看跨租户购物车提交后的结算与拆单结果">
-    <el-alert
-      title="当前仅保存不可支付的拆单规划；未生成正式订单、支付单，也不会清除购物车。"
-      type="warning"
-      :closable="false"
-      show-icon
-    />
+    <el-alert title="平台结算会按店铺生成正式订单，并使用一张支付单统一付款。" type="success" :closable="false" show-icon />
     <p v-if="loadFailed" class="error" role="alert">结算记录加载失败，请刷新重试；这不代表没有历史记录。</p>
     <el-table v-else :data="rows" v-loading="loading" class="checkout-history">
       <el-table-column prop="checkoutNo" label="平台结算单号" min-width="210" />
@@ -98,7 +100,8 @@ onMounted(load)
         <template v-if="detail">
           <div class="detail-heading"><div><small>平台结算单</small><strong>{{ detail.checkoutNo }}</strong></div><el-tag type="warning">{{ statusLabel(detail) }}</el-tag></div>
           <dl><dt>商品金额</dt><dd>¥{{ formatMoney(detail.goodsAmount) }}</dd><dt>运费</dt><dd>¥{{ formatMoney(detail.freightAmount) }}</dd><dt>优惠</dt><dd>-¥{{ formatMoney(detail.discountAmount) }}</dd><dt>应付合计</dt><dd class="amount">¥{{ formatMoney(detail.payAmount) }}</dd></dl>
-          <el-alert v-if="detail.planningOnly" title="这是拆单规划快照，当前不可支付、不可发货，不代表订单已经创建。" type="warning" :closable="false" />
+          <el-alert v-if="detail.planningOnly" title="该历史记录仍处于拆单处理中，请稍后刷新。" type="warning" :closable="false" />
+          <el-button v-if="detail.payable && detail.platformPayOrderId" class="pay-action" type="primary" @click="continuePayment">继续支付</el-button>
           <article v-for="plan in detail.childPlans || []" :key="plan.planNo" class="child-plan">
             <header><div><b>{{ plan.tenantName || `租户 ${plan.tenantId}` }}</b><span>{{ plan.enterpriseName || `企业 ${plan.sellerEnterpriseId}` }} · {{ plan.shopName || `店铺 ${plan.shopId}` }}</span></div><strong>¥{{ formatMoney(plan.payAmount) }}</strong></header>
             <p>规划号 {{ plan.planNo }} · {{ plan.itemCount }} 种商品 / {{ plan.totalQuantity }} 件 · 状态 {{ plan.planStatus }}</p>
@@ -111,5 +114,5 @@ onMounted(load)
 </template>
 
 <style scoped>
-.error{padding:12px 14px;background:#fff1f0;color:#a33;border-radius:6px}.checkout-history{margin-top:20px}.el-pagination{justify-content:flex-end;margin-top:22px}.checkout-detail{min-height:180px}.detail-heading{display:flex;justify-content:space-between;align-items:center}.detail-heading small,.detail-heading strong{display:block}.detail-heading small{margin-bottom:6px;color:var(--muted)}.detail-heading strong{font-size:19px}.checkout-detail dl{display:grid;grid-template-columns:repeat(4,auto 1fr);gap:8px 12px;padding:18px;margin:20px 0;background:#f5f8f7}.checkout-detail dt{color:var(--muted)}.checkout-detail dd{margin:0;font-weight:700}.checkout-detail dd.amount{color:#d85b2c}.child-plan{margin-top:18px;padding:18px;border:1px solid var(--line);border-radius:8px}.child-plan header{display:flex;justify-content:space-between}.child-plan header b,.child-plan header span{display:block}.child-plan header span,.child-plan p,.child-plan small{margin-top:5px;color:var(--muted);font-size:12px}.child-plan header>strong{color:#d85b2c}.child-plan ul{padding:0;margin:14px 0 0;list-style:none}.child-plan li{display:grid;grid-template-columns:1fr 80px 110px;gap:12px;padding:10px 0;border-top:1px dashed var(--line)}.child-plan li>strong{text-align:right}
+.error{padding:12px 14px;background:#fff1f0;color:#a33;border-radius:6px}.checkout-history{margin-top:20px}.el-pagination{justify-content:flex-end;margin-top:22px}.checkout-detail{min-height:180px}.detail-heading{display:flex;justify-content:space-between;align-items:center}.detail-heading small,.detail-heading strong{display:block}.detail-heading small{margin-bottom:6px;color:var(--muted)}.detail-heading strong{font-size:19px}.checkout-detail dl{display:grid;grid-template-columns:repeat(4,auto 1fr);gap:8px 12px;padding:18px;margin:20px 0;background:#f5f8f7}.checkout-detail dt{color:var(--muted)}.checkout-detail dd{margin:0;font-weight:700}.checkout-detail dd.amount{color:#d85b2c}.pay-action{display:block;margin:0 0 18px auto}.child-plan{margin-top:18px;padding:18px;border:1px solid var(--line);border-radius:8px}.child-plan header{display:flex;justify-content:space-between}.child-plan header b,.child-plan header span{display:block}.child-plan header span,.child-plan p,.child-plan small{margin-top:5px;color:var(--muted);font-size:12px}.child-plan header>strong{color:#d85b2c}.child-plan ul{padding:0;margin:14px 0 0;list-style:none}.child-plan li{display:grid;grid-template-columns:1fr 80px 110px;gap:12px;padding:10px 0;border-top:1px dashed var(--line)}.child-plan li>strong{text-align:right}
 </style>

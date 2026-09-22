@@ -2,7 +2,11 @@ import $store from '@/sheep/store';
 import { showAuthModal, showShareModal } from '@/sheep/hooks/useModal';
 import { isNumber, isString, isEmpty, startsWith, isObject, isNil, clone } from 'lodash-es';
 import throttle from '@/sheep/helper/throttle';
-import { scopeLocalPath } from '@/sheep/helper/tenant-navigation.mjs';
+import {
+  isPlatformPortalAddress,
+  platformPublicPath,
+  scopeLocalPath,
+} from '@/sheep/helper/tenant-navigation.mjs';
 import { getControlledTenantId } from '@/sheep/helper/tenant-runtime';
 import { checkoutIntentId } from '@/sheep/helper/checkout-intent.mjs';
 import {
@@ -98,7 +102,11 @@ const _go = (
 
   // Validate before a tab route drops its query; conflicting aliases must not disappear.
   // #ifdef H5
-  try { url = scopeLocalPath(url, getControlledTenantId()); }
+  try {
+    url = isPlatformPortalAddress(url)
+      ? platformPublicPath(url)
+      : scopeLocalPath(url, getControlledTenantId());
+  }
   catch (error) { uni.showToast({ title: error.message || '商城链接无效', icon: 'none' }); return; }
   // #endif
 

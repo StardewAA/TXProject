@@ -24,6 +24,15 @@ export function isPlatformPortalAddress(address) {
   try { return isPlatformRoute(portalRoute(new URL(address, base))); }
   catch { return false; }
 }
+export function isPlatformAccountAddress(address, legacyTenant) {
+  try {
+    const route = portalRoute(new URL(address, base));
+    if (!isAccountRoute(route)) return false;
+    const legacy = entryId(legacyTenant);
+    const hints = aliases.flatMap(key => route.query.getAll(key));
+    return hints.length === 0 || hints.every(value => entryId(value) === legacy);
+  } catch { return false; }
+}
 export function platformNavigationTarget(path, address) {
   let platformShell = false;
   try {
@@ -46,26 +55,31 @@ export function stripPlatformTenantHints(address) {
   }
   return url.href;
 }
+export function platformPublicPath(path) {
+  if (typeof path !== 'string' || !path.startsWith('/') || path.startsWith('//')
+      || /[\\\\\u0000-\u0020\u007f]/.test(path)) throw new Error('商城链接无效');
+  const url = new URL(path, base);
+  if (url.origin !== base || !isPlatformRoute(portalRoute(url))) throw new Error('平台公开链接无效');
+  for (const key of aliases) url.searchParams.delete(key);
+  if (url.hash.startsWith('#/')) {
+    const hashUrl = new URL(url.hash.slice(1), base);
+    for (const key of aliases) hashUrl.searchParams.delete(key);
+    url.hash = '#' + hashUrl.pathname + hashUrl.search + hashUrl.hash;
+  }
+  return url.pathname + url.search + url.hash;
+}
 function validateQuery(query, tenant) {
   for (const key of aliases) for (const value of query.getAll(key)) {
     if (entryId(value) !== tenant) throw new Error('链接属于其他商城，请先通过商城入口切换');
   }
 }
 export function scopeLocalPath(path, tenant) {
-  const id = entryId(tenant);
   if (typeof path !== 'string' || !path.startsWith('/') || path.startsWith('//')
       || /[\\\\\u0000-\u0020\u007f]/.test(path)) throw new Error('商城链接无效');
   const url = new URL(path, base);
   if (url.origin !== base) throw new Error('商城链接无效');
-  if (isPlatformRoute(portalRoute(url))) {
-    for (const key of aliases) url.searchParams.delete(key);
-    if (url.hash.startsWith('#/')) {
-      const hashUrl = new URL(url.hash.slice(1), base);
-      for (const key of aliases) hashUrl.searchParams.delete(key);
-      url.hash = '#' + hashUrl.pathname + hashUrl.search + hashUrl.hash;
-    }
-    return url.pathname + url.search + url.hash;
-  }
+  if (isPlatformRoute(portalRoute(url))) return platformPublicPath(path);
+  const id = entryId(tenant);
   validateQuery(url.searchParams, id);
   // Hash routes can also carry a tenant. Never hide a contradictory hint there.
   const hashQuery = url.hash.indexOf('?');
