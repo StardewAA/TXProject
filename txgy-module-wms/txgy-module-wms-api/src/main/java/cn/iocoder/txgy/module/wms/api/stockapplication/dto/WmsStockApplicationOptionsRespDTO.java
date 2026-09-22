@@ -6,13 +6,17 @@ public class WmsStockApplicationOptionsRespDTO {
     private List<Warehouse> warehouses;
     private List<Sku> skus;
     @Data public static class Warehouse {
+        private Long id;
         private String code;
         private String name;
         private Integer status;
     }
     @Data public static class Sku {
+        private Long itemId;
+        private Long skuId;
         private String materialCode;
         private String materialName;
+        private String materialType;
         private String skuCode;
         private String skuName;
         private String unitName;

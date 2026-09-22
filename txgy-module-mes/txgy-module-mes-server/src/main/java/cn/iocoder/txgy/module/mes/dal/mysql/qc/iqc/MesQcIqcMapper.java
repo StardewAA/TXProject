@@ -5,7 +5,10 @@ import cn.iocoder.txgy.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.txgy.module.mes.controller.admin.qc.iqc.vo.MesQcIqcPageReqVO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.qc.iqc.MesQcIqcDO;
+import cn.iocoder.txgy.module.mes.enums.qc.MesQcStatusEnum;
 import org.apache.ibatis.annotations.Mapper;
+
+import java.util.List;
 
 /**
  * MES 来料检验单（IQC） Mapper
@@ -30,6 +33,25 @@ public interface MesQcIqcMapper extends BaseMapperX<MesQcIqcDO> {
 
     default MesQcIqcDO selectByCode(String code) {
         return selectOne(MesQcIqcDO::getCode, code);
+    }
+
+    default MesQcIqcDO selectFirstBySourceDoc(Integer sourceDocType, Long sourceDocId, Long sourceLineId) {
+        List<MesQcIqcDO> list = selectList(new LambdaQueryWrapperX<MesQcIqcDO>()
+                .eq(MesQcIqcDO::getSourceDocType, sourceDocType)
+                .eq(MesQcIqcDO::getSourceDocId, sourceDocId)
+                .eq(MesQcIqcDO::getSourceLineId, sourceLineId)
+                .orderByDesc(MesQcIqcDO::getId));
+        return list.isEmpty() ? null : list.get(0);
+    }
+
+    default MesQcIqcDO selectFirstDraftBySourceDoc(Integer sourceDocType, Long sourceDocId, Long sourceLineId) {
+        List<MesQcIqcDO> list = selectList(new LambdaQueryWrapperX<MesQcIqcDO>()
+                .eq(MesQcIqcDO::getSourceDocType, sourceDocType)
+                .eq(MesQcIqcDO::getSourceDocId, sourceDocId)
+                .eq(MesQcIqcDO::getSourceLineId, sourceLineId)
+                .eq(MesQcIqcDO::getStatus, MesQcStatusEnum.DRAFT.getStatus())
+                .orderByDesc(MesQcIqcDO::getId));
+        return list.isEmpty() ? null : list.get(0);
     }
 
     default Long selectCountByVendorId(Long vendorId) {

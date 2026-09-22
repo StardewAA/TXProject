@@ -24,7 +24,7 @@
       labelAlign="center"
     >
       <view v-if="registrationOptions?.enabled" class="registration-tenant">
-        <view>归属租户（可不选）</view>
+        <view>归属租户（必选）</view>
         <picker :range="tenantNames" :value="tenantIndex" :disabled="submitting" @change="selectTenant">
           <view class="tenant-picker">{{ selectedTenant && tenantIndex === 0 ? '原租户已不可注册，请重新选择' : tenantNames[tenantIndex] }} ▾</view>
         </picker>
@@ -100,7 +100,7 @@
     refresh: retryAuth, submit: submitAuth,
     imageRegistration, imageChallenge, imageSending, imageCountdown, imageExpiresIn, loadImage,
     registrationOptions, selectedTenant, registrationTarget, choiceNotice, choiceError } = useMallAuthForm(state.model, 'REGISTER');
-  const tenantNames = computed(() => ['不选：平台自营公共商城', ...(registrationOptions.value?.tenants || []).map(item => item.name)]);
+  const tenantNames = computed(() => ['请选择注册归属租户', ...(registrationOptions.value?.tenants || []).map(item => item.name)]);
   const tenantIndex = computed(() => selectedTenant.value ? 1 + (registrationOptions.value?.tenants || []).findIndex(item => item.tenantId === selectedTenant.value) : 0);
   function selectTenant(event) {
     const index = Number(event.detail.value);

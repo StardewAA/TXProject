@@ -78,9 +78,6 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         if (workbenchJournal != null) workbenchJournal.changed(orderId);
     }
     @Resource
-    private cn.iocoder.txgy.module.trade.service.erp.TradeErpInventoryService erpInventory;
-
-    @Resource
     private cn.iocoder.txgy.module.trade.dal.mysql.order.TradeOrderMapper settlementOrderLock;
 
     @Resource
@@ -391,13 +388,10 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         // 校验售后单存在，并状态为已退货
         AfterSaleDO afterSale = validateAfterSaleReceivable(id);
 
-        var erpOrder = tradeOrderQueryService.getOrder(afterSale.getOrderId());
-        var erpItem = new cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderItemDO()
-                .setSkuId(afterSale.getSkuId()).setCount(afterSale.getCount());
-        var erpRequest = erpInventory.request(erpOrder,
-                cn.iocoder.txgy.module.trade.service.erp.ErpInventoryModels.Operation.RETURN,
-                String.valueOf(id), java.util.List.of(erpItem), null, null);
-        if (!erpRequest.confirmed()) return;
+        // 退货入库也属于 WMS 执行能力；接口未开放前不能把后台确认冒充为已入库。
+        throw new cn.iocoder.txgy.framework.common.exception.ServiceException(400,
+                "WMS 退货入库接口尚未开放，暂不能确认收货");
+        /* WMS 退货入库接口开放并返回执行结果后，再推进售后状态。
 
         // 更新售后单的状态
         updateAfterSaleStatus(afterSale.getId(), AfterSaleStatusEnum.BUYER_DELIVERY.getStatus(), new AfterSaleDO()
@@ -406,6 +400,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         // 记录售后日志
         AfterSaleLogUtils.setAfterSaleInfo(afterSale.getId(), afterSale.getStatus(),
                 AfterSaleStatusEnum.WAIT_REFUND.getStatus());
+        */
     }
 
     @Override

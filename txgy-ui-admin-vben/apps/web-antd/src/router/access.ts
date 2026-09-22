@@ -583,6 +583,52 @@ function groupCrmSideMenus(menus: any[]): any[] {
   return menus;
 }
 
+/**
+ * 在后端菜单中注入「AI对话助手」菜单项（前端演示用）。
+ * 找到 CRM 中心（path 为 /crm 的节点），作为其子项挂载；
+ * 若未找到则挂载为顶级菜单，保证功能可见。
+ */
+function injectAiChatMenu(
+  menus: AppRouteRecordRaw[],
+  permissions: unknown[] | null | undefined,
+) {
+  const crmParent = findMenu(menus, (m) => m?.path === '/crm');
+  const hasCrmPermission = (permissions ?? []).some((permission) =>
+    String(permission ?? '').startsWith('crm:'),
+  );
+  if (!hasCrmPermission) {
+    return;
+  }
+  const item = {
+    id: 990_001,
+    name: 'AI对话助手',
+    componentName: 'CrmAiChat',
+    path: 'ai-chat',
+    component: 'views/crm/ai-chat/index.vue',
+    icon: 'crmai:avatar',
+    meta: {},
+    visible: true,
+    // 排序值设为 -1，保证排在 CRM 所有菜单最前面（第一个是「待办事项」sort=0）
+    sort: -1,
+    keepAlive: true,
+    parentId: crmParent ? crmParent.id : 0,
+  };
+  if (crmParent) {
+    crmParent.children = crmParent.children ?? [];
+    if (
+      !crmParent.children.some(
+        (c) => (c.componentName || c.name) === 'CrmAiChat',
+      )
+    ) {
+      // 同时插入数组首位，兼容不按 sort 排序的渲染场景
+      crmParent.children.unshift(item);
+    }
+  } else {
+    // 兜底：作为顶级菜单，并包裹 BasicLayout
+    menus.push({ ...item, component: 'BasicLayout', children: [{ ...item }] });
+  }
+}
+
 function findMenu(
   list: AppRouteRecordRaw[],
   predicate: (m: AppRouteRecordRaw) => boolean,

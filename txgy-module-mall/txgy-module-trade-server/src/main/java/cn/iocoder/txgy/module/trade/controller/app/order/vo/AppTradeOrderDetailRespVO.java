@@ -35,6 +35,24 @@ public class AppTradeOrderDetailRespVO extends AppTradeOrderPaymentRespVO {
     @Schema(description = "订单类型", requiredMode = Schema.RequiredMode.REQUIRED, example = "0")
     private Integer type;
 
+    @Schema(description = "订单业务来源：NORMAL 普通下单，INQUIRY 询价成交", example = "INQUIRY")
+    private String sourceType;
+
+    @Schema(description = "询价单编号", example = "1024")
+    private Long inquiryId;
+
+    @Schema(description = "已采纳报价编号", example = "2048")
+    private Long inquiryQuoteId;
+
+    @Schema(description = "成交时报价快照版本", example = "1")
+    private Long inquiryQuoteVersion;
+
+    @Schema(description = "采购企业编号；仅询价成交订单有值", example = "1001")
+    private Long buyerEnterpriseId;
+
+    @Schema(description = "当前登录会员是否为实际下单人；企业协作订单用于限制支付、评价和个人售后", example = "true")
+    private Boolean createdByCurrentMember;
+
     @Schema(description = "下单时间", requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDateTime createTime;
 

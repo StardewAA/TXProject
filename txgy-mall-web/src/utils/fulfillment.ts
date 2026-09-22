@@ -2,8 +2,8 @@ import type { Address, TradeOrder } from '@/types/mall'
 import type { AddressLocation, LocationCapability, LogisticsEvent, OrderLogistics } from '@/types/fulfillment'
 
 const logisticsMessages: Record<string, string> = {
-  ERP_PENDING: '发货正在等待 ERP 确认出库，暂不查询运输轨迹。',
-  ERP_REJECTED: 'ERP 出库未通过，请联系店铺处理发货。',
+  ERP_PENDING: '这是切换 WMS 直连前的历史出库等待记录，暂不查询运输轨迹。',
+  ERP_REJECTED: '历史出库记录未通过，请联系店铺核实。',
   NOT_SHIPPED: '订单尚未发货。',
   NO_TRACKING: '暂无有效运单，请等待店铺完善发货信息。',
   NOT_CONFIGURED: '物流查询暂未开通，您仍可查看已登记的快递公司和运单号。',

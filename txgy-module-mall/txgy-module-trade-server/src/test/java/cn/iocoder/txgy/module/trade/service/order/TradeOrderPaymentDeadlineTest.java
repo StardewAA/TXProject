@@ -40,28 +40,24 @@ class TradeOrderPaymentDeadlineTest {
     }
 
     @Test
-    void newOrderSnapshotsSeparateWaitAndPayDurations() {
-        properties.setErpWaitExpireTime(Duration.ofMinutes(20));
+    void newOrderSnapshotsOnlyPaymentDuration() {
         deadlines.initialize(order, now);
         assertEquals(7200L, order.getPayExpireSeconds());
-        assertEquals(now.plusMinutes(20), order.getErpWaitExpireTime());
+        assertNull(order.getErpWaitExpireTime());
         assertNull(order.getPayExpireTime());
     }
 
     @Test
-    void fractionalSecondsAreNormalizedBeforeBothDeadlinesArePersisted() {
+    void fractionalSecondsAreNormalizedBeforePaymentDeadlineIsPersisted() {
         LocalDateTime fractional = LocalDateTime.of(2026, 9, 15, 12, 0, 0, 600_000_000);
         deadlines.initialize(order, fractional);
-        assertEquals(LocalDateTime.of(2026, 9, 15, 14, 0), order.getErpWaitExpireTime());
         assertEquals(7200L, order.getPayExpireSeconds());
-        assertEquals(LocalDateTime.of(2026, 9, 15, 14, 20),
-                deadlines.startPayment(order, fractional.plusMinutes(20)));
+        assertEquals(LocalDateTime.of(2026, 9, 15, 14, 0), deadlines.startPayment(order, fractional));
         assertEquals(0, order.getPayExpireTime().getNano());
-        assertEquals(0, order.getErpWaitExpireTime().getNano());
     }
 
     @Test
-    void erpConfirmationStartsFullSnapshotWindowOnlyOnce() {
+    void paymentWindowStartsOnlyOnce() {
         deadlines.initialize(order, now);
         properties.setPayExpireTime(Duration.ofHours(12));
         LocalDateTime first = deadlines.startPayment(order, now.plusMinutes(40));
@@ -70,51 +66,21 @@ class TradeOrderPaymentDeadlineTest {
     }
 
     @Test
-    void waitExpiryUsesInclusiveBoundaryAndCannotOpenPayWindow() {
-        deadlines.initialize(order, now);
-        assertFalse(deadlines.isErpWaitExpired(order, now.plusHours(2).minusNanos(1)));
-        assertTrue(deadlines.isErpWaitExpired(order, now.plusHours(2)));
-        assertThrows(RuntimeException.class, () -> deadlines.startPayment(order, now.plusHours(2)));
-        assertNull(order.getPayExpireTime());
-    }
-
-    @Test
-    void confirmedPaymentWindowDoesNotContinueUsingErpWaitDeadline() {
-        deadlines.initialize(order, now);
-        deadlines.startPayment(order, now.plusMinutes(90));
-        assertFalse(deadlines.isErpWaitExpired(order, now.plusHours(2)));
-        assertEquals(now.plusMinutes(210), order.getPayExpireTime());
-    }
-
-    @Test
     void invalidConfiguredDurationsAreRejectedBeforeOrderCreation() {
         properties.setPayExpireTime(Duration.ZERO);
         assertThrows(IllegalStateException.class, () -> deadlines.initialize(order, now));
-        properties.setPayExpireTime(Duration.ofHours(2));
-        properties.setErpWaitExpireTime(Duration.ofSeconds(-1));
-        assertThrows(IllegalStateException.class, () -> deadlines.initialize(order, now));
     }
 
     @Test
-    void waitingErpHasNoPaymentCountdownAndCannotPay() {
+    void missingPaymentOrderHasNoCountdownAndCannotPay() {
         deadlines.initialize(order, now);
         var response = new AppTradeOrderPageItemRespVO();
         deadlines.fill(order, response, false);
-        assertEquals("ERP_WAITING", response.getPaymentBlockReason());
+        assertEquals("PAY_ORDER_MISSING", response.getPaymentBlockReason());
         assertFalse(response.getCanPay());
         assertNull(response.getPayExpireTimestamp());
-        assertNotNull(response.getErpWaitExpireTimestamp());
+        assertNull(response.getErpWaitExpireTimestamp());
         assertTrue(Math.abs(System.currentTimeMillis() - response.getServerTime()) < 2000);
-        verifyNoInteractions(payApi);
-    }
-
-    @Test
-    void expiredErpIsNotMisrepresentedAsUnpaidPaymentTimeout() {
-        deadlines.initialize(order, now.minusHours(3));
-        var response = new AppTradeOrderDetailRespVO();
-        deadlines.fill(order, response, true);
-        assertEquals("ERP_WAIT_EXPIRED", response.getPaymentBlockReason());
-        assertFalse(response.getCanPay());
         verifyNoInteractions(payApi);
     }
 

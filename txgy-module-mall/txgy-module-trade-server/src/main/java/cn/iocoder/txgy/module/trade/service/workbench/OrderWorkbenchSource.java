@@ -10,7 +10,7 @@ import cn.iocoder.txgy.module.pay.api.order.PayOrderApi;
 import cn.iocoder.txgy.module.pay.api.order.dto.PayOrderRespDTO;
 import static cn.iocoder.txgy.module.trade.service.workbench.OrderWorkbenchModels.*;
 
-/** 只读本地商城事实。每次最多 200 个订单，所有关联表显式约束租户，不查询 WMS/外部ERP。 */
+/** 只读商城及本地 WMS 履约事实。每次最多 200 个订单，所有关联表显式约束租户。 */
 @Service
 class OrderWorkbenchSource {
     private final JdbcTemplate jdbc;
@@ -37,27 +37,30 @@ class OrderWorkbenchSource {
                 +"pay_expire_seconds,pay_price,delivery_type,refund_status,comment_status FROM trade_order WHERE tenant_id=? AND deleted=0 AND id IN ("+in+")",args.toArray());
         var items=group(jdbc.queryForList("SELECT id,order_id,shop_id,after_sale_status,after_sale_id FROM trade_order_item WHERE tenant_id=? AND deleted=0 AND order_id IN ("+in+")",args.toArray()),"order_id");
         var sales=group(jdbc.queryForList("SELECT id,no,order_id,order_item_id,user_id,shop_id,status,way,pay_refund_id FROM trade_after_sale WHERE tenant_id=? AND deleted=0 AND order_id IN ("+in+")",args.toArray()),"order_id");
-        var erps=group(jdbc.queryForList("SELECT id,order_id,operation,business_key,status,message FROM trade_erp_inventory_request WHERE tenant_id=? AND order_id IN ("+in+")",args.toArray()),"order_id");
         List<Candidate> result=new ArrayList<>(); LocalDateTime now=LocalDateTime.now();
         for(var o:orders) {
             long id=num(o,"id"), member=num(o,"user_id"), shop=num(o,"shop_id");
             String no=Objects.toString(o.get("no"),String.valueOf(id)); int status=(int)num(o,"status");
-            var its=items.getOrDefault(id,List.of());var ers=erps.getOrDefault(id,List.of());
+            var its=items.getOrDefault(id,List.of());
             boolean ownShop=shop>0 && !its.isEmpty() && its.stream().allMatch(i->num(i,"shop_id")==shop);
             var pay=payments.get(id);
             if(status==0 && !flag(o,"pay_status") && pay!=null && Objects.equals(pay.getId(),num(o,"pay_order_id"))
                     && String.valueOf(id).equals(pay.getMerchantOrderId()) && Objects.equals(pay.getPrice(),(int)num(o,"pay_price"))
                     && Integer.valueOf(0).equals(pay.getStatus()) && pay.getExpireTime()!=null && now.isBefore(pay.getExpireTime())
                     && (o.get("pay_expire_seconds")==null || time(o,"pay_expire_time")!=null)
-                    && (time(o,"pay_expire_time")==null || now.isBefore(time(o,"pay_expire_time")))
-                    && ers.stream().noneMatch(e->"RESERVE".equals(e.get("operation"))&&!"CONFIRMED".equals(e.get("status"))))
+                    && (time(o,"pay_expire_time")==null || now.isBefore(time(o,"pay_expire_time"))))
                 result.add(order(Role.BUYER,member,shop,id,no,Action.PAYMENT,"订单可付款，请在支付期限内完成"));
             if(status==20) result.add(order(Role.BUYER,member,shop,id,no,Action.RECEIVE,"商品已发货，请核实后确认收货"));
             if(status==30 && !flag(o,"comment_status")) result.add(order(Role.BUYER,member,shop,id,no,Action.COMMENT,"订单已完成，待评价"));
-            if(ownShop && status==10 && flag(o,"pay_status") && num(o,"delivery_type")==1 && num(o,"refund_status")==0
-                    && its.stream().allMatch(i->num(i,"after_sale_status")==0) && !blocked(ers,"OUTBOUND",null)) {
-                result.add(order(Role.SUPPLIER,0,shop,id,no,Action.DELIVERY,"本店已支付订单待发货"));
-                result.add(order(Role.ADMIN,0,shop,id,no,Action.DELIVERY,"新付款订单待发货"));
+            boolean wmsCompleted = status == 10 && flag(o,"pay_status")
+                    && !its.isEmpty()
+                    && Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM trade_wms_shipment w WHERE w.tenant_id=? AND w.order_id=? AND w.deleted=0)"
+                            + " AND NOT EXISTS(SELECT 1 FROM trade_wms_shipment w WHERE w.tenant_id=? AND w.order_id=? AND w.deleted=0 AND w.status<>'WMS_OUTBOUND_COMPLETED')",
+                            Boolean.class, tenant, id, tenant, id));
+            if (wmsCompleted && ownShop && num(o,"delivery_type")==1 && num(o,"refund_status")==0
+                    && its.stream().allMatch(i -> num(i,"after_sale_status")==0)) {
+                result.add(order(Role.SUPPLIER,0,shop,id,no,Action.DELIVERY,"WMS 出库已完成，待登记物流并确认发货"));
+                result.add(order(Role.ADMIN,0,shop,id,no,Action.DELIVERY,"WMS 出库已完成，待登记物流并确认发货"));
             }
             for(var a:sales.getOrDefault(id,List.of())) {
                 long aid=num(a,"id"), ash=num(a,"shop_id"); int ast=(int)num(a,"status");
@@ -66,27 +69,11 @@ class OrderWorkbenchSource {
                 if(ast==20 && num(a,"way")==20) result.add(sale(Role.BUYER,num(a,"user_id"),ash,id,a,Action.BUYER_RETURN,"商家已同意，请寄回商品并填写退货物流"));
                 if(owned && ast==10 && (num(a,"way")==10 || num(a,"way")==20)) result.add(sale(Role.SUPPLIER,0,ash,id,a,Action.AFTER_AUDIT,"本店新售后申请待审核"));
                 if(ast==10 && (num(a,"way")==10 || num(a,"way")==20)) result.add(sale(Role.ADMIN,0,ash,id,a,Action.AFTER_AUDIT,"新售后退款申请待审核"));
-                if(owned && ast==30 && num(a,"way")==20 && !blocked(ers,"RETURN",String.valueOf(aid)))
-                    result.add(sale(Role.SUPPLIER,0,ash,id,a,Action.AFTER_RECEIVE,"买家已寄回商品，待核实收货"));
+                // WMS 退货入库接口尚未开放，不生成可执行的收货入库待办。
                 if(ast==40 && num(a,"pay_refund_id")==0) result.add(sale(Role.ADMIN,0,ash,id,a,Action.PLATFORM_REFUND,"商家已完成售后处理，待平台确认退款"));
-            }
-            for(var e:ers) if(erpRelevant(status,e,sales.getOrDefault(id,List.of()))
-                    && ("REJECTED".equals(e.get("status")) || Objects.toString(e.get("message"),"").startsWith("ERP结果未能应用到商城"))) {
-                String request=Objects.toString(e.get("id"));
-                result.add(new Candidate("ADMIN:ERP:"+request+":"+e.get("status"),Role.ADMIN,0,shop,id,"ERP",id,null,request,no,
-                        Action.ERP_EXCEPTION,"ERP请求异常，需核实真实处理结果；不会自动推进订单"));
             }
         }
         return result;
-    }
-    private boolean erpRelevant(int orderStatus,Map<String,Object> request,List<Map<String,Object>> sales) {
-        return switch(Objects.toString(request.get("operation"),"")) {
-            case "RESERVE" -> orderStatus==0 || orderStatus==10;
-            case "OUTBOUND" -> orderStatus==10;
-            case "RETURN" -> sales.stream().anyMatch(a->num(a,"status")==30 && String.valueOf(num(a,"id")).equals(request.get("business_key")));
-            case "RELEASE" -> true; // 取消不代表释放已成功，失败释放仍必须由平台核实，不能隐瞒库存异常。
-            default -> false;
-        };
     }
     private Candidate order(Role role,long member,long shop,long id,String no,Action action) { return order(role,member,shop,id,no,action,action.name()); }
     private Candidate order(Role role,long member,long shop,long id,String no,Action action,String reason) {

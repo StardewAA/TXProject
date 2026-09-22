@@ -61,7 +61,12 @@
     <s-richtext-block v-if="type === 'PromotionArticle'" :data="data" :styles="styles" />
 
     <!-- 用户组件：用户卡片 -->
-    <s-user-card v-if="type === 'UserCard'" :data="data" :styles="styles" />
+    <s-user-card
+      v-if="type === 'UserCard'"
+      :data="data"
+      :styles="styles"
+      :identity-title="identityTitle"
+    />
     <!-- 用户组件：用户订单 -->
     <s-order-card v-if="type === 'UserOrder'" :data="data" :styles="styles" />
     <!-- 用户组件：用户资产 -->
@@ -90,6 +95,10 @@
     styles: {
       type: Object,
       default: () => ({}),
+    },
+    identityTitle: {
+      type: String,
+      default: '普通用户',
     },
   });
 

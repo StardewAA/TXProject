@@ -84,6 +84,8 @@ public class WmsShipmentOrderDO extends BaseDO {
     private LocalDateTime nextNotificationTime;
     private String sourceModule;
     private String businessChainNo;
+    /** 商城来源店铺；非商城来源为空。 */
+    private Long shopId;
     /**
      * 客户编号
      *

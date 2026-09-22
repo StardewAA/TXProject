@@ -30,6 +30,12 @@ services:
     environment:
       JAVA_OPTS: -Xms256m -Xmx1024m
 
+  # 商城促销/客服服务：只编译 promotion-server 及其 reactor 依赖，避免被无关 ERP 模块阻断。
+  promotion:
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile.promotion
+
   # Windows Docker Desktop 上 nacos 获取本机 IP 失败（InetUtils.refreshIp NPE），改用 hostname 模式
   nacos:
     environment:

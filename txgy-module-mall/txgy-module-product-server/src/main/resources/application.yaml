@@ -34,6 +34,12 @@ spring:
 server:
   port: 48100
 
+# 第 21 节：member 端只保留采购与个人商城能力。旧供应经营写接口默认关闭；
+# 仅在经过审批的短期回退窗口中通过环境变量临时开启，历史读取仍会返回弃用提示头。
+mall:
+  legacy-member-sales:
+    enabled: ${MALL_LEGACY_MEMBER_SALES_ENABLED:false}
+
 logging:
   file:
     name: ${user.home}/logs/${spring.application.name}.log # 日志文件名，全路径
@@ -115,8 +121,7 @@ txgy:
   integration:
     wms:
       readonly:
-        mode: mock # mock：本地直接读同库 WMS 表；remote：调用 /admin-api/wms/inventory/sku-summary
-        authorization: # remote 模式下使用的 WMS 只读账号 Authorization 头，示例：Bearer xxx
+        mode: remote # 仅通过 WMS 租户隔离 RPC 查询，不直读 WMS 数据库
   web:
     admin-ui:
       url: http://dashboard.txgy.iocoder.cn # Admin 管理后台 UI 的地址

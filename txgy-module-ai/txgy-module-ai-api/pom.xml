@@ -29,14 +29,14 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- Swagger 注解：RPC 接口上的 @Tag / @Operation -->
+        <!-- Web annotations used by the internal RPC contract -->
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-            <optional>true</optional>
+            <scope>provided</scope>
         </dependency>
 
-        <!-- OpenFeign：供其他模块以 Feign 客户端方式调用 -->
+        <!-- RPC client used by mall services -->
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-openfeign</artifactId>

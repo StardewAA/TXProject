@@ -74,18 +74,18 @@ public class TradeOrderLogisticsService {
         if (Objects.equals(order.getDeliveryType(), 2)) return state(result, "NOT_APPLICABLE", "自提订单无需快递物流");
         if (outbound != null && !outbound.confirmed()) {
             return state(result, "REJECTED".equals(outbound.status()) ? "ERP_REJECTED" : "ERP_PENDING",
-                    "REJECTED".equals(outbound.status()) ? "ERP 出库未通过，请联系商家核实" : "待 ERP 确认出库；已登记运单不代表已经发货");
+                    "REJECTED".equals(outbound.status()) ? "历史出库记录未通过，请联系商家核实" : "历史出库记录尚未确认；已登记运单不代表已经发货");
         }
         boolean shipped = Objects.equals(order.getStatus(), 20) || Objects.equals(order.getStatus(), 30);
         if (!shipped) return state(result, "NOT_SHIPPED", "订单尚未发货");
-        // New ERP-backed orders cannot use a pre-filled order status to bypass outbound confirmation.
-        if (!entries.isEmpty() && outbound == null) return state(result, "ERP_PENDING", "待 ERP 确认出库；当前没有已确认的出库记录");
+        // 切换前的历史订单不能用预填订单状态绕过原出库记录核验。
+        if (!entries.isEmpty() && outbound == null) return state(result, "ERP_PENDING", "历史订单没有已确认的出库记录");
         if (entries.stream().anyMatch(e -> "mock".equals(e.mode()))) {
-            return state(result, "NOT_CONFIGURED", "模拟 ERP 订单不查询真实物流；模拟出库不代表真实运输");
+            return state(result, "NOT_CONFIGURED", "历史模拟履约记录不代表真实运输，暂不查询物流");
         }
         if (outbound != null && (!Objects.equals(outbound.logisticsId(), order.getLogisticsId())
                 || !Objects.equals(outbound.logisticsNo(), order.getLogisticsNo()))) {
-            return state(result, "ERP_PENDING", "订单运单与 ERP 确认记录不一致，请联系商家核实");
+            return state(result, "ERP_PENDING", "订单运单与历史出库记录不一致，请联系商家核实");
         }
         if (blank(result.getTrackingNo())) return state(result, "NO_TRACKING", "尚未登记有效快递单号，请联系商家核实");
         if (!configured()) return state(result, "NOT_CONFIGURED", "物流查询暂未开通；已知快递公司和单号可供核实");

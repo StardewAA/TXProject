@@ -84,7 +84,7 @@ class ProductComparisonServiceTest {
         assertEquals(List.of(100, 200, 300), response.getItems().stream().map(ComparisonResponse.Item::getPrice).toList());
         assertEquals(List.of("10mm", "20mm", "30mm"), response.getItems().stream().map(i -> i.getProperties().getFirst().value()).toList());
         assertTrue(response.getItems().stream().allMatch(i -> i.isAvailable() && "UNKNOWN".equals(i.getStandardStatus())));
-        assertTrue(response.getItems().stream().allMatch(i -> "PENDING_ERP".equals(i.getStockStatus())));
+        assertTrue(response.getItems().stream().allMatch(i -> "WMS_LIVE_CHECK".equals(i.getStockStatus())));
         assertTrue(response.getItems().stream().allMatch(i -> i.getDifferences().stream().anyMatch(d -> d.contains("未标准化"))));
     }
     @Test void sameRawNameAndSpecStillDoNotProveSameModel() {

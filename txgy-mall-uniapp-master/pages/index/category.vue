@@ -2,7 +2,6 @@
 <template>
   <s-layout
     :bgStyle="{ color: '#f4f7fb' }"
-    tenantEntry
     tabbar="/pages/index/category"
     title="商品分类"
   >

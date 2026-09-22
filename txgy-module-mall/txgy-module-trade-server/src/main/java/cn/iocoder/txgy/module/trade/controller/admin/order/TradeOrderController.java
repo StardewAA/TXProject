@@ -56,7 +56,7 @@ public class TradeOrderController {
 
     @GetMapping("/page")
     @Operation(summary = "获得交易订单分页")
-    @PreAuthorize("@ss.hasPermission('trade:order:query')")
+    @PreAuthorize("@ss.hasPermission('trade:order:query') and @ss.hasAnyRoles('super_admin', 'tenant_admin')")
     public CommonResult<PageResult<TradeOrderPageItemRespVO>> getOrderPage(TradeOrderPageReqVO reqVO) {
         // 查询订单
         PageResult<TradeOrderDO> pageResult = tradeOrderQueryService.getOrderPage(reqVO);
@@ -84,7 +84,7 @@ public class TradeOrderController {
 
     @GetMapping("/summary")
     @Operation(summary = "获得交易订单统计")
-    @PreAuthorize("@ss.hasPermission('trade:order:query')")
+    @PreAuthorize("@ss.hasPermission('trade:order:query') and @ss.hasAnyRoles('super_admin', 'tenant_admin')")
     public CommonResult<TradeOrderSummaryRespVO> getOrderSummary(TradeOrderPageReqVO reqVO) {
         return success(tradeOrderQueryService.getOrderSummary(reqVO));
     }
@@ -92,7 +92,7 @@ public class TradeOrderController {
     @GetMapping("/get-detail")
     @Operation(summary = "获得交易订单详情")
     @Parameter(name = "id", description = "订单编号", required = true, example = "1")
-    @PreAuthorize("@ss.hasPermission('trade:order:query')")
+    @PreAuthorize("@ss.hasPermission('trade:order:query') and @ss.hasAnyRoles('super_admin', 'tenant_admin')")
     public CommonResult<TradeOrderDetailRespVO> getOrderDetail(@RequestParam("id") Long id) {
         // 查询订单
         TradeOrderDO order = tradeOrderQueryService.getOrder(id);
@@ -115,7 +115,7 @@ public class TradeOrderController {
 
     @GetMapping("/get-shop-orders")
     @Operation(summary = "按店铺分组查看订单商品和金额")
-    @PreAuthorize("@ss.hasPermission('trade:order:query')")
+    @PreAuthorize("@ss.hasPermission('trade:order:query') and @ss.hasAnyRoles('super_admin', 'tenant_admin')")
     public CommonResult<List<TradeOrderShopRespVO>> getShopOrders(@RequestParam("id") Long id) {
         return success(TradeOrderShopSplitter.split(tradeOrderQueryService.getOrderItemListByOrderId(id)));
     }
@@ -123,7 +123,7 @@ public class TradeOrderController {
     @GetMapping("/get-express-track-list")
     @Operation(summary = "获得交易订单的物流轨迹")
     @Parameter(name = "id", description = "交易订单编号")
-    @PreAuthorize("@ss.hasPermission('trade:order:query')")
+    @PreAuthorize("@ss.hasPermission('trade:order:query') and @ss.hasAnyRoles('super_admin', 'tenant_admin')")
     public CommonResult<List<?>> getOrderExpressTrackList(@RequestParam("id") Long id) {
         return success(TradeOrderConvert.INSTANCE.convertList02(
                 tradeOrderQueryService.getExpressTrackList(id)));
@@ -131,7 +131,7 @@ public class TradeOrderController {
 
     @PutMapping("/delivery")
     @Operation(summary = "订单发货")
-    @PreAuthorize("@ss.hasPermission('trade:order:update')")
+    @PreAuthorize("@ss.hasPermission('trade:order:update') and @ss.hasAnyRoles('super_admin', 'tenant_admin')")
     public CommonResult<Boolean> deliveryOrder(@RequestBody TradeOrderDeliveryReqVO deliveryReqVO) {
         tradeOrderUpdateService.deliveryOrder(deliveryReqVO);
         return success(true);
@@ -139,7 +139,7 @@ public class TradeOrderController {
 
     @PutMapping("/update-remark")
     @Operation(summary = "订单备注")
-    @PreAuthorize("@ss.hasPermission('trade:order:update')")
+    @PreAuthorize("@ss.hasPermission('trade:order:update') and @ss.hasAnyRoles('super_admin', 'tenant_admin')")
     public CommonResult<Boolean> updateOrderRemark(@RequestBody TradeOrderRemarkReqVO reqVO) {
         tradeOrderUpdateService.updateOrderRemark(reqVO);
         return success(true);
@@ -147,7 +147,7 @@ public class TradeOrderController {
 
     @PutMapping("/update-price")
     @Operation(summary = "订单调价")
-    @PreAuthorize("@ss.hasPermission('trade:order:update')")
+    @PreAuthorize("@ss.hasPermission('trade:order:update') and @ss.hasAnyRoles('super_admin', 'tenant_admin')")
     public CommonResult<Boolean> updateOrderPrice(@RequestBody TradeOrderUpdatePriceReqVO reqVO) {
         tradeOrderUpdateService.updateOrderPrice(reqVO);
         return success(true);
@@ -155,7 +155,7 @@ public class TradeOrderController {
 
     @PutMapping("/update-address")
     @Operation(summary = "修改订单收货地址")
-    @PreAuthorize("@ss.hasPermission('trade:order:update')")
+    @PreAuthorize("@ss.hasPermission('trade:order:update') and @ss.hasAnyRoles('super_admin', 'tenant_admin')")
     public CommonResult<Boolean> updateOrderAddress(@RequestBody TradeOrderUpdateAddressReqVO reqVO) {
         tradeOrderUpdateService.updateOrderAddress(reqVO);
         return success(true);
@@ -164,7 +164,7 @@ public class TradeOrderController {
     @PutMapping("/pick-up-by-id")
     @Operation(summary = "订单核销")
     @Parameter(name = "id", description = "交易订单编号")
-    @PreAuthorize("@ss.hasPermission('trade:order:pick-up')")
+    @PreAuthorize("@ss.hasPermission('trade:order:pick-up') and @ss.hasAnyRoles('super_admin', 'tenant_admin')")
     public CommonResult<Boolean> pickUpOrderById(@RequestParam("id") Long id) {
         tradeOrderUpdateService.pickUpOrderByAdmin(getLoginUserId(), id);
         return success(true);
@@ -173,7 +173,7 @@ public class TradeOrderController {
     @PutMapping("/pick-up-by-verify-code")
     @Operation(summary = "订单核销")
     @Parameter(name = "pickUpVerifyCode", description = "自提核销码")
-    @PreAuthorize("@ss.hasPermission('trade:order:pick-up')")
+    @PreAuthorize("@ss.hasPermission('trade:order:pick-up') and @ss.hasAnyRoles('super_admin', 'tenant_admin')")
     public CommonResult<Boolean> pickUpOrderByVerifyCode(@RequestParam("pickUpVerifyCode") String pickUpVerifyCode) {
         tradeOrderUpdateService.pickUpOrderByAdmin(getLoginUserId(), pickUpVerifyCode);
         return success(true);
@@ -182,7 +182,7 @@ public class TradeOrderController {
     @GetMapping("/get-by-pick-up-verify-code")
     @Operation(summary = "查询核销码对应的订单")
     @Parameter(name = "pickUpVerifyCode", description = "自提核销码")
-    @PreAuthorize("@ss.hasPermission('trade:order:query')")
+    @PreAuthorize("@ss.hasPermission('trade:order:query') and @ss.hasAnyRoles('super_admin', 'tenant_admin')")
     public CommonResult<TradeOrderDetailRespVO> getByPickUpVerifyCode(@RequestParam("pickUpVerifyCode") String pickUpVerifyCode) {
         TradeOrderDO tradeOrder = tradeOrderUpdateService.getByPickUpVerifyCode(pickUpVerifyCode);
         return success(TradeOrderConvert.INSTANCE.convert2(tradeOrder, null));

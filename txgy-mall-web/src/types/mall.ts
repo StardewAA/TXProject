@@ -169,8 +169,16 @@ export interface OrderItem {
   latestAfterSaleReason?: string
 }
 
-export interface TradeOrder extends PaymentDeadlineFields {
+  export interface TradeOrder extends PaymentDeadlineFields {
+    sourceType?: string
+    inquiryId?: Identifier
+    inquiryQuoteId?: Identifier
+    inquiryQuoteVersion?: number
+    buyerEnterpriseId?: Identifier
+    createdByCurrentMember?: boolean
   shopId?: Identifier
+  deliveryType?: number
+  deliveryPrice?: number
   receiverLongitude?: AddressLocation['longitude']
   receiverLatitude?: AddressLocation['latitude']
   receiverCoordSystem?: AddressLocation['coordSystem']
@@ -196,6 +204,7 @@ export interface TradeOrder extends PaymentDeadlineFields {
 }
 
 export interface AfterSale {
+  createdByCurrentMember?: boolean
   shopId?: Identifier
   orderId?: Identifier
   returnReceiverName?: string

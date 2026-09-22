@@ -18,6 +18,8 @@ import cn.iocoder.txgy.module.pay.enums.order.PayOrderStatusEnum;
 import cn.iocoder.txgy.module.pay.framework.pay.core.client.impl.wallet.WalletPayClient;
 import cn.iocoder.txgy.module.pay.service.order.PayOrderService;
 import cn.iocoder.txgy.module.pay.service.wallet.PayWalletService;
+import cn.iocoder.txgy.module.pay.service.app.PayAppService;
+import cn.iocoder.txgy.module.trade.api.wms.TradeWmsStockApi;
 import com.google.common.collect.Maps;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -49,6 +51,10 @@ public class AppPayOrderController {
     private PayOrderService payOrderService;
     @Resource
     private PayWalletService payWalletService;
+    @Resource
+    private PayAppService payAppService;
+    @Resource
+    private TradeWmsStockApi tradeWmsStockApi;
 
     @GetMapping("/get")
     @Operation(summary = "获得支付订单")
@@ -96,7 +102,18 @@ public class AppPayOrderController {
     public CommonResult<AppPayOrderSubmitRespVO> submitPayOrder(@Valid @RequestBody AppPayOrderSubmitReqVO reqVO) {
         LoginUser member = requireMember();
         if (reqVO == null || reqVO.getId() == null || reqVO.getId() <= 0) throw exception(BAD_REQUEST);
-        if (!belongsToMember(payOrderService.getOrder(reqVO.getId()), member)) throw exception(PAY_ORDER_NOT_FOUND);
+        PayOrderDO payOrder = payOrderService.getOrder(reqVO.getId());
+        if (!belongsToMember(payOrder, member)) throw exception(PAY_ORDER_NOT_FOUND);
+        var app = payAppService.getApp(payOrder.getAppId());
+        if (app != null && "mall".equals(app.getAppKey())) {
+            Long tradeOrderId;
+            try {
+                tradeOrderId = Long.valueOf(payOrder.getMerchantOrderId());
+            } catch (NumberFormatException ex) {
+                throw exception(PAY_ORDER_NOT_FOUND);
+            }
+            tradeWmsStockApi.validatePayment(tradeOrderId, payOrder.getId(), member.getId()).checkError();
+        }
         // 1. 钱包支付事，需要额外传 user_id 和 user_type
         if (Objects.equals(reqVO.getChannelCode(), PayChannelEnum.WALLET.getCode())) {
             if (reqVO.getChannelExtras() == null) {

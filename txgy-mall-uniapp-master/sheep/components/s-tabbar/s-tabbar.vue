@@ -20,7 +20,7 @@
         :badgeStyle="tabbar.badgeStyle"
         :isCenter="getTabbarCenter(index)"
         :centerImage="sheep.$url.cdn(item.iconUrl)"
-        @click="sheep.$router.go(item.url)"
+        @click="sheep.$router.go(navigationTarget(item.url))"
       >
         <template v-slot:active-icon>
 <s-menu-icon class="u-page__item__slot-icon" :src="sheep.$url.cdn(item.activeIconUrl)" :label="item.text" />
@@ -38,12 +38,21 @@
   import sheep from '@/sheep';
   import SuTabbar from '@/sheep/ui/su-tabbar/su-tabbar.vue';
   import { filterMarketingMenuItems } from '@/sheep/helper/simplified-marketing';
+  import { platformNavigationTarget } from '@/sheep/helper/tenant-navigation.mjs';
 
   const tabbar = computed(() => {
     return sheep.$store('app').template.basic?.tabbar;
   });
   // 基础 tabbar 也可能来自旧装修数据，统一过滤已下线的复杂营销入口。
   const tabbarItems = computed(() => filterMarketingMenuItems(tabbar.value?.items));
+  const navigationTarget = (url) => {
+    // #ifdef H5
+    return platformNavigationTarget(url, window.location.href);
+    // #endif
+    // #ifndef H5
+    return url;
+    // #endif
+  };
 
   const tabbarStyle = computed(() => {
     const backgroundStyle = tabbar.value.style;

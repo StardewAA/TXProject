@@ -10,6 +10,7 @@ const SpuApi = {
       custom: {
         showLoading: false,
         showError: false,
+        scope: 'browse',
       },
     });
   },
@@ -34,6 +35,7 @@ const SpuApi = {
       custom: {
         showLoading: false,
         showError: false,
+        scope: 'browse',
       },
     });
   },
@@ -46,6 +48,7 @@ const SpuApi = {
       custom: {
         showLoading: false,
         showError: false,
+        scope: 'browse',
       },
     });
   },

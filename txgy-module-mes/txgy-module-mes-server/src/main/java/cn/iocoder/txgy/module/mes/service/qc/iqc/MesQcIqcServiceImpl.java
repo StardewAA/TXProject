@@ -2,19 +2,23 @@ package cn.iocoder.txgy.module.mes.service.qc.iqc;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjUtil;
+import cn.iocoder.txgy.framework.common.exception.ServiceException;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.hutool.core.util.ObjectUtil;
 import cn.iocoder.txgy.module.mes.controller.admin.qc.iqc.vo.MesQcIqcPageReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.qc.iqc.vo.MesQcIqcSaveReqVO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.qc.defectrecord.MesQcDefectRecordDO;
+import cn.iocoder.txgy.module.mes.dal.dataobject.md.item.MesMdItemDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.qc.iqc.MesQcIqcDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.qc.template.MesQcTemplateItemDO;
 import cn.iocoder.txgy.module.mes.dal.mysql.qc.iqc.MesQcIqcMapper;
 import cn.iocoder.txgy.module.mes.enums.MesBizTypeConstants;
+import cn.iocoder.txgy.module.mes.enums.md.autocode.MesMdAutoCodeRuleCodeEnum;
 import cn.iocoder.txgy.module.mes.enums.qc.MesQcDefectLevelEnum;
 import cn.iocoder.txgy.module.mes.enums.qc.MesQcStatusEnum;
 import cn.iocoder.txgy.module.mes.enums.qc.MesQcTypeEnum;
+import cn.iocoder.txgy.module.mes.service.md.autocode.MesMdAutoCodeRecordService;
 import cn.iocoder.txgy.module.mes.service.md.item.MesMdItemService;
 import cn.iocoder.txgy.module.mes.service.md.vendor.MesMdVendorService;
 import cn.iocoder.txgy.module.mes.service.qc.defectrecord.MesQcDefectRecordService;
@@ -24,13 +28,16 @@ import cn.iocoder.txgy.module.mes.service.wm.arrivalnotice.MesWmArrivalNoticeSer
 import cn.iocoder.txgy.module.mes.service.wm.outsourcereceipt.MesWmOutsourceReceiptService;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.*;
 
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertMap;
@@ -45,6 +52,7 @@ import static cn.iocoder.txgy.module.mes.enums.ErrorCodeConstants.*;
  */
 @Service
 @Validated
+@Slf4j
 public class MesQcIqcServiceImpl implements MesQcIqcService {
 
     @Resource
@@ -52,6 +60,8 @@ public class MesQcIqcServiceImpl implements MesQcIqcService {
 
     @Resource
     private MesQcTemplateItemService templateItemService;
+    @Resource
+    private MesMdAutoCodeRecordService autoCodeRecordService;
     @Resource
     private MesQcIqcLineService iqcLineService;
     @Resource
@@ -79,7 +89,15 @@ public class MesQcIqcServiceImpl implements MesQcIqcService {
         // 1.2 校验来源单据参数，并验证数据存在
         String sourceDocCode = validateAndGetSourceDocCode(
                 createReqVO.getSourceDocType(), createReqVO.getSourceDocId(), createReqVO.getSourceLineId());
-        // 1.3 通过 itemId + IQC 类型自动查找模板
+        // 1.3 幂等校验：同一来源行已存在草稿检验单时，禁止重复创建
+        if (createReqVO.getSourceDocType() != null) {
+            MesQcIqcDO existing = iqcMapper.selectFirstDraftBySourceDoc(
+                    createReqVO.getSourceDocType(), createReqVO.getSourceDocId(), createReqVO.getSourceLineId());
+            if (existing != null) {
+                throw exception(QC_IQC_DRAFT_EXISTS);
+            }
+        }
+        // 1.4 通过 itemId + IQC 类型自动查找模板
         MesQcTemplateItemDO templateItem = templateItemService.getRequiredTemplateByItemIdAndType(
                 createReqVO.getItemId(), MesQcTypeEnum.IQC.getType());
         Long templateId = templateItem.getTemplateId();
@@ -94,6 +112,48 @@ public class MesQcIqcServiceImpl implements MesQcIqcService {
 
         // 3. 从模板指标自动生成检验行
         iqcLineService.createLinesFromTemplate(iqc.getId(), templateId);
+        return iqc.getId();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
+    public Long generateIqcDraft(Integer sourceDocType, Long sourceDocId, Long sourceLineId, String sourceDocCode,
+                                 Long vendorId, Long itemId, BigDecimal quantity, LocalDateTime receiveDate) {
+        // 1. 幂等：同一来源行已存在检验单时，直接返回已有编号
+        MesQcIqcDO existing = iqcMapper.selectFirstBySourceDoc(sourceDocType, sourceDocId, sourceLineId);
+        if (existing != null) {
+            return existing.getId();
+        }
+        // 2. 匹配 IQC 检验模板：未配置时跳过自动建单（不阻断来源单流程）
+        MesQcTemplateItemDO templateItem;
+        try {
+            templateItem = templateItemService.getRequiredTemplateByItemIdAndType(itemId, MesQcTypeEnum.IQC.getType());
+        } catch (ServiceException e) {
+            log.warn("[generateIqcDraft][物料({}) 未配置 IQC 检验模板，跳过自动建单，来源单据({}/{})]",
+                    itemId, sourceDocType, sourceDocId, e);
+            return null;
+        }
+        // 3. 物料名称（用于检验单名称，查不到时降级为来源单据编号）
+        MesMdItemDO item = itemService.getItem(itemId);
+        String name = (item != null && item.getName() != null ? item.getName() : sourceDocCode) + " 来料检验";
+        // 4. 生成检验单编号
+        String code = autoCodeRecordService.generateAutoCode(MesMdAutoCodeRuleCodeEnum.QC_IQC_CODE.getCode());
+        // 5. 插入草稿单：数量先按"全部合格"占位，完成前由检验员据实修改
+        MesQcIqcDO iqc = MesQcIqcDO.builder()
+                .code(code).name(name)
+                .templateId(templateItem.getTemplateId())
+                .sourceDocType(sourceDocType).sourceDocId(sourceDocId).sourceLineId(sourceLineId)
+                .sourceDocCode(sourceDocCode)
+                .vendorId(vendorId).itemId(itemId)
+                .receivedQuantity(quantity).checkQuantity(quantity)
+                .qualifiedQuantity(quantity).unqualifiedQuantity(BigDecimal.ZERO)
+                .receiveDate(receiveDate != null ? receiveDate : LocalDateTime.now())
+                .status(MesQcStatusEnum.DRAFT.getStatus())
+                .build();
+        iqcMapper.insert(iqc);
+        // 6. 从模板指标自动生成检验行
+        iqcLineService.createLinesFromTemplate(iqc.getId(), templateItem.getTemplateId());
+        log.info("[generateIqcDraft][来源单据({}/{}) 自动生成来料检验单({})]", sourceDocType, sourceDocId, iqc.getId());
         return iqc.getId();
     }
 

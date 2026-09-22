@@ -15,7 +15,10 @@ const server = createServer(async (request, response) => {
     let target = resolve(root, '.' + pathname);
     if ((target !== root && !target.startsWith(root + sep)) || pathname.includes('/app-api/')) return response.writeHead(503).end();
     if (!extname(target)) target = join(root, 'index.html');
-    response.writeHead(200, { 'Content-Type': types[extname(target)] || 'application/octet-stream' }).end(await readFile(target));
+    // Read the file before committing the 200 headers. Missing optional assets must
+    // return one clean 404 response instead of attempting to write headers twice.
+    const data = await readFile(target);
+    response.writeHead(200, { 'Content-Type': types[extname(target)] || 'application/octet-stream' }).end(data);
   } catch { response.writeHead(404).end(); }
 });
 const address = { id: 41, name: '隔离联系人', mobile: '13800000000', areaId: 110101, areaName: '北京市 东城区', detailAddress: '隔离测试收货点', defaultStatus: false };

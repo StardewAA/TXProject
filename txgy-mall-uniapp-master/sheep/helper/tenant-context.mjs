@@ -68,5 +68,11 @@ export function createTenantContext(legacyTenantId = '1', entryTenantId = legacy
       }
       return { 'tenant-id': browse, ...(withToken && snapshot.token ? { Authorization: snapshot.token } : {}) };
     },
+    accountHeaders(snapshot, withToken = true) {
+      if (blocked || snapshot.epoch !== epoch || snapshot.browseTenantId !== browse) throw new Error(blocked || '商城上下文已变化，请重试');
+      if (withToken && snapshot.token && !snapshot.accountTenantId) throw new Error('登录身份尚未核验，请重试');
+      return { 'tenant-id': snapshot.accountTenantId || browse,
+        ...(withToken && snapshot.token ? { Authorization: snapshot.token } : {}) };
+    },
   };
 }

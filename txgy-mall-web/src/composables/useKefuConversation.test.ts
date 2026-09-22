@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ api: { thread: vi.fn(), messages: vi.fn(), read: vi.fn(), send: vi.fn(), human: vi.fn() }, current: true, cleanup: [] as Array<() => void> }))
 vi.mock('@/api/kefu-chat', () => ({ kefuChatApi: mocks.api }))
-vi.mock('@/utils/tenant-context', () => ({ getTenantContext: () => ({ browseTenantId: '1', accountUserId: '77' }) }))
+vi.mock('@/utils/tenant-context', () => ({
+  getTenantContext: () => ({ browseTenantId: '999', accountTenantId: '1', accountUserId: '77' }),
+  getAccountRequestTenant: () => '1',
+}))
 vi.mock('./useAccountOperation', () => ({ useAccountOperation: () => ({ current: () => mocks.current }) }))
 vi.mock('vue', async original => ({ ...await original<typeof import('vue')>(), onBeforeUnmount: (fn: () => void) => mocks.cleanup.push(fn) }))
 import { useKefuConversation } from './useKefuConversation'

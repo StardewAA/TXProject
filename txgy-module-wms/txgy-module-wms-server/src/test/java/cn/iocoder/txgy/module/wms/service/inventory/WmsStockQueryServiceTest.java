@@ -36,6 +36,7 @@ class WmsStockQueryServiceTest extends BaseDbUnitTest {
         assertEquals(0, new BigDecimal("39").compareTo(page.getList().get(0).getQuantity()));
         assertEquals(0, new BigDecimal("60").compareTo(page.getList().get(1).getQuantity()));
         assertEquals(2, service.getWarehouses().size());
+        assertEquals(1L, service.getWarehouses().getFirst().getId());
         // A committed WMS change is visible on the next query, without an ERP refresh.
         jdbc.update("UPDATE wms_inventory SET quantity=40 WHERE sku_id=1 AND warehouse_id=1 AND deleted=0");
         assertEquals(0, new BigDecimal("40").compareTo(service.getStockPage(request).getList().get(0).getQuantity()));
@@ -56,6 +57,21 @@ class WmsStockQueryServiceTest extends BaseDbUnitTest {
         assertEquals(1L, service.getStockPage(request).getTotal());
     }
 
+    @Test void filtersExactMappedSkuWarehouseAndReturnsMappingIds() {
+        var request = new WmsStockPageReqDTO();
+        request.setItemId(1L);
+        request.setSkuId(1L);
+        request.setWarehouseId(2L);
+        var page = service.getStockPage(request);
+        assertEquals(1L, page.getTotal());
+        assertEquals(1L, page.getList().getFirst().getItemId());
+        assertEquals(1L, page.getList().getFirst().getSkuId());
+        assertEquals(2L, page.getList().getFirst().getWarehouseId());
+        assertEquals(0, new BigDecimal("7").compareTo(page.getList().getFirst().getQuantity()));
+        TenantContextHolder.setTenantId(1L);
+        assertEquals(0L, service.getStockPage(request).getTotal());
+    }
+
     @Test void refusesQueriesWithoutTenantContext() {
         TenantContextHolder.clear();
         assertThrows(RuntimeException.class, () -> service.getStockPage(new WmsStockPageReqDTO()));
@@ -69,6 +85,8 @@ class WmsStockQueryServiceTest extends BaseDbUnitTest {
         assertEquals(java.util.List.of("BOARD-50", "BOARD-80", "BOARD-100"),
                 skus.stream().map(s -> s.getSkuCode()).toList());
         assertEquals("BOARD", skus.get(2).getMaterialCode());
+        assertEquals(1L, skus.get(2).getItemId());
+        assertEquals(4L, skus.get(2).getSkuId());
         assertEquals("包", skus.get(2).getUnitName());
         TenantContextHolder.setTenantId(1L);
         assertEquals(java.util.List.of("OTHER"), service.getSkuOptions().stream().map(s -> s.getSkuCode()).toList());

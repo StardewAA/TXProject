@@ -36,4 +36,11 @@ public final class AppMallImageAuthReqVO {
         @NotBlank @Size(max = 40) private String account;
         @NotNull @Size(min = 4, max = 16) @ToString.Exclude private String password;
     }
+    /** Platform login never accepts a browsing or account tenant from the client. */
+    @Data
+    public static class PlatformLogin {
+        @Null(message = "平台登录不接受租户参数") private Long tenantId;
+        @NotBlank @Size(max = 40) private String account;
+        @NotNull @Size(min = 4, max = 16) @ToString.Exclude private String password;
+    }
 }

@@ -1,11 +1,10 @@
 package cn.iocoder.txgy.module.product.controller.admin.spu;
 
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
-import cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.txgy.module.product.dal.dataobject.review.ProductSpuReviewRecordDO;
 import cn.iocoder.txgy.module.product.service.review.ProductSpuReviewService;
 import cn.iocoder.txgy.module.product.service.spu.ProductSpuService;
-import cn.iocoder.txgy.module.product.service.shop.ProductShopService;
+import cn.iocoder.txgy.module.product.service.enterprise.ProductAdminBusinessScopeService;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
@@ -20,17 +19,28 @@ import static cn.iocoder.txgy.module.product.service.enterprise.EnterpriseMember
 public class ProductSpuReviewController {
     @Resource private ProductSpuReviewService reviewService;
     @Resource private ProductSpuService spuService;
-    @Resource private ProductShopService shopService;
+    @Resource private ProductAdminBusinessScopeService businessScopeService;
     @GetMapping("/policy")
     @PreAuthorize("@ss.hasPermission('product:spu:query')")
-    public CommonResult<ProductSpuReviewService.Policy> policy() { return success(reviewService.policy()); }
+    public CommonResult<ProductSpuReviewService.Policy> policy() {
+        ProductSpuReviewService.Policy configured = reviewService.policy();
+        ProductAdminBusinessScopeService.Scope scope = businessScopeService.currentScope();
+        boolean canWrite = configured.adminWriteEnabled() && !scope.unrestricted()
+                && scope.shopIds().stream().anyMatch(shopId -> !configured.adminWriteLockedShopIds().contains(shopId));
+        return success(new ProductSpuReviewService.Policy(canWrite, configured.legacyStrategy(),
+                configured.reviewEnabled(), configured.adminWriteLockedShopIds()));
+    }
     @GetMapping("/history")
     @PreAuthorize("@ss.hasPermission('product:spu:query')")
     public CommonResult<List<ProductSpuReviewRecordDO>> history(@RequestParam Long id) {
         var p = spuService.getSpu(id);
         if (p == null) throw invalid("商品不存在");
-        var managed = shopService.getShopByManagerUserId(SecurityFrameworkUtils.getLoginUserId());
-        if (managed != null && !Objects.equals(managed.getId(), p.getShopId())) throw invalid("无权查看其他店铺商品审核记录");
+        if (p.getShopId() == null) {
+            businessScopeService.requireTenantManager(businessScopeService.currentAdminUserId());
+        } else {
+            // 审核历史属于治理留痕：店铺停用后仍须可追溯；审核决定等写操作仍校验有效店铺。
+            businessScopeService.requireCurrentShopResource(p.getShopId());
+        }
         return success(reviewService.history(id));
     }
     public record Decision(@NotNull Long id, @NotNull @PositiveOrZero Long expectedVersion,

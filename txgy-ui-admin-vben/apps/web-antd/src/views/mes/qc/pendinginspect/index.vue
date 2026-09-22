@@ -40,6 +40,26 @@ function handleRefresh() {
   gridApi.query();
 }
 
+/** 去检验：打开已存在的草稿检验单（IQC） */
+function handleInspectIqc(row: MesQcPendingInspectApi.PendingInspect) {
+  iqcFormModalApi.setData({ formType: 'update', id: row.qcId }).open();
+}
+
+/** 去检验：打开已存在的草稿检验单（IPQC） */
+function handleInspectIpqc(row: MesQcPendingInspectApi.PendingInspect) {
+  ipqcFormModalApi.setData({ formType: 'update', id: row.qcId }).open();
+}
+
+/** 去检验：打开已存在的草稿检验单（OQC） */
+function handleInspectOqc(row: MesQcPendingInspectApi.PendingInspect) {
+  oqcFormModalApi.setData({ formType: 'update', id: row.qcId }).open();
+}
+
+/** 去检验：打开已存在的草稿检验单（RQC） */
+function handleInspectRqc(row: MesQcPendingInspectApi.PendingInspect) {
+  rqcFormModalApi.setData({ formType: 'update', id: row.qcId }).open();
+}
+
 /** 创建来料检验单（IQC） */
 function handleCreateIqc(row: MesQcPendingInspectApi.PendingInspect) {
   const prefill: MesQcIqcApi.Iqc = {
@@ -154,35 +174,67 @@ const [Grid, gridApi] = useVbenVxeGrid({
         <TableAction
           :actions="[
             {
+              label: '去检验',
+              type: 'link',
+              icon: ACTION_ICON.EDIT,
+              auth: ['mes:qc-iqc:update'],
+              ifShow: row.qcType === MesQcTypeEnum.IQC && !!row.qcId,
+              onClick: handleInspectIqc.bind(null, row),
+            },
+            {
               label: '来料检验',
               type: 'link',
               icon: ACTION_ICON.ADD,
               auth: ['mes:qc-iqc:create'],
-              ifShow: row.qcType === MesQcTypeEnum.IQC,
+              ifShow: row.qcType === MesQcTypeEnum.IQC && !row.qcId,
               onClick: handleCreateIqc.bind(null, row),
+            },
+            {
+              label: '去检验',
+              type: 'link',
+              icon: ACTION_ICON.EDIT,
+              auth: ['mes:qc-ipqc:update'],
+              ifShow: row.qcType === MesQcTypeEnum.IPQC && !!row.qcId,
+              onClick: handleInspectIpqc.bind(null, row),
             },
             {
               label: '过程检验',
               type: 'link',
               icon: ACTION_ICON.ADD,
               auth: ['mes:qc-ipqc:create'],
-              ifShow: row.qcType === MesQcTypeEnum.IPQC,
+              ifShow: row.qcType === MesQcTypeEnum.IPQC && !row.qcId,
               onClick: handleCreateIpqc.bind(null, row),
+            },
+            {
+              label: '去检验',
+              type: 'link',
+              icon: ACTION_ICON.EDIT,
+              auth: ['mes:qc-oqc:update'],
+              ifShow: row.qcType === MesQcTypeEnum.OQC && !!row.qcId,
+              onClick: handleInspectOqc.bind(null, row),
             },
             {
               label: '出货检验',
               type: 'link',
               icon: ACTION_ICON.ADD,
               auth: ['mes:qc-oqc:create'],
-              ifShow: row.qcType === MesQcTypeEnum.OQC,
+              ifShow: row.qcType === MesQcTypeEnum.OQC && !row.qcId,
               onClick: handleCreateOqc.bind(null, row),
+            },
+            {
+              label: '去检验',
+              type: 'link',
+              icon: ACTION_ICON.EDIT,
+              auth: ['mes:qc-rqc:update'],
+              ifShow: row.qcType === MesQcTypeEnum.RQC && !!row.qcId,
+              onClick: handleInspectRqc.bind(null, row),
             },
             {
               label: '退料检验',
               type: 'link',
               icon: ACTION_ICON.ADD,
               auth: ['mes:qc-rqc:create'],
-              ifShow: row.qcType === MesQcTypeEnum.RQC,
+              ifShow: row.qcType === MesQcTypeEnum.RQC && !row.qcId,
               onClick: handleCreateRqc.bind(null, row),
             },
           ]"
