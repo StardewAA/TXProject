@@ -286,20 +286,17 @@ async function generateAccess(options: GenerateMenuAndRoutesOptions) {
       const menus = JSON.parse(
         JSON.stringify(accessMenus),
       ) as AppRouteRecordRaw[];
-      // 注入 CRM 前端菜单项（CRM 首页，无需后端配置）
+      // 1) 注入 CRM 首页菜单项（无需后端配置）
       injectCrmMenus(menus, accessStore.accessCodes);
-      // 先完成「后端菜单 → 路由记录」转换，再把 CRM 的扁平子菜单重组为分组：
-      // 分组必须发生在转换之后，否则子菜单路径会被拼接成 /crm/<分组>/xxx，导致地址变化。
+
+      // 2) 转换与过滤：MES / WMS 变换 → 菜单过滤 → 路由记录转换 → CRM 分组
+      //    注意分组必须在 convert 之后：否则子菜单路径会被拼成 /crm/<分组>/xxx，地址就变了
       return groupCrmSideMenus(
         convertServerMenuToRouteRecordStringComponent(
           filterMallPromotionMenus(
-            filterHrmEmployeePortalRecruitMenus(transformWmsMenus(menus)),
-      // 注入「AI对话助手」菜单项（前端演示用，无需后端配置）
-      injectAiChatMenu(menus, accessStore.accessCodes);
-      return convertServerMenuToRouteRecordStringComponent(
-        filterMallPromotionMenus(
-          filterHrmEmployeePortalRecruitMenus(
-            transformMesMenus(transformWmsMenus(menus)),
+            filterHrmEmployeePortalRecruitMenus(
+              transformMesMenus(transformWmsMenus(menus)),
+            ),
           ),
         ),
       );
