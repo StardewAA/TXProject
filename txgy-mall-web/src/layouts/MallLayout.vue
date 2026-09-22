@@ -20,7 +20,7 @@ const isMemberArea = computed(() => router.currentRoute.value.path.startsWith('/
 const searchMode = ref('goods')
 function search(event: Event) {
   const q = String(new FormData(event.target as HTMLFormElement).get('keyword') || '').trim()
-  void router.push({ name: 'platform-home', query: q ? { q } : {} })
+  void router.push({ name: 'goods-list', query: q ? { keyword: q } : {} })
 }
 
 async function logout() {
@@ -68,7 +68,7 @@ onMounted(() => {
         </MallLink>
         <div class="header-discovery"><form class="header-search" @submit.prevent="search">
           <select v-model="searchMode" aria-label="搜索范围"><option value="goods">全平台</option></select>
-          <input name="keyword" aria-label="搜索关键词" :value="router.currentRoute.value.query.q" :placeholder="searchMode === 'shops' ? '搜索店铺或企业名称' : '搜索防腐材料、保温材料、管件及施工配套'" />
+          <input name="keyword" aria-label="搜索关键词" :value="router.currentRoute.value.query.keyword || router.currentRoute.value.query.q" placeholder="搜索防腐材料、保温材料、管件及施工配套" />
           <button type="submit">搜索</button>
         </form><div class="header-hotwords"><span>热门选材</span><MallLink v-for="word in ['防腐', '岩棉', '玻璃棉', '硅酸铝', '管件']" :key="word" :to="{ path: '/goods', query: { keyword: word } }">{{ word }}</MallLink></div></div>
         <MallLink class="cart-entry" to="/cart">
@@ -83,10 +83,7 @@ onMounted(() => {
           <MallLink to="/shops">企业店铺</MallLink>
           <MallLink to="/inquiries">询价专栏</MallLink>
           <MallLink to="/marketing">采购优惠</MallLink>
-          <MallLink :to="{ path: '/goods', query: { keyword: '防腐' } }">防腐材料</MallLink>
-          <MallLink :to="{ path: '/goods', query: { keyword: '保温' } }">保温材料</MallLink>
-          <MallLink :to="{ path: '/goods', query: { keyword: '管件' } }">管材管件</MallLink>
-          <MallLink :to="{ path: '/goods', query: { keyword: '施工' } }">施工配套</MallLink>
+          <MallLink to="/categories">商品分类</MallLink>
         </nav>
       </div>
     </header>

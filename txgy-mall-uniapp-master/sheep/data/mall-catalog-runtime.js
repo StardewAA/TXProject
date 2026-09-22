@@ -63,7 +63,8 @@ function resolveCategoryKey(spu, localProduct) {
 function normalizeProduct(spu, tenant, categories) {
   // The bundled ERP metadata belongs to the historical tenant 1 only.
   const localProduct = tenant === '1' ? findLocalProduct(spu) || {} : {};
-  const categoryKey = categories.find(c => Number(c.apiId) === Number(spu.categoryId))?.key
+  const categoryKey = categories.find(c => c.key !== 'all' && c.categoryIds?.includes(Number(spu.categoryId)))?.key
+    || categories.find(c => Number(c.apiId) === Number(spu.categoryId))?.key
     || (tenant === '1' ? resolveCategoryKey(spu, localProduct) : '');
   return {
     ...localProduct,
@@ -88,35 +89,65 @@ function normalizeProduct(spu, tenant, categories) {
 
 function normalizeApiCategories(categories = [], tenant, products = []) {
   const apiById = new Map(categories.map((item) => [Number(item.id), item]));
-  const productCountByCategory = new Map();
+  const productCountByRoot = new Map();
+  const leafIdsByRoot = new Map();
+
+  const findRoot = (categoryId) => {
+    let current = apiById.get(Number(categoryId));
+    const visited = new Set();
+    while (current && Number(current.parentId) > 0 && !visited.has(Number(current.id))) {
+      visited.add(Number(current.id));
+      const parent = apiById.get(Number(current.parentId));
+      if (!parent) break;
+      current = parent;
+    }
+    return current || apiById.get(Number(categoryId));
+  };
+
   products.forEach((product) => {
     const categoryId = Number(product?.categoryId);
     if (Number.isFinite(categoryId) && categoryId > 0) {
-      productCountByCategory.set(categoryId, (productCountByCategory.get(categoryId) || 0) + 1);
+      const root = findRoot(categoryId);
+      const rootId = Number(root?.id || categoryId);
+      productCountByRoot.set(rootId, (productCountByRoot.get(rootId) || 0) + 1);
+      if (!leafIdsByRoot.has(rootId)) leafIdsByRoot.set(rootId, new Set());
+      leafIdsByRoot.get(rootId).add(categoryId);
     }
   });
 
-  // 分类页只展示当前商城实际有商品的末级分类。不同租户可以维护完全不同的
-  // 分类名称和编号，不能再用平台旧分类名称做硬匹配。
-  return [...productCountByCategory.entries()].map(([apiId, count], index) => {
+  // 默认先展示全部商品，再按一级材料大类聚合。否则一个末级分类可能只有
+  // 一两款商品，用户会误以为整个商城的分类数据很少。
+  const allCategory = {
+    key: 'all',
+    apiId: 0,
+    categoryIds: products.map((product) => Number(product?.categoryId)).filter((id) => id > 0),
+    name: '全部商品',
+    group: '全部在售材料',
+    icon: '全部',
+    color: '#0f766e',
+    hint: `${products.length} 款在售商品`,
+  };
+
+  const grouped = [...productCountByRoot.entries()].map(([apiId, count], index) => {
     const apiCategory = apiById.get(apiId);
     const legacyKey = tenant === '1' ? categoryByApiId.get(apiId) : '';
     const exactKey = categoryByName.get(apiCategory?.name);
-    const key = legacyKey || exactKey || `category-${apiId}`;
+    const key = legacyKey || exactKey || `category-group-${apiId}`;
     const presentation = mallCategories.find((category) => category.key === key);
     const name = apiCategory?.name || presentation?.name || '其他材料';
-    const parent = apiById.get(Number(apiCategory?.parentId));
     return {
       ...presentation,
       key,
       apiId,
+      categoryIds: [...(leafIdsByRoot.get(apiId) || [])],
       name,
-      group: parent?.name || presentation?.group || '工程材料',
+      group: name,
       icon: presentation?.icon || name.slice(0, 2),
       color: presentation?.color || categoryColors[index % categoryColors.length],
       hint: presentation?.hint || `${count} 款在售商品`,
     };
   });
+  return [allCategory, ...grouped];
 }
 
 /**

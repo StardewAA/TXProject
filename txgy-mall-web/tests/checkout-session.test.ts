@@ -12,12 +12,13 @@ describe('platform checkout session boundary', () => {
     expect(checkout).not.toContain('tradeApi.createOrder')
   })
 
-  it('keeps the planning-only boundary visible and never pretends an order was created', () => {
+  it('opens the aggregate cashier without exposing internal integration wording', () => {
     expect(checkout).toContain("platformSubmitError.value = error instanceof Error ? error.message : '平台结算提交失败'")
-    expect(checkout).toContain('平台结算未创建任何订单')
-    expect(checkout).toContain('当前可保存经服务端复核的不可支付拆单规划')
-    expect(checkout).toContain('拆单规划已保存，暂不可支付')
-    expect(checkout).toContain('不会创建订单、扣库存或清理购物车')
+    expect(checkout).toContain("!reason.includes('原子子订单与聚合支付尚未接通')")
+    expect(checkout).toContain('确认结算')
+    expect(checkout).toContain('/pay/${result.platformPayOrderId}?platformCheckout=')
+    expect(checkout).not.toContain('保存不可支付拆单规划')
+    expect(checkout).not.toContain('当前可保存经服务端复核的不可支付拆单规划')
   })
 
   it('continues to suppress late account data and serializes address creation', () => {

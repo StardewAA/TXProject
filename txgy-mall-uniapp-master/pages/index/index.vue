@@ -66,7 +66,7 @@
         <view class="section-heading">
           <view>
             <text class="section-title">热门租户</text>
-            <text class="section-subtitle">按有效销量查看材料供应商</text>
+            <text class="section-subtitle">近期成交优先，展示更多在售供应商</text>
           </view>
           <view class="ranking-windows">
             <text :class="{ active: rankingWindow === '7d' }" @tap="changeRankingWindow('7d')">近 7 天</text>
@@ -75,22 +75,25 @@
         </view>
         <view v-if="hotLoading" class="portal-state">正在加载热门租户…</view>
         <view v-else-if="hotError" class="portal-state portal-retry" @tap="loadHotTenants">榜单暂时无法加载，点击重试</view>
-        <scroll-view v-else-if="hotTenants.length" class="category-scroll" scroll-x show-scrollbar="false">
-          <view class="category-row tenant-ranking-row">
-            <view
-              v-for="tenant in hotTenants"
-              :key="tenant.tenantSlug"
-              class="category-tile tenant-ranking-card"
-              @tap="openTenant(tenant.tenantSlug)"
-            >
-              <view class="category-icon tenant-rank">
-                {{ tenant.rank || '·' }}
-              </view>
-              <text class="category-name">{{ tenant.tenantName }}</text>
-              <text class="category-count">{{ tenant.mainCategories || '防腐保温材料' }}</text>
+        <view v-else-if="hotTenants.length" class="tenant-ranking-list">
+          <view
+            v-for="tenant in visibleHotTenants"
+            :key="tenant.tenantSlug"
+            class="tenant-ranking-item"
+            @tap="openTenant(tenant.tenantSlug)"
+          >
+            <view class="tenant-rank">{{ tenant.rank || '·' }}</view>
+            <view class="tenant-ranking-info">
+              <text class="tenant-ranking-name">{{ tenant.tenantName }}</text>
+              <text class="tenant-ranking-category">{{ tenant.mainCategories || '防腐保温材料' }}</text>
             </view>
+            <text class="tenant-ranking-arrow">›</text>
           </view>
-        </scroll-view>
+          <view v-if="hotTenants.length > 5" class="tenant-ranking-toggle" @tap="hotExpanded = !hotExpanded">
+            {{ hotExpanded ? '收起榜单' : `查看其余 ${hotTenants.length - 5} 家供应商` }}
+            <text>{{ hotExpanded ? '⌃' : '⌄' }}</text>
+          </view>
+        </view>
         <view v-else class="portal-state">暂无销量榜单，可继续浏览平台商品</view>
       </view>
 
@@ -111,7 +114,7 @@
             class="product-card"
             @tap="openProduct(product)"
           >
-            <view class="product-cover" :style="{ background: productGradient(product) }">
+            <view class="product-cover">
               <image
                 v-if="product.picUrl"
                 class="product-cover-image"
@@ -176,16 +179,13 @@
   const hotTenants = ref([]);
   const hotLoading = ref(true);
   const hotError = ref(false);
+  const hotExpanded = ref(false);
   const rankingWindow = ref('7d');
+  const visibleHotTenants = computed(() => hotExpanded.value ? hotTenants.value : hotTenants.value.slice(0, 5));
   const featuredProducts = computed(() =>
     (Array.isArray(products.value) ? products.value : []).filter(Boolean).slice(0, 6),
   );
 
-  const productGradient = (product) => {
-    const palettes = ['#0f766e', '#155e75', '#1d4ed8', '#4d7c0f', '#7c3aed'];
-    const color = palettes[Math.abs(Number(product?.tenantId) || 0) % palettes.length];
-    return `linear-gradient(135deg, ${color} 0%, #0f172a 100%)`;
-  };
   const formatPrice = (price) => {
     const value = Number(price);
     return Number.isSafeInteger(value) && value >= 0 ? (value / 100).toFixed(2) : '0.00';
@@ -241,6 +241,7 @@
   const changeRankingWindow = (value) => {
     if (value === rankingWindow.value || !['7d', '30d'].includes(value)) return;
     rankingWindow.value = value;
+    hotExpanded.value = false;
     loadHotTenants();
   };
 
@@ -531,22 +532,88 @@
     box-shadow: 0 8rpx 22rpx rgba(15, 23, 42, 0.05);
   }
 
-  .tenant-ranking-card {
-    width: 210rpx;
-    min-height: 166rpx;
-    justify-content: flex-start;
+  .tenant-ranking-list {
+    overflow: hidden;
+    border: 1rpx solid #e2ebe8;
+    border-radius: 22rpx;
+    background: #fff;
+    box-shadow: 0 8rpx 22rpx rgba(15, 23, 42, 0.05);
+  }
+
+  .tenant-ranking-item {
+    min-height: 104rpx;
+    padding: 18rpx 22rpx;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+  }
+
+  .tenant-ranking-item + .tenant-ranking-item {
+    border-top: 1rpx solid #edf2f0;
+  }
+
+  .tenant-ranking-item:active {
+    background: #f1f7f4;
   }
 
   .tenant-rank {
+    width: 58rpx;
+    height: 58rpx;
+    flex: 0 0 58rpx;
+    border-radius: 18rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 22rpx;
+    font-weight: 700;
     background: linear-gradient(145deg, #0f766e, #155e75);
   }
 
-  .tenant-ranking-card .category-count {
-    width: 100%;
+  .tenant-ranking-info {
+    min-width: 0;
+    flex: 1;
+    margin-left: 20rpx;
+  }
+
+  .tenant-ranking-name,
+  .tenant-ranking-category {
+    display: block;
     overflow: hidden;
-    text-align: center;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .tenant-ranking-name {
+    color: #1e293b;
+    font-size: 24rpx;
+    font-weight: 600;
+  }
+
+  .tenant-ranking-category {
+    margin-top: 7rpx;
+    color: #94a3b8;
+    font-size: 19rpx;
+  }
+
+  .tenant-ranking-arrow {
+    margin-left: 16rpx;
+    color: #0f766e;
+    font-size: 40rpx;
+    line-height: 1;
+  }
+
+  .tenant-ranking-toggle {
+    height: 76rpx;
+    border-top: 1rpx solid #e2ebe8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10rpx;
+    color: #0f766e;
+    font-size: 21rpx;
+    font-weight: 600;
+    background: #f7faf9;
   }
 
   .category-icon {
@@ -596,13 +663,10 @@
 
   .product-cover {
     height: 184rpx;
-    padding: 22rpx;
     box-sizing: border-box;
-    display: flex;
     position: relative;
-    flex-direction: column;
-    justify-content: space-between;
-    color: rgba(255, 255, 255, 0.92);
+    overflow: hidden;
+    background: #eef2f1;
   }
 
   .product-cover-image {
@@ -610,8 +674,7 @@
     inset: 0;
     width: 100%;
     height: 100%;
-    opacity: 0.28;
-    mix-blend-mode: screen;
+    opacity: 1;
   }
 
   .product-code,
@@ -622,22 +685,44 @@
   }
 
   .product-code {
+    position: absolute;
+    top: 14rpx;
+    left: 14rpx;
+    max-width: calc(100% - 110rpx);
+    padding: 5rpx 9rpx;
+    overflow: hidden;
+    border-radius: 7rpx;
+    background: rgba(15, 23, 42, 0.72);
+    color: #fff;
     font-size: 20rpx;
-    letter-spacing: 1rpx;
-    opacity: 0.78;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .product-unit {
-    align-self: flex-end;
+    position: absolute;
+    top: 14rpx;
+    right: 14rpx;
     padding: 6rpx 12rpx;
-    border: 1rpx solid rgba(255, 255, 255, 0.4);
     border-radius: 999rpx;
+    background: rgba(15, 23, 42, 0.72);
+    color: #fff;
     font-size: 19rpx;
   }
 
   .product-mark {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    padding: 10rpx 14rpx;
+    overflow: hidden;
+    background: rgba(15, 23, 42, 0.72);
+    color: #fff;
     font-size: 22rpx;
     font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .product-body {

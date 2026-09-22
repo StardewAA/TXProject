@@ -11,13 +11,34 @@ export function chatTarget(input = {}) {
       throw new Error('咨询内容编号不正确');
     resource = { resourceType: input.resourceType, resourceId: id };
   }
-  return { scope, shopId, ...(resource || {}) };
+  let productSkuId;
+  if (input.productSkuId != null) {
+    productSkuId = Number(input.productSkuId);
+    if (!positive(productSkuId) || scope !== 'SHOP' || resource?.resourceType !== 'PRODUCT')
+      throw new Error('咨询商品规格不正确');
+  }
+  let tenantId;
+  if (input.tenantId != null) {
+    tenantId = Number(input.tenantId);
+    if (!positive(tenantId) || !productSkuId)
+      throw new Error('咨询商品所属商城不正确');
+  }
+  return {
+    scope,
+    shopId,
+    ...(resource || {}),
+    ...(productSkuId ? { productSkuId } : {}),
+    ...(tenantId ? { tenantId } : {}),
+  };
 }
-export function chatEntry(shopId, resourceType, resourceId) {
+export function chatEntry(shopId, resourceType, resourceId, productSkuId, tenantId) {
   const id = Number(shopId),
     target = positive(id) ? { scope: 'SHOP', shopId: id } : { scope: 'PLATFORM', shopId: 0 };
   if (['PRODUCT', 'ORDER'].includes(resourceType) && positive(Number(resourceId)))
     Object.assign(target, { resourceType, resourceId: Number(resourceId) });
+  if (resourceType === 'PRODUCT' && target.scope === 'SHOP' && positive(Number(productSkuId)))
+    target.productSkuId = Number(productSkuId);
+  if (target.productSkuId && positive(Number(tenantId))) target.tenantId = Number(tenantId);
   return target;
 }
 export function chatData(response) {
@@ -34,6 +55,12 @@ export function chatEnabled(value) {
 }
 export function chatThread(value, target, sessionId, identity) {
   const session = value?.session;
+  const crossTenantProduct = target.scope === 'SHOP' && positive(target.productSkuId);
+  const expectedTenantId = positive(target.tenantId)
+    ? target.tenantId
+    : crossTenantProduct
+      ? null
+      : Number(identity?.tenantId);
   if (
     !session ||
     typeof session.id !== 'string' ||
@@ -47,7 +74,8 @@ export function chatThread(value, target, sessionId, identity) {
     (identity &&
       (!positive(Number(identity.tenantId)) ||
         !positive(Number(identity.memberId)) ||
-        String(session.tenantId) !== String(identity.tenantId) ||
+        !positive(Number(session.tenantId)) ||
+        (expectedTenantId && String(session.tenantId) !== String(expectedTenantId)) ||
         String(session.memberId) !== String(identity.memberId)))
   )
     throw new Error('会话范围或状态已变化，请重新进入');
@@ -177,7 +205,8 @@ export function createChatController(api, current, state, uuid = chatUuid, ident
       state.capability = capability;
       if (!chatEnabled(capability)) return;
       const thread = getThread(
-        chatData(await api.open({ scope: target.scope, shopId: target.shopId })),
+        chatData(await api.open({ scope: target.scope, shopId: target.shopId,
+          ...(target.productSkuId ? { productSkuId: target.productSkuId } : {}) })),
       );
       if (!valid()) return;
       state.thread = thread;

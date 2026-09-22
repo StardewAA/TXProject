@@ -72,6 +72,16 @@ class InquiryCrossTenantMapperContractTest {
     }
 
     @Test
+    void platformPublicDetailUsesTheXmlLanguageDriverForEscapedComparisonOperators() throws Exception {
+        Select select = InquiryCrossTenantMapper.class.getMethod("selectPlatformPublicInquiry",
+                Long.class).getAnnotation(Select.class);
+        String sql = String.join(" ", Arrays.asList(select.value())).toLowerCase();
+        assertTrue(sql.contains("<script>"));
+        assertTrue(sql.contains("</script>"));
+        assertTrue(InquiryCrossTenantMapper.PLATFORM_PUBLIC_FROM.contains("&lt;&gt;"));
+    }
+
+    @Test
     void opportunityRequiresEveryInquiryLineToHaveAnApprovedOnSaleDeliverableProduct() {
         String categoryAndDelivery = InquiryCrossTenantMapper.CATEGORY_AND_DELIVERY_MATCH;
         assertTrue(categoryAndDelivery.contains("NOT EXISTS (SELECT 1 FROM product_purchase_inquiry_item requested_item"));

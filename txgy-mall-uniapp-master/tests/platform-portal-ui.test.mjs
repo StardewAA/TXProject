@@ -47,6 +47,9 @@ test('platform detail loads by tenant slug and never falls through to legacy ten
   assert.match(detail, /normalizePortalTenantSlug\(options\.tenantSlug\)/);
   assert.match(detail, /v-if="!state\.portal" class="detail-comment-selector"/);
   assert.match(detail, /公开可售规格/);
+  assert.match(detail, />店铺客服<\/button>/);
+  assert.match(detail, /chatEntry\(state\.goodsInfo\?\.shopId, 'PRODUCT', state\.goodsInfo\?\.id, skuId, state\.goodsInfo\?\.tenantId\)/);
+  assert.doesNotMatch(detail, />平台商品<\/button>/);
 });
 
 test('every portal API call declares the platform request scope', () => {

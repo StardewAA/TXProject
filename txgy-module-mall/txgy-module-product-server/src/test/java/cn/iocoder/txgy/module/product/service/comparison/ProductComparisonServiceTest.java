@@ -4,6 +4,8 @@ import cn.iocoder.txgy.framework.common.exception.ServiceException;
 import cn.iocoder.txgy.framework.security.core.LoginUser;
 import cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
+import cn.iocoder.txgy.module.product.api.sku.ProductPublicSkuApi;
+import cn.iocoder.txgy.module.product.api.sku.dto.ProductPublicSkuRespDTO;
 import cn.iocoder.txgy.module.product.controller.app.comparison.*;
 import cn.iocoder.txgy.module.product.dal.dataobject.enterprise.ProductEnterpriseDO;
 import cn.iocoder.txgy.module.product.dal.dataobject.shop.ProductShopDO;
@@ -28,7 +30,7 @@ import static org.mockito.Mockito.*;
 /** Real MyBatis SQL and H2 persistence, synthetic three-shop samples only; no application database. */
 class ProductComparisonServiceTest {
     JdbcTemplate jdbc; ProductComparisonService service; ProductSpuMapper spus; ProductSkuMapper skus;
-    ProductShopService shops; ComparisonListRepository repository; ProductReviewProperties policy;
+    ProductShopService shops; ProductPublicSkuApi publicSkus; ComparisonListRepository repository; ProductReviewProperties policy;
 
     @BeforeEach void setup() throws Exception {
         var source = new JdbcDataSource();
@@ -53,6 +55,8 @@ class ProductComparisonServiceTest {
         var sessions = new SqlSessionTemplate(factory.getObject());
         spus = sessions.getMapper(ProductSpuMapper.class); skus = sessions.getMapper(ProductSkuMapper.class);
         shops = mock(ProductShopService.class);
+        publicSkus = mock(ProductPublicSkuApi.class);
+        when(publicSkus.getOwnershipList(anyCollection())).thenReturn(List.of());
         when(shops.getShop(anyLong())).thenAnswer(call -> {
             long id = call.getArgument(0); var s = new ProductShopDO().setId(id).setName("样例店" + id).setEnterpriseId(id * 10).setStatus(0);
             s.setTenantId(id == 400 ? 2L : 1L); return s;
@@ -65,7 +69,8 @@ class ProductComparisonServiceTest {
         repository = new ComparisonListRepository(); ReflectionTestUtils.setField(repository, "jdbcTemplate", jdbc);
         service = new ProductComparisonService(); ReflectionTestUtils.setField(service, "skuMapper", skus);
         ReflectionTestUtils.setField(service, "spuMapper", spus); ReflectionTestUtils.setField(service, "reviewService", review);
-        ReflectionTestUtils.setField(service, "shopService", shops); ReflectionTestUtils.setField(service, "repository", repository);
+        ReflectionTestUtils.setField(service, "shopService", shops); ReflectionTestUtils.setField(service, "publicSkuApi", publicSkus);
+        ReflectionTestUtils.setField(service, "repository", repository);
         for (int i = 1; i <= 4; i++) {
             jdbc.update("INSERT INTO product_spu(id,shop_id,name,pic_url,status,price,stock,review_status,content_version,approved_version,tenant_id) VALUES(?,?,?,?,1,1,123,20,1,1,?)",
                     i * 10, i * 100, i == 4 ? "不可公开秘密商品" : "同名样例保温板", "https://example.test/spu.png", i == 4 ? 2 : 1);
@@ -104,6 +109,16 @@ class ProductComparisonServiceTest {
             assertNull(item.getShopId()); assertNull(item.getPicUrl()); assertTrue(item.getProperties().isEmpty());
             assertEquals("商品暂不可比较", item.getUnavailableReason());
         }
+    }
+    @Test void openedPortalSkuCanBeComparedAcrossTheAccountTenantBoundary() {
+        var publicSku = new ProductPublicSkuRespDTO().setTenantId(2L).setEnterpriseId(4000L)
+                .setShopId(400L).setShopName("跨租户样例店").setSpuId(40L).setSpuName("跨租户保温板")
+                .setSkuId(41L).setPicUrl("https://example.test/public.png").setPrice(400).setStock(100)
+                .setProperties(List.of()).setSaleable(true);
+        when(publicSkus.getOwnershipList(List.of(41L))).thenReturn(List.of(publicSku));
+        var item = service.calculate(request(11L, 41L)).getItems().getLast();
+        assertTrue(item.isAvailable()); assertEquals(40L, item.getSpuId()); assertEquals(400L, item.getShopId());
+        assertEquals("跨租户保温板", item.getSpuName()); assertEquals(400, item.getPrice());
     }
     @Test void corruptCrossTenantSkuToSpuRelationshipCannotLeak() {
         jdbc.update("UPDATE product_sku SET tenant_id=1 WHERE id=41");

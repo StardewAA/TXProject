@@ -6,6 +6,8 @@ import cn.iocoder.txgy.module.trade.dal.mysql.order.TradeOrderItemMapper;
 import cn.iocoder.txgy.module.trade.dal.mysql.order.TradeOrderMapper;
 import cn.iocoder.txgy.module.trade.enums.order.TradeOrderStatusEnum;
 import cn.iocoder.txgy.module.trade.service.wms.TradeWmsStockService;
+import cn.iocoder.txgy.module.trade.service.checkout.PlatformCheckoutOrderService;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -19,9 +21,15 @@ public class TradeWmsStockApiImpl implements TradeWmsStockApi {
     private final TradeOrderMapper orderMapper;
     private final TradeOrderItemMapper orderItemMapper;
     private final TradeWmsStockService stockService;
+    private final PlatformCheckoutOrderService platformCheckoutOrderService;
 
     @Override
     public CommonResult<Boolean> validatePayment(Long orderId, Long payOrderId, Long memberId) {
+        if (orderId != null && orderId < 0) {
+            platformCheckoutOrderService.validatePayment(-orderId, payOrderId, memberId,
+                    TenantContextHolder.getRequiredTenantId());
+            return success(true);
+        }
         var order = orderMapper.selectById(orderId);
         if (order == null || !Objects.equals(order.getUserId(), memberId)
                 || !Objects.equals(order.getPayOrderId(), payOrderId)) {

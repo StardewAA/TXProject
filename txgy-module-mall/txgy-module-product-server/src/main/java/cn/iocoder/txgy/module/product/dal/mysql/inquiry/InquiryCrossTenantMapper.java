@@ -331,8 +331,8 @@ public interface InquiryCrossTenantMapper {
     long countPlatformPublicInquiries(@Param("state") String state, @Param("now") Long now,
                                       @Param("keyword") String keyword);
 
-    @Select({"SELECT i.id AS inquiryId,i.tenant_id AS inquiryTenantId,i.visibility AS visibility",
-            PLATFORM_PUBLIC_FROM, " AND i.id=#{inquiryId} LIMIT 1"})
+    @Select({"<script>", "SELECT i.id AS inquiryId,i.tenant_id AS inquiryTenantId,i.visibility AS visibility",
+            PLATFORM_PUBLIC_FROM, " AND i.id=#{inquiryId} LIMIT 1", "</script>"})
     OpportunityRef selectPlatformPublicInquiry(@Param("inquiryId") Long inquiryId);
 
     @Select({"<script>",

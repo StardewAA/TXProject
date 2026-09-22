@@ -107,6 +107,8 @@ export interface PlatformCheckoutDetail {
   aggregateStatus: string
   failureReason?: string
   remark?: string
+  platformPayOrderId?: Identifier
+  platformPayOrderNo?: string
   payable: boolean
   planningOnly: boolean
   createTime?: string

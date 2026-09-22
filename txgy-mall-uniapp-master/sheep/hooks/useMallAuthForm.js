@@ -1,12 +1,13 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import request from '@/sheep/request';
 import $store from '@/sheep/store';
+import { tenantId } from '@/sheep/config';
 import { tenantTransport, ensureTenantReady, getControlledTenantId, captureTenantOperation, isTenantOperationCurrent, verifyPlatformSession } from '@/sheep/helper/tenant-runtime';
 import { assertAuthAvailable, createChallengeState } from '@/sheep/helper/auth-challenge.mjs';
 import { targetAuth } from '@/sheep/api/tenant-auth';
 import { parseRegistrationOptions, resolveRegistrationChoice, assertRegistrationContext, registrationChoiceNotice } from '@/sheep/helper/registration-choice.mjs';
 import { createImageRegistrationState, createCaptchaSession, normalizeLoginName } from '@/sheep/helper/image-registration.mjs';
-import { isPlatformPortalAddress } from '@/sheep/helper/tenant-navigation.mjs';
+import { isPlatformAccountAddress, isPlatformPortalAddress } from '@/sheep/helper/tenant-navigation.mjs';
 
 export const mallAuthPassword = { rules: [
   { required: true, errorMessage: '请输入密码' },
@@ -26,7 +27,8 @@ export function useMallAuthForm(model, purpose) {
   let captchaSession = '';
   const registrationOptions = ref(null), selectedTenant = ref('');
   const platformLogin = purpose === 'PASSWORD_LOGIN' && typeof window !== 'undefined'
-    && isPlatformPortalAddress(window.location?.href || '');
+    && (isPlatformPortalAddress(window.location?.href || '')
+      || isPlatformAccountAddress(window.location?.href || '', tenantId));
   // #ifdef H5
   if (typeof window !== 'undefined') selectedTenant.value = new URLSearchParams(window.location.search).get('registrationTenant') || '';
   // #endif

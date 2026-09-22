@@ -67,6 +67,7 @@ class PlatformCheckoutServiceTest {
     private PlatformCheckoutPlanItemMapper planItemMapper;
     private TradeNoRedisDAO tradeNoRedisDAO;
     private PlatformCheckoutFreightService freightService;
+    private PlatformCheckoutOrderService orderService;
     private PlatformCheckoutService service;
 
     @BeforeEach
@@ -81,9 +82,11 @@ class PlatformCheckoutServiceTest {
         planItemMapper = mock(PlatformCheckoutPlanItemMapper.class);
         tradeNoRedisDAO = mock(TradeNoRedisDAO.class);
         freightService = mock(PlatformCheckoutFreightService.class);
+        orderService = mock(PlatformCheckoutOrderService.class);
         service = new PlatformCheckoutService(cartMapper, productApi, accountApi,
                 checkoutMapper, checkoutOrderMapper, allocationMapper, planMapper, planItemMapper, tradeNoRedisDAO,
-                freightService);
+                freightService, orderService);
+        when(orderService.formalize(any(), any(), any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(freightService.quote(any(), any())).thenAnswer(invocation -> {
             Collection<PlatformCheckoutFreightService.FreightItem> items = invocation.getArgument(1);
             Map<PlatformCheckoutFreightService.ShopKey, PlatformCheckoutFreightService.FreightQuote> quotes =
@@ -121,12 +124,12 @@ class PlatformCheckoutServiceTest {
         assertEquals(3, result.getValidItemCount());
         assertEquals(6, result.getTotalQuantity());
         assertTrue(result.getValidationPassed());
-        assertFalse(result.getSubmittable());
+        assertTrue(result.getSubmittable());
         assertEquals(2, result.getTenantGroups().size());
         assertEquals(99L, result.getAddress().getAddressId());
         assertEquals(2, result.getTenantGroups().getFirst().getShops().size());
         assertEquals(2400L, result.getTenantGroups().getFirst().getShops().getFirst().getGoodsAmount());
-        assertTrue(result.getBlockingReasons().contains(PlatformCheckoutService.SUBMIT_BLOCK_REASON));
+        assertTrue(result.getBlockingReasons().isEmpty());
     }
 
     @Test

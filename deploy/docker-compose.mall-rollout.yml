@@ -26,14 +26,14 @@ services:
       MALL_TENANT_AUTH_HMAC_SECRET: "local-mall-auth-20260917-change-before-production"
       MALL_TENANT_SMS_TEMPLATE_CODE: "local-picture-registration"
   product:
-    image: mall-product:section22-20260922-1
+    image: mall-product:portal-category-20260922-1
     pull_policy: never
     environment:
       MALL_LEGACY_MEMBER_SALES_ENABLED: "false"
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/$${SERVER_PORT:-48080}' || exit 1"]
   trade:
-    image: mall-trade:section22-20260921-1
+    image: mall-trade:platform-checkout-20260922-1
     pull_policy: never
     environment:
       TXGY_TRADE_COMPATIBILITY_MEMBER_SUPPLIER_WRITE_ENABLED: "false"
@@ -44,7 +44,7 @@ services:
     image: mall-wms:section22-20260921-1
     pull_policy: never
   mall-pc:
-    image: mall-pc:section22-20260922-4
+    image: mall-pc:platform-checkout-20260922-1
     pull_policy: never
     container_name: txgy-mall-web-integration
     ports:
@@ -59,7 +59,7 @@ services:
       - txgy-dev
     restart: unless-stopped
   mall-h5:
-    image: mall-h5:section22-20260921-1
+    image: mall-h5:clear-product-images-20260922-1
     pull_policy: never
     container_name: deploy-mall-h5-1
     ports:
