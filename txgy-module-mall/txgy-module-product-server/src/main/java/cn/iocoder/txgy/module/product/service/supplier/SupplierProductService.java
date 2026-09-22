@@ -3,6 +3,8 @@ package cn.iocoder.txgy.module.product.service.supplier;
 import cn.iocoder.txgy.framework.common.pojo.*;
 import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.txgy.module.product.controller.app.supplier.SupplierProductSaveReqVO;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
+import cn.iocoder.txgy.module.product.api.tenant.MallTenantWriteGuard;
 import cn.iocoder.txgy.module.product.controller.admin.spu.vo.*;
 import cn.iocoder.txgy.module.product.dal.dataobject.sku.ProductSkuDO;
 import cn.iocoder.txgy.module.product.dal.dataobject.spu.ProductSpuDO;
@@ -10,6 +12,7 @@ import cn.iocoder.txgy.module.product.dal.dataobject.category.ProductCategoryDO;
 import cn.iocoder.txgy.module.product.dal.mysql.sku.ProductSkuMapper;
 import cn.iocoder.txgy.module.product.dal.mysql.spu.ProductSpuMapper;
 import cn.iocoder.txgy.module.product.service.enterprise.EnterpriseMembershipService;
+import cn.iocoder.txgy.module.product.service.enterprise.ProductAdminBusinessScopeService;
 import cn.iocoder.txgy.module.product.service.spu.ProductSpuService;
 import cn.iocoder.txgy.module.product.service.category.ProductCategoryService;
 import cn.iocoder.txgy.module.product.service.brand.ProductBrandService;
@@ -25,6 +28,7 @@ import static cn.iocoder.txgy.module.product.service.enterprise.EnterpriseMember
 @Service
 public class SupplierProductService {
     @Resource private EnterpriseMembershipService membership;
+    @Resource private ProductAdminBusinessScopeService adminScope;
     @Resource private ProductSpuMapper spuMapper;
     @Resource private ProductSkuMapper skuMapper;
     @Resource private ProductSpuService spuService;
@@ -39,6 +43,12 @@ public class SupplierProductService {
                           Integer reviewStatus, Long contentVersion, Long approvedVersion, String submissionId, String reviewRemark) {}
     public record SkuView(Long id, Integer price, Integer marketPrice, Integer stock,
                           String barCode, Double weight, Double volume, String specification, boolean wmsManaged, String picUrl) {}
+    /**
+     * 询价报价选择器使用的最小 SKU 投影。只返回当前店铺审核通过且仍在售的商品，
+     * 避免前端先分页查询 SPU、再逐个加载详情而遗漏可报价规格。
+     */
+    public record QuoteSkuOption(Long id, Long spuId, String productName, String specification,
+                                 Integer price, String barCode, String picUrl) {}
     public record Detail(Long id, Long shopId, String name, String keyword, String introduction,
                          Long categoryId, Long brandId, String picUrl, Long deliveryTemplateId,
                          Integer status, List<SkuView> skus, List<String> sliderPicUrls,
@@ -100,6 +110,47 @@ public class SupplierProductService {
                 cn.iocoder.txgy.module.product.service.review.ProductSpuReviewService.version(p), p.getApprovedVersion(),
                 p.getSubmissionId(), p.getReviewRemark())).toList(), result.getTotal());
     }
+
+    public List<QuoteSkuOption> quoteSkuOptions(Long member, Long shop) {
+        membership.requireShop(member, shop);
+        return quoteSkuOptionsForShop(shop);
+    }
+
+    public List<QuoteSkuOption> adminQuoteSkuOptions(Long adminUserId, Long shopId) {
+        adminScope.requireMerchantShop(adminUserId, shopId);
+        return quoteSkuOptionsForShop(shopId);
+    }
+
+    private List<QuoteSkuOption> quoteSkuOptionsForShop(Long shop) {
+        List<ProductSpuDO> products = spuMapper.selectList(new LambdaQueryWrapperX<ProductSpuDO>()
+                .eq(ProductSpuDO::getShopId, shop)
+                .eq(ProductSpuDO::getStatus, 1)
+                .eq(ProductSpuDO::getReviewStatus,
+                        cn.iocoder.txgy.module.product.service.review.ProductSpuReviewService.APPROVED)
+                .isNotNull(ProductSpuDO::getApprovedVersion)
+                .apply("approved_version = content_version")
+                .orderByDesc(ProductSpuDO::getId));
+        if (products.isEmpty()) return List.of();
+        Map<Long, ProductSpuDO> productMap = products.stream().collect(java.util.stream.Collectors.toMap(
+                ProductSpuDO::getId, java.util.function.Function.identity(), (left, right) -> left,
+                LinkedHashMap::new));
+        return skuMapper.selectListBySpuId(productMap.keySet()).stream()
+                .filter(sku -> productMap.containsKey(sku.getSpuId()))
+                .map(sku -> {
+                    ProductSpuDO product = productMap.get(sku.getSpuId());
+                    String specification = sku.getProperties() == null || sku.getProperties().isEmpty()
+                            ? "默认规格" : sku.getProperties().stream().map(property -> {
+                                String name = Objects.toString(property.getPropertyName(), "").trim();
+                                String value = Objects.toString(property.getValueName(), "").trim();
+                                if (name.isEmpty()) return value;
+                                if (value.isEmpty()) return name;
+                                return name + "：" + value;
+                            }).filter(value -> !value.isBlank()).collect(java.util.stream.Collectors.joining("；"));
+                    if (specification.isBlank()) specification = "默认规格";
+                    return new QuoteSkuOption(sku.getId(), sku.getSpuId(), product.getName(), specification,
+                            sku.getPrice(), sku.getBarCode(), Objects.toString(sku.getPicUrl(), product.getPicUrl()));
+                }).toList();
+    }
     private ProductSpuDO owned(Long member, Long shop, Long id, boolean lock) {
         membership.requireShop(member, shop);
         var q = new LambdaQueryWrapperX<ProductSpuDO>().eq(ProductSpuDO::getId, id)
@@ -152,6 +203,7 @@ public class SupplierProductService {
     private String skuImage(String image,String main){return image==null||image.isBlank()?main:image;}
     @Transactional(rollbackFor = Exception.class)
     public Long save(Long member, SupplierProductSaveReqVO req) {
+        requireWritableTenant();
         membership.requireShop(member, req.getShopId());
         // 编辑时先锁定并校验归属，不能在后续保存中更换店铺。
         var existing = req.getId() == null ? null : owned(member, req.getShopId(), req.getId(), true);
@@ -202,6 +254,7 @@ public class SupplierProductService {
     }
     @Transactional(rollbackFor = Exception.class)
     public void status(Long member, Long shop, Long id, Integer status, Long expectedVersion) {
+        requireWritableTenant();
         if (status == null || !Set.of(0, 1).contains(status)) throw invalid("仅支持上架或下架");
         var p = owned(member, shop, id, true);
         cn.iocoder.txgy.module.product.service.review.ProductSpuReviewService.expect(p, expectedVersion);
@@ -214,5 +267,9 @@ public class SupplierProductService {
                 throw invalid("请先由后台配置有效快递配送方式及运费模板");
         }
         spuMapper.updateById(new ProductSpuDO().setId(id).setStatus(status));
+    }
+
+    private static void requireWritableTenant() {
+        MallTenantWriteGuard.requireWritable(TenantContextHolder.getRequiredTenantId());
     }
 }

@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed, nextTick, ref } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
@@ -38,6 +38,24 @@ interface Session {
 
 let sessionSeq = 1;
 let msgSeq = 1;
+
+/**
+ * embedded：嵌入模式（CRM 首页的 AI 助手弹窗复用本组件时置为 true）
+ *
+ * true 时不渲染 Page 外壳（页面级布局容器），改由父容器提供高度；
+ * 其余能力（多会话、上下文记忆、意图识别、写操作二次确认、OCR 建单、详情跳转）完全不变。
+ */
+const props = withDefaults(
+  defineProps<{
+    /** 来自外部的自动提问（CRM 首页点击示例问题时传入），变化即发送 */
+    autoQuestion?: string;
+    /** 嵌入模式（CRM 首页 AI 弹窗复用本组件） */
+    embedded?: boolean;
+  }>(),
+  { autoQuestion: '', embedded: false },
+);
+/** 根容器：默认 Page（整页），嵌入模式退化为普通 div，避免 Page 依赖整页布局导致高度塌陷 */
+const rootComponent = computed(() => (props.embedded ? 'div' : Page));
 
 const sessions = ref<Session[]>([]);
 const activeId = ref<number | undefined>(undefined);
@@ -200,6 +218,31 @@ function onEnter(e: KeyboardEvent) {
   e.preventDefault();
   send();
 }
+
+/**
+ * 外部自动提问（CRM 首页点击「示例问题」）
+ *
+ * 两种时机都要覆盖：
+ * 1) 首次挂载时值已存在 —— 组件是随弹窗懒挂载的，父组件写入 autoQuestion 时本组件尚未创建，
+ *    watch 不会补发历史变化，必须在 onMounted 里补一次；
+ * 2) 挂载后值发生变化（关闭弹窗后再次点击示例问题）。
+ *
+ * 父组件在弹窗关闭时会把值复位为空串，因此连续点击同一个示例问题也能再次触发。
+ */
+onMounted(() => {
+  if (props.autoQuestion) {
+    send(props.autoQuestion);
+  }
+});
+
+watch(
+  () => props.autoQuestion,
+  (question) => {
+    if (question) {
+      send(question);
+    }
+  },
+);
 
 /** 一句话查多个对象时会返回多张表；兼容旧的单表结构 */
 function msgTables(m: ChatMessage): TableResult[] {
@@ -401,10 +444,11 @@ function openDetail(bizType: BizType | undefined, row: Record<string, any>) {
 </script>
 
 <template>
-  <Page>
+  <component :is="rootComponent" :class="props.embedded ? 'h-full p-4' : ''">
     <div class="flex h-full min-h-0 gap-4">
-      <!-- 左侧：会话列表 -->
+      <!-- 左侧：会话列表（嵌入首页卡片时隐藏，把宽度让给对话区；弹窗放大版仍保留） -->
       <aside
+        v-if="!props.embedded"
         class="flex w-64 shrink-0 flex-col overflow-hidden rounded-xl border border-border bg-card"
       >
         <div class="flex items-center justify-between border-b border-border p-3">
@@ -615,25 +659,36 @@ function openDetail(bizType: BizType | undefined, row: Record<string, any>) {
         <!-- 空状态 -->
         <div
           v-else
-          class="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-6 text-center"
+          class="flex min-h-0 flex-1 flex-col items-center justify-center text-center"
+          :class="props.embedded ? 'gap-2 p-3' : 'gap-4 p-6'"
         >
-          <AiAssistantIcon :size="88" />
+          <AiAssistantIcon :size="props.embedded ? 48 : 88" />
           <div class="text-base font-medium text-foreground">CRM 智能助手</div>
-          <div class="max-w-md text-sm text-muted-foreground">
-            用自然语言向我提问：客户、线索、商机、合同、回款、待办、报价单、售后工单、回访、质保档案都可以查。我会调用通义千问
-            理解你的意图，从各 CRM 模块拉取真实数据以表格展示，查不到会如实告知。<br />
-            也可以点 📎 上传合同/报价单（图片、Word、PDF）自动识别字段并建单。
+          <!-- 嵌入态（首页卡片）空间有限，只保留一行提示；示例问题由首页提供 -->
+          <div
+            v-if="props.embedded"
+            class="max-w-lg text-xs text-muted-foreground"
+          >
+            直接输入问题即可查询客户、线索、商机、合同、回款、待办、工单、质保档案；也可点
+            📎 上传合同/报价单自动识别字段并建单。
           </div>
-          <div class="flex flex-wrap justify-center gap-2">
-            <button
-              v-for="ex in examples"
-              :key="ex"
-              class="rounded-full border border-border bg-background px-3 py-1 text-xs text-muted-foreground transition hover:border-primary hover:text-primary"
-              @click="send(ex)"
-            >
-              {{ ex }}
-            </button>
-          </div>
+          <template v-else>
+            <div class="max-w-md text-sm text-muted-foreground">
+              用自然语言向我提问：客户、线索、商机、合同、回款、待办、报价单、售后工单、回访、质保档案都可以查。我会调用通义千问
+              理解你的意图，从各 CRM 模块拉取真实数据以表格展示，查不到会如实告知。<br />
+              也可以点 📎 上传合同/报价单（图片、Word、PDF）自动识别字段并建单。
+            </div>
+            <div class="flex flex-wrap justify-center gap-2">
+              <button
+                v-for="ex in examples"
+                :key="ex"
+                class="rounded-full border border-border bg-background px-3 py-1 text-xs text-muted-foreground transition hover:border-primary hover:text-primary"
+                @click="send(ex)"
+              >
+                {{ ex }}
+              </button>
+            </div>
+          </template>
         </div>
 
         <!-- 输入区 -->
@@ -676,13 +731,16 @@ function openDetail(bizType: BizType | undefined, row: Record<string, any>) {
               {{ sending ? '思考中…' : '发送' }}
             </button>
           </div>
-          <div class="mt-1 text-[11px] text-muted-foreground">
+          <div
+            v-if="!props.embedded"
+            class="mt-1 text-[11px] text-muted-foreground"
+          >
             由通义千问理解意图，数据实时来自 CRM 各业务模块的真实接口。
           </div>
         </div>
       </section>
     </div>
-  </Page>
+  </component>
 </template>
 
 <style scoped>

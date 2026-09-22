@@ -33,7 +33,9 @@ import WmsHomeOrderSummaryCards from '../home/modules/wms-home-order-summary-car
 import WmsHomeOrderTrendChart from '../home/modules/wms-home-order-trend-chart.vue';
 import {
   createConversation,
+  currentConversationStorageKey,
   deriveTitle,
+  hasResolvedUser,
   loadConversations,
   newSessionId,
   saveConversations,
@@ -66,12 +68,12 @@ const welcomeTitle = computed(() => {
     : '你好，我是仓库智能助手';
 });
 
-/** 输入框下方的能力提示条 */
+/** 输入框下方的能力提示条（示例用公司主业的防腐保温材料，避免出现无关品类） */
 const QUICK_TIPS = [
-  '采购入库 苹果 20 件 到 北京仓',
-  '查询北京仓库存余额',
-  '新建商品：苹果，单位件，规格 80#',
-  '出库发货 苹果 5 件 从北京仓',
+  '采购入库 岩棉板 20 件 到 金岩原辅材料库',
+  '查询金岩原辅材料库库存余额',
+  '新建商品：岩棉板，单位立方米，规格 1200×600×50',
+  '出库发货 岩棉板 5 件 从金岩成品库',
 ];
 
 const messages = ref<AiChatMessage[]>([]);
@@ -143,6 +145,30 @@ function isPermissionDenied(text?: string): boolean {
   return /您没有.*权限|需要权限|无权访问|越权|无权限|权限不足/.test(text);
 }
 
+/**
+ * 把后端 AiItem 归一化成确认卡片/建单需要的扁平结构。
+ *
+ * 后端 AiItem 的形状是 { sku: {id, name, itemName, skuName, unit, candidates…}, quantity, price }，
+ * 而确认卡片与 /wms/ai/create-order 读的是扁平字段（name/spec/unit/itemId/skuId/candidates）。
+ * 不做这次转换，建单时会因 skuId 为空而报「未匹配到系统商品」。
+ */
+function normalizeItems(items?: WmsAiApi.ItemVO[]): WmsAiApi.ItemVO[] {
+  return (items || []).map((raw: any) => {
+    const sku = raw?.sku || {};
+    return {
+      ...raw,
+      candidates: sku.candidates || raw.candidates || [],
+      itemId: sku.itemId ?? raw.itemId,
+      name: sku.name || sku.itemName || raw.name || '',
+      price: raw.price ?? sku.price ?? undefined,
+      resolved: sku.resolved ?? raw.resolved ?? false,
+      skuId: sku.id ?? raw.skuId,
+      spec: sku.skuName || raw.spec,
+      unit: sku.unit || raw.unit,
+    } as WmsAiApi.ItemVO;
+  });
+}
+
 /** 当前会话的 sessionId（保证多轮上下文延续） */
 function sid() {
   return activeConversation.value?.sessionId || '';
@@ -158,6 +184,26 @@ function scrollToBottom() {
 function push(msg: AiChatMessage) {
   messages.value.push(msg);
   void nextTick(scrollToBottom);
+}
+
+/**
+ * 拼接 reply 与 tips，并去掉重复内容。
+ *
+ * 后端曾经把同一段说明同时写进 reply 和 tips，两个字段又都会被展示，
+ * 结果同一段话出现两遍。这里按「规范化后的文本」去重，保证只显示一次。
+ */
+function dedupeReplyAndTips(reply?: string, tips?: string[]) {
+  const norm = (s: string) => s.replace(/\s+/g, ' ').trim();
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const part of [reply, ...(tips || [])]) {
+    if (!part) continue;
+    const key = norm(part);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(part);
+  }
+  return out.join('\n');
 }
 
 /** 把当前消息写回会话并持久化 */
@@ -293,38 +339,74 @@ function humanSize(n?: number) {
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
-/** 在浏览器里打开附件（图片放大 / 文件预览） */
-function openAttachment(url?: string) {
+/** 能在浏览器里直接显示的类型；其余类型（Excel/CSV 等）浏览器只会下载 */
+const INLINE_VIEWABLE = /^(image\/|application\/pdf|text\/|video\/|audio\/)/i;
+
+/**
+ * 打开附件（图片放大 / 文件预览 / 不可预览的类型则下载）。
+ *
+ * 分三种情况处理，直接 window.open 原地址是不行的：
+ * 1. 本地选取的附件是 FileReader 产生的 data: URL —— 浏览器**禁止顶层打开 data: URL**，
+ *    会直接拦掉，表现为「点了没反应」；
+ * 2. 后端文件地址是相对路径 —— 直接打开会被前端 SPA 路由接管，表现为「跳到系统首页」；
+ * 3. 后端下载接口 /infra/file/{id}/get/** 用的是 attachment（强制下载），
+ *    应换成 /infra/file/{id}/preview/**（inline，内联预览）。
+ *
+ * @param filename 原始文件名：浏览器无法在线预览的类型（如 xlsx）会转为下载，
+ *                 必须带上原名，否则会下到一个没有名字、没有后缀的文件。
+ */
+async function openAttachment(url?: string, filename?: string) {
   if (!url) return;
-  window.open(url, '_blank');
+
+  // 1. 后端文件地址：改用 preview 接口内联打开
+  if (!url.startsWith('data:') && url.includes('/infra/file/')) {
+    triggerLink(url.replace(/\/(get|preview)\//, '/preview/'), undefined, true);
+    return;
+  }
+
+  // 2. data: 或其它相对地址：取成 Blob 后按类型决定预览还是下载
+  try {
+    const res = await fetch(url, { credentials: 'include' });
+    if (!res.ok) throw new Error(`附件读取失败 ${res.status}`);
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    if (INLINE_VIEWABLE.test(blob.type)) {
+      triggerLink(objectUrl, undefined, true);
+    } else {
+      triggerLink(objectUrl, filename || '附件', false);
+      message.info('该类型无法在线预览，已开始下载');
+    }
+    // Blob 地址用完释放（延迟释放，确保新标签页/下载已开始）
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+  } catch {
+    message.error('附件打开失败，请重试');
+  }
 }
 
 /** 触发文件下载；对相对路径会 Blob 拉取后再下载，避免被 Vue Router 拦截 */
 async function downloadFile(url?: string, filename?: string) {
   if (!url) return;
-
-  // data: 或绝对 http(s) 链接直接用 <a download> 触发
-  if (url.startsWith('data:') || /^https?:\/\//i.test(url)) {
-    triggerLink(url, filename);
-    return;
-  }
-
-  // 相对路径：先fetch成blob再生成object URL，避免SPA路由拦截
   try {
     const res = await fetch(url, { credentials: 'include' });
-    if (!res.ok) throw new Error(`下载失败 ${res.status}`);
-    const blob = await res.blob();
-    triggerLink(URL.createObjectURL(blob), filename);
+    if (!res.ok) throw new Error(`附件读取失败 ${res.status}`);
+    const objectUrl = URL.createObjectURL(await res.blob());
+    triggerLink(objectUrl, filename || '附件', false);
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
   } catch {
-    message.error('文件打开失败，请重试');
+    message.error('文件下载失败，请重试');
   }
 }
 
-function triggerLink(url: string, filename?: string) {
+/** 用临时 <a> 触发打开或下载；open=true 时在新标签页打开，否则走下载 */
+function triggerLink(url: string, filename?: string, open = false) {
   const a = document.createElement('a');
   a.href = url;
-  if (filename) a.download = filename;
-  a.target = '_blank';
+  if (open) {
+    a.target = '_blank';
+    a.rel = 'noopener';
+  } else if (filename) {
+    a.download = filename;
+  }
   a.style.display = 'none';
   document.body.appendChild(a);
   a.click();
@@ -370,20 +452,28 @@ async function send() {
       resp = await apiRecognize(payload);
     }
 
-    const aiText = [resp.reply, ...(resp.tips || [])].filter(Boolean).join('\n');
+    // reply 与 tips 依次拼接展示。
+    // 后端历史实现里存在「同一段文字既放 reply 又放 tips」的情况（会导致整段显示两遍），
+    // 这里做一次去重兜底：丢掉与 reply 完全相同、或与前一条 tip 重复的项。
+    const aiText = dedupeReplyAndTips(resp.reply, resp.tips);
     push({
       action: resp.action,
       buildable: resp.buildable,
       id: uid(),
-      items: resp.items,
-      merchant: resp.merchant,
-      merchantId: resp.merchantId,
+      items: normalizeItems(resp.items),
+      merchant: resp.merchant?.name,
+      merchantId: resp.merchant?.id,
       permission: isPermissionDenied(aiText),
       role: 'ai',
       text: aiText,
       type: resp.type,
-      warehouse: resp.warehouse,
-      warehouseId: resp.warehouseId,
+      // 后端 warehouse/sourceWarehouse/targetWarehouse 都是 { id, name, resolved } 对象，
+      // 这里摊平成确认卡片使用的「名称 + 编号」，否则 id 会丢，卡片只能让用户手选。
+      warehouse: resp.warehouse?.name || resp.sourceWarehouse?.name,
+      warehouseId: resp.warehouse?.id ?? resp.sourceWarehouse?.id,
+      // 移库专用：移入仓库（其余动作后端不返回）
+      targetWarehouse: resp.targetWarehouse?.name,
+      targetWarehouseId: resp.targetWarehouse?.id,
     });
     persist();
   } catch (error: any) {
@@ -408,7 +498,9 @@ function onKeydown(e: KeyboardEvent) {
 
 // ==================== 初始化 ====================
 
-onMounted(() => {
+/** 把某个用户的会话列表装载进来（已装载过相同 key 则不重复处理） */
+let loadedKey = '';
+function applyLoadedConversations() {
   const list = loadConversations();
   if (list.length > 0) {
     conversations.value = list;
@@ -419,8 +511,14 @@ onMounted(() => {
   } else {
     handleCreate();
   }
-  // 初次进入空会话引导态：加载首页可视化图表
   if (showHero.value) void nextTick(loadCharts);
+}
+
+onMounted(() => {
+  // watch 的 immediate 在 setup 阶段可能已经按用户 key 装载过一次，这里避免重复装载
+  if (!loadedKey) {
+    applyLoadedConversations();
+  }
   // 拉取仓库/往来企业精简列表，供待确认单据卡片选择（失败静默，不影响主流程）
   getWarehouseSimpleList()
     .then((data) => {
@@ -433,6 +531,28 @@ onMounted(() => {
     })
     .catch(() => {});
 });
+
+/**
+ * 会话按「租户 + 用户」隔离（见 useConversations.storageKey）。
+ *
+ * 刷新页面时 userInfo 只在内存、要等 /auth/get-permission-info 回来才有值；
+ * 若挂载阶段拿不到用户身份，会话会落到全局旧 key 上，切换账号后就会看到别人的历史。
+ * 因此监听存储 key：一旦能确定真实身份（或换成另一个账号），重新加载该用户自己的会话。
+ */
+watch(
+  () => currentConversationStorageKey(),
+  (key) => {
+    if (!hasResolvedUser()) {
+      return;
+    }
+    if (key === loadedKey) {
+      return;
+    }
+    loadedKey = key;
+    applyLoadedConversations();
+  },
+  { immediate: true },
+);
 
 defineExpose({ handleCreate, newSessionId });
 </script>
@@ -484,10 +604,15 @@ defineExpose({ handleCreate, newSessionId });
         <!-- 空会话：欢迎语 + WMS 首页可视化图表 -->
         <div
           v-if="showHero"
-          class="mx-auto flex h-full max-w-6xl flex-col transition-all duration-500"
+          class="mx-auto flex min-h-full max-w-6xl flex-col transition-all duration-500"
         >
+          <!--
+            注意别用 flex-1：仪表盘比可视区高时，flex-1 的基准是 0，
+            会被压缩到 0 高度，表现为欢迎语消失、输入框顶到页面最上方。
+            这里用 grow + shrink-0 + basis-auto：有富余空间时撑开居中，空间不够时保持内容高度、由外层滚动。
+          -->
           <div
-            class="flex flex-1 flex-col justify-center transition-all duration-500"
+            class="flex shrink-0 grow basis-auto flex-col justify-center py-6 transition-all duration-500"
           >
             <div class="mx-auto w-full max-w-2xl text-center">
               <div
@@ -513,12 +638,15 @@ defineExpose({ handleCreate, newSessionId });
                 <div
                   v-for="(img, i) in images"
                   :key="`i${i}`"
-                  class="group relative h-14 w-14 overflow-hidden rounded border border-gray-200 bg-white"
+                  class="group relative h-14 w-14 cursor-pointer overflow-hidden rounded border border-gray-200 bg-white"
+                  title="点击查看大图"
+                  @click="openAttachment(img.url)"
                 >
                   <img :src="img.url" class="h-full w-full object-cover" />
                   <span
                     class="absolute right-0 top-0 hidden cursor-pointer bg-black/50 px-1 text-xs text-white group-hover:block"
-                    @click="images.splice(i, 1)"
+                    title="移除"
+                    @click.stop="images.splice(i, 1)"
                   >
                     ×
                   </span>
@@ -526,13 +654,16 @@ defineExpose({ handleCreate, newSessionId });
                 <div
                   v-for="(doc, i) in docs"
                   :key="`d${i}`"
-                  class="group relative flex h-14 items-center gap-1 rounded border border-gray-200 bg-white px-2 text-xs"
+                  class="group relative flex h-14 cursor-pointer items-center gap-1 rounded border border-gray-200 bg-white px-2 text-xs"
+                  title="点击查看文件"
+                  @click="openAttachment(doc.url, doc.name)"
                 >
                   <IconifyIcon class="size-4" icon="lucide:file-text" />
                   <span class="max-w-24 truncate">{{ doc.name }}</span>
                   <span
                     class="absolute right-0 top-0 hidden cursor-pointer bg-black/50 px-1 text-white group-hover:block"
-                    @click="docs.splice(i, 1)"
+                    title="移除"
+                    @click.stop="docs.splice(i, 1)"
                   >
                     ×
                   </span>
@@ -547,7 +678,7 @@ defineExpose({ handleCreate, newSessionId });
                   v-model="input"
                   :disabled="sending"
                   class="max-h-56 min-h-[120px] w-full resize-none rounded-t-xl border-0 px-4 py-3 text-sm outline-none"
-                  placeholder="请输入你想咨询的内容，例如：采购入库 苹果 20 件 到 北京仓"
+                  placeholder="请输入你想咨询的内容，例如：采购入库 岩棉板 20 件 到 金岩原辅材料库"
                   rows="3"
                   @blur="handleHeroBlur"
                   @focus="handleHeroFocus"
@@ -675,8 +806,8 @@ defineExpose({ handleCreate, newSessionId });
                   :key="i"
                   href="#"
                   class="flex cursor-pointer items-center gap-1 rounded bg-black/5 px-2 py-1 text-xs transition hover:bg-black/10"
-                  title="点击打开/下载文件"
-                  @click.prevent.stop="downloadFile(doc.url, doc.name)"
+                  title="点击查看文件"
+                  @click.prevent.stop="openAttachment(doc.url, doc.name)"
                 >
                   <IconifyIcon class="size-3.5" icon="lucide:file-text" />
                   <span class="max-w-40 truncate">{{ doc.name }}</span>
@@ -724,12 +855,15 @@ defineExpose({ handleCreate, newSessionId });
             <div
               v-for="(img, i) in images"
               :key="`i${i}`"
-              class="group relative h-14 w-14 overflow-hidden rounded border border-gray-200 bg-white"
+              class="group relative h-14 w-14 cursor-pointer overflow-hidden rounded border border-gray-200 bg-white"
+              title="点击查看大图"
+              @click="openAttachment(img.url)"
             >
               <img :src="img.url" class="h-full w-full object-cover" />
               <span
                 class="absolute right-0 top-0 hidden cursor-pointer bg-black/50 px-1 text-xs text-white group-hover:block"
-                @click="images.splice(i, 1)"
+                title="移除"
+                @click.stop="images.splice(i, 1)"
               >
                 ×
               </span>
@@ -737,13 +871,16 @@ defineExpose({ handleCreate, newSessionId });
             <div
               v-for="(doc, i) in docs"
               :key="`d${i}`"
-              class="group relative flex h-14 items-center gap-1 rounded border border-gray-200 bg-white px-2 text-xs"
+              class="group relative flex h-14 cursor-pointer items-center gap-1 rounded border border-gray-200 bg-white px-2 text-xs"
+              title="点击查看文件"
+              @click="openAttachment(doc.url, doc.name)"
             >
               <IconifyIcon class="size-4" icon="lucide:file-text" />
               <span class="max-w-24 truncate">{{ doc.name }}</span>
               <span
                 class="absolute right-0 top-0 hidden cursor-pointer bg-black/50 px-1 text-white group-hover:block"
-                @click="docs.splice(i, 1)"
+                title="移除"
+                @click.stop="docs.splice(i, 1)"
               >
                 ×
               </span>
@@ -758,7 +895,7 @@ defineExpose({ handleCreate, newSessionId });
               v-model="input"
               :disabled="sending"
               class="max-h-40 min-h-[76px] w-full resize-none rounded-t-xl border-0 px-4 py-3 text-sm outline-none"
-              placeholder="请输入你想咨询的内容，例如：采购入库 苹果 20 件 到 北京仓"
+              placeholder="请输入你想咨询的内容，例如：采购入库 岩棉板 20 件 到 金岩原辅材料库"
               rows="2"
               @keydown="onKeydown"
             ></textarea>

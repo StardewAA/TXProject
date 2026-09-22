@@ -8,8 +8,8 @@ import ServiceEntry from '@/components/ServiceEntry.vue'
 import OrderLogisticsMap from '@/components/OrderLogisticsMap.vue'
 import type { AddressLocation } from '@/types/fulfillment'
 
-const props = defineProps<{ orderId: Identifier; receiverLocation?: AddressLocation; receiverAddress?: string; dispatchOriginAddress?: string }>()
-const { data, loading, failed, remaining, canRefresh, load } = useOrderLogistics(() => props.orderId)
+const props = defineProps<{ orderId: Identifier; enterprise?: boolean; receiverLocation?: AddressLocation; receiverAddress?: string; dispatchOriginAddress?: string }>()
+const { data, loading, failed, remaining, canRefresh, load } = useOrderLogistics(() => props.orderId, () => Boolean(props.enterprise))
 const presentation = computed(() => logisticsPresentation(data.value))
 const providerName = computed(() => ({ kd100: '快递100', kdniao: '快递鸟' }[data.value?.source || ''] || '物流服务'))
 </script>

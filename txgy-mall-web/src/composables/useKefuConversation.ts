@@ -6,7 +6,9 @@ import type { KefuMessage, KefuResource, KefuSend, KefuThread } from '@/types/ke
 import { useAccountOperation } from './useAccountOperation'
 
 export function useKefuConversation(initial: KefuThread, agent: boolean) {
-  const operation = useAccountOperation(), scope = { scope: initial.session.scope, shopId: initial.session.shopId }, tenant = getTenantContext().browseTenantId
+  // Pin every follow-up response to the server-resolved session tenant. A platform
+  // member may legitimately talk to a shop owned by another tenant.
+  const operation = useAccountOperation(), scope = { scope: initial.session.scope, shopId: initial.session.shopId }, tenant = String(initial.session.tenantId)
   const memberId = agent ? undefined : getTenantContext().accountUserId
   const thread = ref(assertKefuThread(initial, scope, tenant, undefined, memberId)), messages = ref<KefuMessage[]>([])
   const input = ref(''), error = ref(''), sending = ref(false), loading = ref(false), failed = ref(false)

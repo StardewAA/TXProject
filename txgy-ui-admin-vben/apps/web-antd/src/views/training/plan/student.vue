@@ -13,14 +13,15 @@ import {
   message,
   Modal,
   Popconfirm,
-  Select,
   Space,
   Table,
   Tag,
   Upload,
 } from 'ant-design-vue';
 
-import { getSimpleUserList } from '#/api/system/user';
+import type { SystemUserApi } from '#/api/system/user';
+
+import { UserSelectDialog } from '#/views/system/user/components';
 
 import {
   addClassStudents,
@@ -68,14 +69,9 @@ async function loadStudents() {
   if (!currentClass.value?.id) {
     rows.value = [];
     total.value = 0;
-    loading.value = false;
     return;
   }
   loading.value = true;
-  // 兜底：请求异常或长时间挂起时也确保 loading 关闭，避免页面永久转圈
-  const guardTimer = setTimeout(() => {
-    loading.value = false;
-  }, 8000);
   try {
     const data = await getClassStudentPage({
       pageNo: pageNo.value,
@@ -85,11 +81,7 @@ async function loadStudents() {
     });
     rows.value = data?.list ?? [];
     total.value = data?.total ?? 0;
-  } catch {
-    rows.value = [];
-    total.value = 0;
   } finally {
-    clearTimeout(guardTimer);
     loading.value = false;
   }
 }
@@ -118,34 +110,55 @@ function handleTableChange(pagination: any) {
   loadStudents();
 }
 
-// ========== 添加学员（勾选批量加入，自动生成学习任务） ==========
-const userOptions = ref<{ label: string; value: number }[]>([]);
+// ========== 添加学员（从「系统管理 → 用户管理」人员中选择，批量入班并自动生成学习任务） ==========
+const userSelectRef = ref<InstanceType<typeof UserSelectDialog>>();
 const addVisible = ref(false);
-const addUserIds = ref<number[]>([]);
 const addLoading = ref(false);
+/** 已选待入班人员（已在班的在选择时即过滤） */
+const pendingUsers = ref<SystemUserApi.User[]>([]);
+const addUserIds = computed(() =>
+  pendingUsers.value.map((item) => item.id!).filter((id) => id != null),
+);
+const addColumns = [
+  { title: '姓名', dataIndex: 'nickname', key: 'nickname', width: 120 },
+  { title: '登录账号', dataIndex: 'username', key: 'username', width: 140 },
+  { title: '手机号', dataIndex: 'mobile', key: 'mobile', width: 130 },
+  { title: '部门', dataIndex: 'deptName', key: 'deptName' },
+  { title: '操作', key: 'action', width: 80 },
+];
 
-async function openAddModal() {
-  addUserIds.value = [];
-  if (userOptions.value.length === 0) {
-    try {
-      const users = await getSimpleUserList();
-      userOptions.value = (users ?? [])
-        .filter((item) => item.status === 0 && item.id != null)
-        .map((item) => ({ label: item.nickname, value: item.id! }));
-    } catch {
-      userOptions.value = [];
-    }
+/** 打开「人员选择」弹窗（来源：系统管理 - 用户管理的人员列表，支持按部门/姓名/手机号检索、多选） */
+function openUserSelect() {
+  userSelectRef.value?.open([], { multiple: true });
+}
+
+/** 人员选择确认：过滤已在班人员后进入入班确认弹窗 */
+function handleUsersSelected(rows: SystemUserApi.User[]) {
+  const inClassCount = rows.filter((item) =>
+    activeUserIds.value.has(item.id!),
+  ).length;
+  pendingUsers.value = rows.filter(
+    (item) => item.id != null && !activeUserIds.value.has(item.id),
+  );
+  if (pendingUsers.value.length === 0) {
+    message.warning('所选人员均已在班，无需重复加入');
+    return;
+  }
+  if (inClassCount > 0) {
+    message.info(`${inClassCount} 名人员已在班，已自动跳过`);
   }
   addVisible.value = true;
 }
 
-const addableOptions = computed(() =>
-  userOptions.value.filter((item) => !activeUserIds.value.has(item.value)),
-);
+function removePendingUser(userId?: number) {
+  pendingUsers.value = pendingUsers.value.filter(
+    (item) => item.id !== userId,
+  );
+}
 
 async function handleAddStudents() {
   if (!currentClass.value?.id || addUserIds.value.length === 0) {
-    message.warning('请先勾选要添加的学员');
+    message.warning('请先选择要添加的学员');
     return;
   }
   addLoading.value = true;
@@ -225,15 +238,22 @@ async function handleImport() {
   }
 }
 
-// ========== 在班人数与名额（工具栏展示） ==========
-/** 单个培训班在班学员上限，与后端 ClassStudentServiceImpl.MAX_STUDENT_SIZE 保持一致 */
-const CLASS_MAX_STUDENT = 50;
+// ========== 在班人数与名额（工具栏展示；「批量导入学员并指定培训班」入口在培训班管理列表页） ==========
+/**
+ * 单个培训班在班学员上限，与后端 ClassStudentServiceImpl.MAX_STUDENT_SIZE 保持一致
+ * 0 表示不限制人数（已取消培训班 50 人上限）；如需恢复限制，改为具体数值即可
+ */
+const CLASS_MAX_STUDENT = 0;
+/** 是否限制班级人数（上限为 0 时表示不限制） */
+const studentLimited = computed(() => CLASS_MAX_STUDENT > 0);
 
 /** 当前在班人数（用于展示「在班 X/50」与剩余名额） */
 const inClassTotalCount = computed(() => activeUserIds.value.size);
-/** 剩余可加入名额 */
+/** 剩余可加入名额（不限制人数时为 Infinity） */
 const remainingQuota = computed(() =>
-  Math.max(0, CLASS_MAX_STUDENT - inClassTotalCount.value),
+  studentLimited.value
+    ? Math.max(0, CLASS_MAX_STUDENT - inClassTotalCount.value)
+    : Number.POSITIVE_INFINITY,
 );
 
 // ========== 表格列 ==========
@@ -254,14 +274,15 @@ const columns = [
     <template v-if="currentClass">
       <!-- 工具栏 -->
       <Space class="mb-3" wrap>
-        <Button type="primary" :disabled="!writable" @click="openAddModal">
+        <Button type="primary" :disabled="!writable" @click="openUserSelect">
           添加学员
         </Button>
         <Button :disabled="!writable" @click="importVisible = true">
           批量导入学员
         </Button>
-        <Tag :color="remainingQuota === 0 ? 'red' : 'blue'">
-          在班 {{ inClassTotalCount }}/{{ CLASS_MAX_STUDENT }}
+        <Tag :color="studentLimited && remainingQuota === 0 ? 'red' : 'blue'">
+          在班 {{ inClassTotalCount
+          }}<template v-if="studentLimited">/{{ CLASS_MAX_STUDENT }}</template>
         </Tag>
         <Input
           v-model:value="query.userName"
@@ -285,6 +306,7 @@ const columns = [
         size="small"
         :columns="columns"
         :data-source="rows"
+        :loading="loading"
         :pagination="{
           current: pageNo,
           pageSize,
@@ -321,37 +343,49 @@ const columns = [
       请先在上方选择培训班（暂无班级请先到培训班管理创建并开班）
     </div>
 
-    <!-- 添加学员弹窗 -->
+    <!-- 添加学员弹窗（人员来自「系统管理 → 用户管理」） -->
     <Modal
       v-model:open="addVisible"
       title="添加学员"
       :footer="null"
-      width="620px"
+      width="760px"
     >
       <p class="mb-2 text-xs text-gray-500">
-        勾选人员后批量加入班级，系统将自动生成「课程 × 学员」学习任务。
+        确认以下人员加入班级，系统将自动生成「课程 × 学员」学习任务。
       </p>
-      <Space class="mb-3 w-full">
-        <Select
-          v-model:value="addUserIds"
-          mode="multiple"
-          allow-clear
-          show-search
-          option-filter-prop="label"
-          placeholder="选择学员（可多选）"
-          style="width: 100%"
-          :options="addableOptions"
-        />
-      </Space>
-      <div class="text-right">
+      <Table
+        :columns="addColumns"
+        :data-source="pendingUsers"
+        :pagination="false"
+        :scroll="{ y: 260 }"
+        row-key="id"
+        size="small"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'action'">
+            <Button type="link" danger size="small" @click="removePendingUser(record.id)">
+              移除
+            </Button>
+          </template>
+        </template>
+      </Table>
+      <div class="mt-3 text-right">
         <Space>
           <Button @click="addVisible = false">取消</Button>
-          <Button type="primary" :loading="addLoading" @click="handleAddStudents">
-            确认添加
+          <Button
+            type="primary"
+            :disabled="addUserIds.length === 0"
+            :loading="addLoading"
+            @click="handleAddStudents"
+          >
+            确认添加（{{ addUserIds.length }} 人）
           </Button>
         </Space>
       </div>
     </Modal>
+
+    <!-- 人员选择弹窗（系统管理 - 用户管理人员列表） -->
+    <UserSelectDialog ref="userSelectRef" @selected="handleUsersSelected" />
 
     <!-- 批量导入弹窗 -->
     <Modal

@@ -66,6 +66,10 @@
             <groupId>cn.iocoder.cloud</groupId>
             <artifactId>txgy-spring-boot-starter-security</artifactId>
         </dependency>
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-spring-boot-starter-protection</artifactId>
+        </dependency>
 
         <!-- DB 相关 -->
         <dependency>

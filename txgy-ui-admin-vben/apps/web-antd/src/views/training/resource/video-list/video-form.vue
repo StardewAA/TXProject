@@ -51,6 +51,7 @@ const DEFINITION_OPTIONS = [
 ];
 const selectedFile = ref<File | null>(null);
 const uploading = ref(false);
+const progress = ref(0);
 // 时长自动识别状态：detecting 识别中 / autoDetected 已自动填入 / detectFailed 识别失败需手动
 const detecting = ref(false);
 const autoDetected = ref(false);
@@ -158,6 +159,7 @@ async function handleConfirm() {
     return;
   }
   uploading.value = true;
+  progress.value = 0;
   try {
     const base = {
       title: title.value.trim(),
@@ -177,17 +179,18 @@ async function handleConfirm() {
           data.append(key, String(value));
         }
       });
-      const result = await uploadVideo(data);
-      message.success(
-        result?.message ||
-          (result?.taskCount
-            ? `上传成功，后台正在转码 ${result.taskCount} 个清晰度`
-            : '视频上传成功，已上线'),
-      );
+      const onProgress = (pct: number) => {
+        progress.value = pct;
+      };
+      const result = await uploadVideo(data, onProgress);
     }
     modalApi.close();
     emit('success');
+  } catch (error) {
+    message.error('视频上传失败，请重试或更换较小的文件');
+    throw error;
   } finally {
+    hideLoading?.();
     uploading.value = false;
   }
 }
@@ -207,6 +210,7 @@ const [Modal, modalApi] = useVbenModal({
       definition.value = '720P';
       selectedFile.value = null;
       detecting.value = false;
+      progress.value = 0;
       autoDetected.value = false;
       detectFailed.value = false;
       return;
@@ -263,8 +267,19 @@ const [Modal, modalApi] = useVbenModal({
         </div>
       </div>
       <div class="text-xs text-gray-400">
-        上传后系统在后台异步生成 360P / 480P / 720P 转码版本（不高于上传时的原始清晰度），
-        进度可在列表中查看；转码完成后播放时可自由切换清晰度以适应弱网环境。
+        上传成功后视频立即上线可播放；上传处理时间取决于文件大小，请以页面提示为准。
+      </div>
+
+      <div
+        v-if="uploading"
+        class="mb-3 flex items-center gap-2 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-600 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300"
+      >
+        <IconifyIcon icon="lucide:loader-circle" class="animate-spin" />
+        {{
+          progress >= 100
+            ? '上传完成，服务器处理中…'
+            : `视频上传中 ${progress}%，请勿关闭页面…`
+        }}
       </div>
 
       <div v-if="!editing">

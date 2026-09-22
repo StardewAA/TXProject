@@ -4,16 +4,21 @@ import cn.iocoder.txgy.module.member.api.address.MemberAddressApi;
 import cn.iocoder.txgy.module.member.api.config.MemberConfigApi;
 import cn.iocoder.txgy.module.member.api.level.MemberLevelApi;
 import cn.iocoder.txgy.module.member.api.point.MemberPointApi;
+import cn.iocoder.txgy.module.member.api.platform.MemberPlatformAccountApi;
 import cn.iocoder.txgy.module.member.api.user.MemberUserApi;
 import cn.iocoder.txgy.module.pay.api.order.PayOrderApi;
 import cn.iocoder.txgy.module.pay.api.refund.PayRefundApi;
 import cn.iocoder.txgy.module.pay.api.transfer.PayTransferApi;
 import cn.iocoder.txgy.module.pay.api.wallet.PayWalletApi;
 import cn.iocoder.txgy.module.product.api.category.ProductCategoryApi;
+import cn.iocoder.txgy.module.product.api.enterprise.ProductPurchaseMemberApi;
 import cn.iocoder.txgy.module.product.api.comment.ProductCommentApi;
+import cn.iocoder.txgy.module.product.api.inquiry.ProductInquiryApi;
 import cn.iocoder.txgy.module.product.api.sku.ProductSkuApi;
+import cn.iocoder.txgy.module.product.api.sku.ProductPublicSkuApi;
 import cn.iocoder.txgy.module.product.api.spu.ProductSpuApi;
 import cn.iocoder.txgy.module.product.api.shop.ProductShopApi;
+import cn.iocoder.txgy.module.product.api.shop.ProductAdminShopScopeApi;
 import cn.iocoder.txgy.module.product.api.supplier.ProductSupplierApi;
 import cn.iocoder.txgy.module.promotion.api.bargain.BargainActivityApi;
 import cn.iocoder.txgy.module.promotion.api.bargain.BargainRecordApi;
@@ -27,6 +32,8 @@ import cn.iocoder.txgy.module.system.api.notify.NotifyMessageSendApi;
 import cn.iocoder.txgy.module.system.api.social.SocialClientApi;
 import cn.iocoder.txgy.module.system.api.social.SocialUserApi;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
+import cn.iocoder.txgy.module.wms.api.stock.WmsStockReadApi;
+import cn.iocoder.txgy.module.wms.api.integration.WmsIntegrationApi;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.context.annotation.Configuration;
 
@@ -35,10 +42,13 @@ import org.springframework.context.annotation.Configuration;
         BargainActivityApi.class, BargainRecordApi.class, CombinationRecordApi.class,
         CouponApi.class, DiscountActivityApi.class, RewardActivityApi.class, SeckillActivityApi.class, PointActivityApi.class,
         MemberUserApi.class, MemberPointApi.class, MemberLevelApi.class, MemberAddressApi.class, MemberConfigApi.class,
-        ProductSpuApi.class, ProductSkuApi.class, ProductCommentApi.class, ProductCategoryApi.class,
-        ProductShopApi.class, ProductSupplierApi.class,
+        MemberPlatformAccountApi.class,
+        ProductSpuApi.class, ProductSkuApi.class, ProductPublicSkuApi.class, ProductCommentApi.class, ProductCategoryApi.class,
+        ProductShopApi.class, ProductAdminShopScopeApi.class, ProductSupplierApi.class, ProductInquiryApi.class,
+        ProductPurchaseMemberApi.class,
         PayOrderApi.class, PayRefundApi.class, PayTransferApi.class, PayWalletApi.class,
-        AdminUserApi.class, NotifyMessageSendApi.class, SocialClientApi.class, SocialUserApi.class
+        AdminUserApi.class, NotifyMessageSendApi.class, SocialClientApi.class, SocialUserApi.class,
+        WmsStockReadApi.class, WmsIntegrationApi.class
 })
 public class RpcConfiguration {
 }

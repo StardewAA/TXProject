@@ -5,6 +5,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,6 +17,10 @@ import java.util.Map;
  * → 工具注入大模型 → 模型 Function Calling 调用 → 本类只读 SQL 查询真实数据
  *
  * 数据原则：所有记录来自 MES 数据库实时查询，状态码在 SQL 中翻译为中文，模型只做整理转述。
+ *
+ * [参数绑定约定] keywordOrFilter 生成的每组占位符为 (? IS NULL OR col LIKE ?)，
+ * 绑定顺序为先 IS NULL 检查值（keyword 原文）、再 LIKE 值（like(keyword) 带通配符），
+ * 统一由 {@link #likeArgs(String, int)} 按列数生成，避免各工具手写错位。
  *
  * @author 天信管业
  */
@@ -30,9 +35,6 @@ public class MesQueryToolConfiguration {
      * AND 组合恒为 0 行，误报「未查询到相关数据」。改为 OR 语义后：
      * 任一列命中即返回；keyword 为空时每组 {@code ? IS NULL} 短路为 true，不设过滤。
      *
-     * <p>占位符顺序仍为每列一组 [keyword, like(keyword)]，与各 doQuery 的 args 绑定顺序保持一致，
-     * 因此无需改动任何工具的参数列表。
-     *
      * @param columns 参与匹配的列（如 it.code、it.name、wh.name）
      */
     private static String keywordOrFilter(String... columns) {
@@ -44,6 +46,19 @@ public class MesQueryToolConfiguration {
             sb.append("(? IS NULL OR ").append(columns[i]).append(" LIKE ?)");
         }
         return sb.append("))").toString();
+    }
+
+    /**
+     * 生成 keywordOrFilter 对应的绑定参数段：每列先绑 IS NULL 检查值（keyword 原文）、
+     * 再绑 LIKE 值（like(keyword) 带通配符）；keyword 为空时 LIKE 值绑 null（由 IS NULL 短路）
+     */
+    private static Object[] likeArgs(String keyword, int columns) {
+        List<Object> args = new ArrayList<>();
+        for (int i = 0; i < columns; i++) {
+            args.add(keyword);
+            args.add(keyword != null ? MesBaseQueryToolFunction.like(keyword) : null);
+        }
+        return args.toArray();
     }
 
     // ==================== 生产制造域 ====================
@@ -59,13 +74,7 @@ public class MesQueryToolConfiguration {
                 Integer statusCode = mapStatus(status, "草稿:0,已确认:1,已完成:2,已取消:3");
                 List<Object> args = new ArrayList<>();
                 args.add(tenantId);
-                args.add(keyword);
-                // 每组 (? IS NULL OR col LIKE ?) 有两个占位符，null 时也必须全部绑定
-                args.add(keyword != null ? like(keyword) : null);
-                args.add(keyword);
-                args.add(keyword != null ? like(keyword) : null);
-                args.add(keyword);
-                args.add(keyword != null ? like(keyword) : null);
+                args.addAll(Arrays.asList(likeArgs(keyword, 3)));
                 args.add(statusCode);
                 args.add(statusCode);
                 args.add(limit);
@@ -96,13 +105,7 @@ public class MesQueryToolConfiguration {
                 Integer statusCode = mapStatus(status, "草稿:0,已完成:4,已取消:5");
                 List<Object> args = new ArrayList<>();
                 args.add(tenantId);
-                args.add(keyword);
-                // 每组 (? IS NULL OR col LIKE ?) 有两个占位符，null 时也必须全部绑定
-                args.add(keyword != null ? like(keyword) : null);
-                args.add(keyword);
-                args.add(keyword != null ? like(keyword) : null);
-                args.add(keyword);
-                args.add(keyword != null ? like(keyword) : null);
+                args.addAll(Arrays.asList(likeArgs(keyword, 3)));
                 args.add(statusCode);
                 args.add(statusCode);
                 args.add(limit);
@@ -135,25 +138,26 @@ public class MesQueryToolConfiguration {
                 Integer statusCode = mapStatus(status, "草稿:0,审批中:2,待检验:3,已完成:4");
                 List<Object> args = new ArrayList<>();
                 args.add(tenantId);
-                args.add(keyword);
-                // 每组 (? IS NULL OR col LIKE ?) 有两个占位符，null 时也必须全部绑定
-                args.add(keyword != null ? like(keyword) : null);
-                args.add(keyword);
-                args.add(keyword != null ? like(keyword) : null);
-                args.add(keyword);
-                args.add(keyword != null ? like(keyword) : null);
+                args.addAll(Arrays.asList(likeArgs(keyword, 3)));
                 args.add(statusCode);
                 args.add(statusCode);
                 args.add(limit);
-                String sql = "SELECT f.code AS 报工单号, f.name AS 名称, IFNULL(wo.code,'') AS 所属工单, IFNULL(it.name,'') AS 物料,"
+                String sql = "SELECT f.code AS 报工单号,"
+                        + " CASE f.type WHEN 1 THEN '自行报工' WHEN 2 THEN '委外报工' ELSE CONCAT('类型码', f.type) END AS 报工类型,"
+                        + " IFNULL(ws.name,'') AS 工作站, IFNULL(p.name,'') AS 工序,"
+                        + " IFNULL(wo.code,'') AS 生产工单编码,"
+                        + " IFNULL(it.code,'') AS 产品物料编码, IFNULL(it.name,'') AS 产品物料名称,"
+                        + " IFNULL(it.specification,'') AS 规格型号,"
                         + " f.feedback_quantity + 0 AS 报工数量, f.qualified_quantity + 0 AS 合格数量, f.unqualified_quantity + 0 AS 不合格数量,"
                         + " IFNULL(f.feedback_time,'') AS 报工时间,"
                         + " CASE f.status WHEN 0 THEN '草稿' WHEN 2 THEN '审批中' WHEN 3 THEN '待检验' WHEN 4 THEN '已完成' ELSE CONCAT('状态码', f.status) END AS 状态"
                         + " FROM mes_pro_feedback f"
                         + " LEFT JOIN mes_pro_work_order wo ON wo.id = f.work_order_id"
                         + " LEFT JOIN mes_md_item it ON it.id = f.item_id"
+                        + " LEFT JOIN mes_md_workstation ws ON ws.id = f.workstation_id"
+                        + " LEFT JOIN mes_pro_process p ON p.id = f.process_id"
                         + " WHERE f.tenant_id = ? AND f.deleted = 0"
-                        + keywordOrFilter("f.code", "f.name", "it.name")
+                        + keywordOrFilter("f.code", "it.code", "it.name")
                         + " AND (? IS NULL OR f.status = ?)"
                         + " ORDER BY f.id DESC LIMIT ?";
                 return jdbcTemplate.queryForList(sql, args.toArray());
@@ -175,13 +179,7 @@ public class MesQueryToolConfiguration {
                 Integer statusCode = mapStatus(status, "未处置:0,已处置:1");
                 List<Object> args = new ArrayList<>();
                 args.add(tenantId);
-                args.add(keyword);
-                // 每组 (? IS NULL OR col LIKE ?) 有两个占位符，null 时也必须全部绑定
-                args.add(keyword != null ? like(keyword) : null);
-                args.add(keyword);
-                args.add(keyword != null ? like(keyword) : null);
-                args.add(keyword);
-                args.add(keyword != null ? like(keyword) : null);
+                args.addAll(Arrays.asList(likeArgs(keyword, 3)));
                 args.add(statusCode);
                 args.add(statusCode);
                 args.add(limit);
@@ -224,13 +222,7 @@ public class MesQueryToolConfiguration {
                 }
                 List<Object> args = new ArrayList<>();
                 args.add(tenantId);
-                args.add(keyword);
-                // 每组 (? IS NULL OR col LIKE ?) 有两个占位符，null 时也必须全部绑定
-                args.add(keyword != null ? like(keyword) : null);
-                args.add(keyword);
-                args.add(keyword != null ? like(keyword) : null);
-                args.add(keyword);
-                args.add(keyword != null ? like(keyword) : null);
+                args.addAll(Arrays.asList(likeArgs(keyword, 3)));
                 args.add(statusCode);
                 args.add(statusCode);
                 args.add(limit);
@@ -263,11 +255,7 @@ public class MesQueryToolConfiguration {
             protected List<Map<String, Object>> doQuery(Long tenantId, String keyword, String status, int limit) {
                 List<Object> args = new ArrayList<>();
                 args.add(tenantId);
-                args.add(keyword);
-                // 每组 (? IS NULL OR col LIKE ?) 有两个占位符，null 时也必须全部绑定
-                args.add(keyword != null ? like(keyword) : null);
-                args.add(keyword);
-                args.add(keyword != null ? like(keyword) : null);
+                args.addAll(Arrays.asList(likeArgs(keyword, 2)));
                 args.add(limit);
                 String sql = "SELECT p.code AS 工序编码, p.name AS 工序名称, IFNULL(p.attention,'') AS 注意事项,"
                         + " CASE p.status WHEN 0 THEN '启用' WHEN 1 THEN '停用' ELSE '未知' END AS 状态"
@@ -290,13 +278,7 @@ public class MesQueryToolConfiguration {
             protected List<Map<String, Object>> doQuery(Long tenantId, String keyword, String status, int limit) {
                 List<Object> args = new ArrayList<>();
                 args.add(tenantId);
-                args.add(keyword);
-                // 每组 (? IS NULL OR col LIKE ?) 有两个占位符，null 时也必须全部绑定
-                args.add(keyword != null ? like(keyword) : null);
-                args.add(keyword);
-                args.add(keyword != null ? like(keyword) : null);
-                args.add(keyword);
-                args.add(keyword != null ? like(keyword) : null);
+                args.addAll(Arrays.asList(likeArgs(keyword, 3)));
                 args.add(limit);
                 String sql = "SELECT i.code AS 物料编码, i.name AS 物料名称, IFNULL(i.specification,'') AS 规格型号,"
                         + " IFNULL(t.name,'未分类') AS 物料分类, IFNULL(u.name,'') AS 单位,"
@@ -353,10 +335,15 @@ public class MesQueryToolConfiguration {
             protected List<Map<String, Object>> doQuery(Long tenantId, String keyword, String status, int limit) {
                 Integer statusCode = mapStatus(status, "草稿:0,已完成:4,已取消:5");
                 Map<String, Object> result = new LinkedHashMap<>();
-                List<Object> iqcArgs = new ArrayList<>(List.of(tenantId,
-                        keyword, keyword != null ? like(keyword) : null,
-                        keyword, keyword != null ? like(keyword) : null));
-                iqcArgs.addAll(List.of(statusCode, statusCode, limit));
+                // 每类检验单的过滤组为 3 个占位符：kw(IS NULL) + like(code) + like(it.name)
+                List<Object> iqcArgs = new ArrayList<>();
+                iqcArgs.add(tenantId);
+                iqcArgs.add(keyword);
+                iqcArgs.add(keyword != null ? like(keyword) : null);
+                iqcArgs.add(keyword != null ? like(keyword) : null);
+                iqcArgs.add(statusCode);
+                iqcArgs.add(statusCode);
+                iqcArgs.add(limit);
                 result.put("来料检验IQC", jdbcTemplate.queryForList(
                         "SELECT q.code AS 检验单号, IFNULL(v.name,'') AS 供应商, IFNULL(it.name,'') AS 物料,"
                                 + " q.received_quantity + 0 AS 来料数量, IFNULL(q.check_quantity + 0, 0) AS 检验数量,"
@@ -368,10 +355,14 @@ public class MesQueryToolConfiguration {
                                 + " AND (? IS NULL OR q.code LIKE ? OR it.name LIKE ?)"
                                 + " AND (? IS NULL OR q.status = ?) ORDER BY q.id DESC LIMIT ?",
                         iqcArgs.toArray()));
-                List<Object> ipqcArgs = new ArrayList<>(List.of(tenantId,
-                        keyword, keyword != null ? like(keyword) : null,
-                        keyword, keyword != null ? like(keyword) : null));
-                ipqcArgs.addAll(List.of(statusCode, statusCode, limit));
+                List<Object> ipqcArgs = new ArrayList<>();
+                ipqcArgs.add(tenantId);
+                ipqcArgs.add(keyword);
+                ipqcArgs.add(keyword != null ? like(keyword) : null);
+                ipqcArgs.add(keyword != null ? like(keyword) : null);
+                ipqcArgs.add(statusCode);
+                ipqcArgs.add(statusCode);
+                ipqcArgs.add(limit);
                 result.put("过程检验IPQC", jdbcTemplate.queryForList(
                         "SELECT q.code AS 检验单号, CASE q.type WHEN 1 THEN '自制工序检验' WHEN 2 THEN '首检' WHEN 3 THEN '巡检' WHEN 4 THEN '自检' WHEN 5 THEN '成品检验' ELSE CONCAT('类型码', q.type) END AS 检验类型,"
                                 + " IFNULL(wo.code,'') AS 所属工单, IFNULL(it.name,'') AS 物料,"
@@ -382,10 +373,14 @@ public class MesQueryToolConfiguration {
                                 + " AND (? IS NULL OR q.code LIKE ? OR it.name LIKE ?)"
                                 + " AND (? IS NULL OR q.status = ?) ORDER BY q.id DESC LIMIT ?",
                         ipqcArgs.toArray()));
-                List<Object> oqcArgs = new ArrayList<>(List.of(tenantId,
-                        keyword, keyword != null ? like(keyword) : null,
-                        keyword, keyword != null ? like(keyword) : null));
-                oqcArgs.addAll(List.of(statusCode, statusCode, limit));
+                List<Object> oqcArgs = new ArrayList<>();
+                oqcArgs.add(tenantId);
+                oqcArgs.add(keyword);
+                oqcArgs.add(keyword != null ? like(keyword) : null);
+                oqcArgs.add(keyword != null ? like(keyword) : null);
+                oqcArgs.add(statusCode);
+                oqcArgs.add(statusCode);
+                oqcArgs.add(limit);
                 result.put("出货检验OQC", jdbcTemplate.queryForList(
                         "SELECT q.code AS 检验单号, IFNULL(c.name,'') AS 客户, IFNULL(it.name,'') AS 物料,"
                                 + " q.out_quantity + 0 AS 出货数量, IFNULL(q.check_quantity + 0, 0) AS 检验数量,"
@@ -414,13 +409,7 @@ public class MesQueryToolConfiguration {
                 Integer statusCode = mapStatus(status, "停机:1,生产中:2,维护中:3");
                 List<Object> args = new ArrayList<>();
                 args.add(tenantId);
-                args.add(keyword);
-                // 每组 (? IS NULL OR col LIKE ?) 有两个占位符，null 时也必须全部绑定
-                args.add(keyword != null ? like(keyword) : null);
-                args.add(keyword);
-                args.add(keyword != null ? like(keyword) : null);
-                args.add(keyword);
-                args.add(keyword != null ? like(keyword) : null);
+                args.addAll(Arrays.asList(likeArgs(keyword, 3)));
                 args.add(statusCode);
                 args.add(statusCode);
                 args.add(limit);
@@ -452,13 +441,7 @@ public class MesQueryToolConfiguration {
             protected List<Map<String, Object>> doQuery(Long tenantId, String keyword, String status, int limit) {
                 List<Object> args = new ArrayList<>();
                 args.add(tenantId);
-                args.add(keyword);
-                // 每组 (? IS NULL OR col LIKE ?) 有两个占位符，null 时也必须全部绑定
-                args.add(keyword != null ? like(keyword) : null);
-                args.add(keyword);
-                args.add(keyword != null ? like(keyword) : null);
-                args.add(keyword);
-                args.add(keyword != null ? like(keyword) : null);
+                args.addAll(Arrays.asList(likeArgs(keyword, 3)));
                 args.add(limit);
                 String sql = "SELECT it.code AS 物料编码, it.name AS 物料名称, IFNULL(wh.name,'') AS 仓库,"
                         + " IFNULL(ms.batch_code,'') AS 批次, ms.quantity + 0 AS 库存数量,"
@@ -486,11 +469,7 @@ public class MesQueryToolConfiguration {
             protected List<Map<String, Object>> doQuery(Long tenantId, String keyword, String status, int limit) {
                 List<Object> args = new ArrayList<>();
                 args.add(tenantId);
-                args.add(keyword);
-                // 每组 (? IS NULL OR col LIKE ?) 有两个占位符，null 时也必须全部绑定
-                args.add(keyword != null ? like(keyword) : null);
-                args.add(keyword);
-                args.add(keyword != null ? like(keyword) : null);
+                args.addAll(Arrays.asList(likeArgs(keyword, 2)));
                 args.add(limit);
                 String sql = "SELECT t.code AS 班组编码, t.name AS 班组名称"
                         + " FROM mes_cal_team t"

@@ -4,7 +4,7 @@
  *
  * 1. fixed 固定定位（右 16px / 下 20px）；面板固定白色背景 + 黑色文字，不随主题变化
  * 2. 宽 380px（最大化 560px），高 min(720px, 视口-32px)；消息区内部滚动
- * 3. 最小化收起为右下角悬浮球（悬停"MES 智能助手"）；支持最大化切换；默认展开
+ * 3. 最小化收起为右下角悬浮球（悬停"MES 智能助手"）；支持最大化切换；默认收起（进入页面不自动弹出，点击悬浮球才展开）
  * 4. 对接现有 AI 流式接口：权限拦截在后端，越权返回拒绝话术直接渲染
  * 5. Enter 发送 / Shift+Enter 换行；会话仅当前页面缓存，刷新清空
  */
@@ -19,8 +19,12 @@ import { Button, Input, Tooltip, message } from 'ant-design-vue';
 import {
   createChatConversationMy,
   deleteChatConversationMy,
+  getChatConversationMyList,
 } from '#/api/ai/chat/conversation';
-import { sendChatMessageStream } from '#/api/ai/chat/message';
+import {
+  getChatMessageListByConversationId,
+  sendChatMessageStream,
+} from '#/api/ai/chat/message';
 import { getMyPage } from '#/api/ai/model/chatRole';
 import { uploadFile } from '#/api/infra/file';
 import { MarkdownView } from '#/components/markdown-view';
@@ -37,9 +41,9 @@ import {
   type BlankDocFormState,
 } from './blankDocSchema';
 // 【新增模块：导入解析】Word/Excel/粘贴文本 → 识别单据 → 提取字段填充模板
+// （注：附件文件改走后端统一抽取，前端 parseDocFromFile 退役，仅保留粘贴文本解析）
 import {
   looksLikeDocText,
-  parseDocFromFile,
   parseDocFromText,
   type DocParseResult,
 } from './mesDocImport';
@@ -64,8 +68,8 @@ const props = withDefaults(
   },
 );
 
-/** 面板状态：展开（默认）/ 收起为悬浮球；最大化切换 */
-const expanded = ref(true);
+/** 面板状态：默认收起为悬浮球（进入页面不自动弹出，点击悬浮球才展开）；最大化切换 */
+const expanded = ref(false);
 const maximized = ref(false);
 /** 会话就绪标记（创建成功后才能发送） */
 const conversationReady = ref(false);
@@ -336,68 +340,56 @@ function pushParseResult(result: DocParseResult) {
   scrollToBottom();
 }
 
-/** 【新增：导入解析】处理上传的 Word/Excel/Txt 文件 + 图片（图片走视觉识别 → 直接录入） */
-async function handleImportFile(e: Event) {
+/**
+ * 【交互改造】待发送附件：📎 选择后先挂在输入框上方（不立即处理），
+ * 由用户输入意图（或点快捷意图按钮）后，发送时才统一上传并交给后端处理
+ */
+const pendingFiles = ref<
+  Array<{ file: File; kind: 'image' | 'doc'; preview?: string }>
+>([]);
+
+/** 附件按钮点击：选择文件 → 挂到待发送区 */
+function handleImportFile(e: Event) {
   const input = e.target as HTMLInputElement;
-  const file = input.files?.[0];
+  const files = Array.from(input.files ?? []);
   input.value = ''; // 允许重复选择同一个文件
-  if (!file) return;
-  // 【新增：图片录入】图片先上传到文件服务，再携带附件 URL 发送，
-  // 由后端视觉模型识别「字段:值」并调用录入工具写库（用户要求：根据图片直接添加）
-  if (file.type.startsWith('image/')) {
-    messages.value.push({
-      role: 'user',
-      content: `📷 上传图片：${file.name}`,
-      time: formatTime(),
+  for (const file of files) {
+    const kind: 'image' | 'doc' = file.type.startsWith('image/')
+      ? 'image'
+      : 'doc';
+    pendingFiles.value.push({
+      file,
+      kind,
+      preview: kind === 'image' ? URL.createObjectURL(file) : undefined,
     });
-    scrollToBottom();
-    try {
-      const url = (await uploadFile({ file })) as unknown as string;
-      if (!url) throw new Error('上传返回为空');
-      inputText.value = '请根据图片中的单据信息，提取字段并录入对应的业务单据';
-      await handleSend([url]);
-    } catch {
-      messages.value.push({
-        role: 'assistant',
-        content: '❌ 图片上传失败，请重试或直接以文字描述单据内容。',
-        time: formatTime(),
-      });
-      scrollToBottom();
+  }
+}
+
+/** 移除待发送附件（同时释放预览 URL） */
+function removePendingFile(index: number) {
+  const item = pendingFiles.value[index];
+  if (item?.preview) URL.revokeObjectURL(item.preview);
+  pendingFiles.value.splice(index, 1);
+}
+
+/** 输入框实例（快捷意图填入后聚焦用） */
+const intentInputRef = ref();
+
+/** 快捷意图：点击后填入输入框（自动聚焦、光标到末尾），用户可修改后发送 */
+function applyQuickIntent(text: string) {
+  inputText.value = text;
+  nextTick(() => {
+    // antd TextArea 组件实例 → 取内部原生 textarea 聚焦并置光标于文末
+    const inst = intentInputRef.value;
+    const el =
+      inst?.resizableTextArea?.textArea ??
+      inst?.$el?.querySelector?.('textarea');
+    if (el) {
+      el.focus();
+      const len = inputText.value.length;
+      el.setSelectionRange(len, len);
     }
-    return;
-  }
-  // 展示用户动作 + "解析中"占位
-  messages.value.push({
-    role: 'user',
-    content: `📎 上传文件：${file.name}`,
-    time: formatTime(),
   });
-  const aiMsg: {
-    content: string;
-    docConfirm?: boolean;
-    docKey?: string;
-    docState?: BlankDocFormState;
-    role: 'assistant' | 'user';
-    time: string;
-  } = { role: 'assistant', content: '', time: formatTime() };
-  messages.value.push(aiMsg);
-  streaming.value = true;
-  scrollToBottom();
-  const result = await parseDocFromFile(file);
-  if (result.ok && result.schema && result.state) {
-    const missingHint =
-      result.missing && result.missing.length > 0
-        ? `\n（未提取到、将留空待填：${result.missing.join('、')}）`
-        : '';
-    aiMsg.content = `✅ 已识别【${result.schema.title}】，提取到以下信息：\n${result.summary}${missingHint}\n\n确认无误后，点击下方按钮打开单据预览：`;
-    aiMsg.docConfirm = true;
-    aiMsg.docKey = result.schema.key;
-    aiMsg.docState = result.state;
-  } else {
-    aiMsg.content = `❌ 无法识别单据：${result.reason ?? '内容格式无法解析'}。\n请检查文件/文本格式后重试；或直接粘贴文本（每行"字段：值"）。`;
-  }
-  streaming.value = false;
-  scrollToBottom();
 }
 
 /** 【新增：导入解析】处理粘贴的单据文本（在 handleSend 中调用） */
@@ -420,12 +412,183 @@ const messageListRef = ref<HTMLDivElement>();
 /** 流式中断控制器 */
 const abortController = ref<AbortController>();
 
-/** 面板尺寸：最大化时放大宽高，普通尺寸宽 380 / 高 min(720, 视口-32) */
-const panelStyle = computed(() =>
-  maximized.value
-    ? { width: 'min(560px, calc(100vw - 32px))', height: 'min(86vh, 860px)' }
-    : { height: 'min(720px, calc(100vh - 32px))', width: '380px' },
+/** ========== 悬浮球 / 面板拖拽定位 ==========
+ * 初始固定在视口右下角；用户可拖拽移动（悬浮球整体拖拽、面板按住标题栏拖拽），
+ * 拖拽后的位置存入 localStorage，刷新后恢复上次位置 */
+const FAB_SIZE = 52;
+const PANEL_WIDTH = 380;
+const PANEL_HEIGHT_FALLBACK = 720;
+
+function clampPos(x: number, y: number, w: number, h: number) {
+  return {
+    x: Math.min(Math.max(0, x), Math.max(0, window.innerWidth - w)),
+    y: Math.min(Math.max(0, y), Math.max(0, window.innerHeight - h)),
+  };
+}
+
+function loadPos(key: string, defX: number, defY: number) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      const p = JSON.parse(raw);
+      if (Number.isFinite(p?.x) && Number.isFinite(p?.y)) {
+        return { x: p.x, y: p.y };
+      }
+    }
+  } catch {
+    /* 忽略反序列化失败，使用默认位置 */
+  }
+  return { x: defX, y: defY };
+}
+
+function savePos(key: string, pos: { x: number; y: number }) {
+  try {
+    localStorage.setItem(key, JSON.stringify(pos));
+  } catch {
+    /* 存储不可用时忽略 */
+  }
+}
+
+/** 悬浮球初始位置：右下角（right 20 / bottom 24） */
+const fabPos = ref(
+  loadPos(
+    'mes-ai-fab-pos',
+    window.innerWidth - FAB_SIZE - 20,
+    window.innerHeight - FAB_SIZE - 24,
+  ),
 );
+/** 面板初始位置：右下角（right 16 / top 20） */
+const panelPos = ref(
+  loadPos('mes-ai-panel-pos', window.innerWidth - PANEL_WIDTH - 16, 20),
+);
+/** 最大化停靠位置（默认右侧贴边、top 88，可拖拽后记忆） */
+const maxPos = ref(loadPos('mes-ai-max-pos', window.innerWidth - 488, 88));
+
+const fabStyle = computed(() => ({
+  left: `${fabPos.value.x}px`,
+  top: `${fabPos.value.y}px`,
+}));
+
+/** 面板尺寸：最大化默认停靠屏幕右侧（全高抽屉式，可拖拽后记忆），普通尺寸按拖拽位置定位 */
+const panelStyle = computed(() => {
+  if (maximized.value) {
+    const w = Math.min(480, window.innerWidth - 64);
+    const p = clampPos(maxPos.value.x, maxPos.value.y, w, window.innerHeight - 108);
+    return {
+      width: `${w}px`,
+      height: `${Math.round(window.innerHeight - p.y - 20)}px`,
+      left: `${p.x}px`,
+      top: `${p.y}px`,
+    };
+  }
+  return {
+    height: 'min(720px, calc(100vh - 32px))',
+    width: '380px',
+    left: `${panelPos.value.x}px`,
+    top: `${panelPos.value.y}px`,
+  };
+});
+
+/** 拖拽状态（模块级即可，同一时刻只拖一个元素） */
+interface DragState {
+  target: 'fab' | 'panel';
+  startX: number;
+  startY: number;
+  origX: number;
+  origY: number;
+  moved: boolean;
+}
+let dragState: null | DragState = null;
+/** 上一次拖拽是否发生了移动（用于区分「拖拽」与「点击」） */
+let lastDragMoved = false;
+
+function onDragMove(e: MouseEvent) {
+  if (!dragState) return;
+  const dx = e.clientX - dragState.startX;
+  const dy = e.clientY - dragState.startY;
+  if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+    dragState.moved = true;
+  }
+  const isFab = dragState.target === 'fab';
+  const isPanelMax = dragState.target === 'panel' && maximized.value;
+  const w = isFab ? FAB_SIZE : isPanelMax ? Math.min(480, window.innerWidth - 64) : PANEL_WIDTH;
+  const h = isFab
+    ? FAB_SIZE
+    : isPanelMax
+      ? window.innerHeight - 88
+      : Math.min(PANEL_HEIGHT_FALLBACK, window.innerHeight - 32);
+  const p = clampPos(dragState.origX + dx, dragState.origY + dy, w, h);
+  if (isFab) {
+    fabPos.value = p;
+    savePos('mes-ai-fab-pos', p);
+  } else if (isPanelMax) {
+    maxPos.value = p;
+    savePos('mes-ai-max-pos', p);
+  } else {
+    panelPos.value = p;
+    savePos('mes-ai-panel-pos', p);
+  }
+}
+
+function onDragEnd() {
+  window.removeEventListener('mousemove', onDragMove);
+  window.removeEventListener('mouseup', onDragEnd);
+  document.body.style.userSelect = '';
+  lastDragMoved = dragState?.moved ?? false;
+  dragState = null;
+}
+
+/** 拖拽入口：悬浮球整体 / 面板标题栏（最大化时同样可拖拽，位置独立记忆） */
+function onDragStart(e: MouseEvent, target: 'fab' | 'panel') {
+  const pos =
+    target === 'fab'
+      ? fabPos.value
+      : maximized.value
+        ? maxPos.value
+        : panelPos.value;
+  dragState = {
+    target,
+    startX: e.clientX,
+    startY: e.clientY,
+    origX: pos.x,
+    origY: pos.y,
+    moved: false,
+  };
+  lastDragMoved = false;
+  document.body.style.userSelect = 'none';
+  window.addEventListener('mousemove', onDragMove);
+  window.addEventListener('mouseup', onDragEnd);
+}
+
+/** 悬浮球点击：拖拽结束后未移动才视为点击展开 */
+function onFabClick() {
+  if (lastDragMoved) {
+    lastDragMoved = false;
+    return;
+  }
+  setExpanded(true);
+}
+
+// 视口尺寸变化时把两个元素拉回可视范围
+function clampAllToViewport() {
+  fabPos.value = clampPos(fabPos.value.x, fabPos.value.y, FAB_SIZE, FAB_SIZE);
+  if (maximized.value) {
+    const w = Math.min(480, window.innerWidth - 64);
+    maxPos.value = clampPos(
+      maxPos.value.x,
+      maxPos.value.y,
+      w,
+      window.innerHeight - 108,
+    );
+  } else {
+    panelPos.value = clampPos(
+      panelPos.value.x,
+      panelPos.value.y,
+      PANEL_WIDTH,
+      Math.min(PANEL_HEIGHT_FALLBACK, window.innerHeight - 32),
+    );
+  }
+}
 
 /** 时间戳轻量展示（HH:mm） */
 function formatTime(): string {
@@ -455,12 +618,18 @@ async function scrollToBottom() {
   }
 }
 
+/** 同步页面主体避让 class：pushBody 为 false 时始终不挤压页面（面板悬浮覆盖在内容之上） */
+function syncBodyAvoid(open: boolean) {
+  document.body.classList.toggle(
+    'mes-ai-panel-open',
+    props.pushBody !== false && open,
+  );
+}
+
 /** 展开/收起切换：同步管理 body 避让 class */
 function setExpanded(v: boolean) {
   expanded.value = v;
-  if (props.pushBody !== false) {
-    document.body.classList.toggle('mes-ai-panel-open', v);
-  }
+  syncBodyAvoid(v);
   if (v) scrollToBottom();
 }
 
@@ -519,6 +688,35 @@ function describeRequestError(e: any, fallback: string): string {
   return rawMsg || fallback;
 }
 
+/**
+ * 解析当前租户下的 AI 角色编号。
+ * 角色 id 是按租户分配的（例：「MES 生产助手」在租户 2010 为 20、租户 1 为 1000020），
+ * 硬编码的 fallbackRoleId 只在个别租户成立，故改为按名称动态查找：
+ *   1) 先查公开角色（publicStatus: true）——「MES 生产助手」是全租户共用的公开角色；
+ *   2) 再查当前用户的私有角色（publicStatus: false）；
+ *   3) 都未命中时退回 props.fallbackRoleId，兼容历史数据。
+ */
+async function resolveChatRoleId(): Promise<number> {
+  for (const publicStatus of [true, false]) {
+    try {
+      const page = await getMyPage({
+        name: props.roleName,
+        pageNo: 1,
+        pageSize: 10,
+        publicStatus,
+      });
+      const list = page?.list || [];
+      const hit =
+        list.find((item: any) => item.name === props.roleName) || list[0];
+      if (hit?.id) return hit.id;
+    } catch {
+      // 单次查询失败不阻断：继续尝试下一种查询范围
+    }
+  }
+  if (props.fallbackRoleId) return props.fallbackRoleId;
+  throw new Error('未找到 AI 角色配置');
+}
+
 /** 创建会话：查找「MES 生产助手」角色（带回退逻辑），失败给出分类提示可重试 */
 async function initConversation() {
   // 防重入：上一次初始化未完成时跳过。
@@ -542,17 +740,7 @@ async function initConversation() {
     }
   }
   try {
-    let roleId = props.fallbackRoleId;
-    const page = await getMyPage({
-      name: props.roleName,
-      pageNo: 1,
-      pageSize: 10,
-      publicStatus: false,
-    });
-    const list = page?.list || [];
-    const hit = list.find((item: any) => item.name === props.roleName) || list[0];
-    if (hit) roleId = hit.id;
-    if (!roleId) throw new Error('未找到 AI 角色配置');
+    const roleId = await resolveChatRoleId();
     const conv = await createChatConversationMy({ roleId } as any);
     conversationId.value = String(conv ?? '');
     conversationReady.value = true;
@@ -580,22 +768,130 @@ async function initConversation() {
 /** 会话编号（后端返回字符串形式的 Long，保持字符串避免精度丢失） */
 const conversationId = ref<string>('');
 
+// ==================== 【历史会话记录】 ====================
+const historyOpen = ref(false); // 历史列表展开状态（覆盖消息区显示）
+const historyLoading = ref(false);
+const historyList = ref<any[]>([]);
+
+/** 打开/关闭历史会话列表（打开时拉取本角色全部历史会话） */
+async function toggleHistory() {
+  historyOpen.value = !historyOpen.value;
+  if (!historyOpen.value) return;
+  historyLoading.value = true;
+  try {
+    const list = await getChatConversationMyList();
+    // 仅展示本助手角色的会话，按更新时间倒序
+    historyList.value = (list || [])
+      .filter((c: any) => c.roleId && c.id)
+      .sort(
+        (a: any, b: any) =>
+          new Date(b.updateTime || b.createTime).getTime() -
+          new Date(a.updateTime || a.createTime).getTime(),
+      );
+  } catch {
+    message.error('历史会话加载失败，请稍后重试');
+  } finally {
+    historyLoading.value = false;
+  }
+}
+
+/** 切换到历史会话：中断旧流 → 加载该会话全部消息 → 回显 */
+async function switchConversation(item: any) {
+  if (streaming.value) {
+    abortController.value?.abort();
+    abortController.value = undefined;
+    streaming.value = false;
+  }
+  historyOpen.value = false;
+  historyLoading.value = true;
+  try {
+    const list = await getChatMessageListByConversationId(item.id);
+    const mapped = (list || []).map((m: any) => ({
+      role: m.type === 'user' ? 'user' : 'assistant',
+      content: m.content || '',
+      time: m.createTime ? String(m.createTime).slice(0, 16) : formatTime(),
+    }));
+    messages.value = mapped;
+    conversationId.value = String(item.id);
+    conversationReady.value = true;
+    scrollToBottom();
+  } catch {
+    message.error('历史消息加载失败，请稍后重试');
+  } finally {
+    historyLoading.value = false;
+  }
+}
+
+/** 删除历史会话；若删除的是当前会话则重新初始化 */
+async function removeHistory(item: any) {
+  try {
+    await deleteChatConversationMy(Number(item.id));
+    historyList.value = historyList.value.filter((c) => c.id !== item.id);
+    if (String(item.id) === conversationId.value) {
+      await initConversation();
+      historyOpen.value = false;
+    }
+    message.success('会话已删除');
+  } catch {
+    message.error('删除失败，请稍后重试');
+  }
+}
+
 /** 发送消息：流式接收；权限拦截在后端，越权返回拒绝话术直接渲染 */
 async function handleSend(attachmentUrls?: string[]) {
   const content = inputText.value?.trim();
-  // 输入为空、未就绪、正在接收时禁止发送
-  if (!content || streaming.value || !conversationReady.value) return;
+  // 输入为空、未就绪、正在接收时禁止发送（有挂起附件时也要求写明意图）
+  if (!content || streaming.value || !conversationReady.value) {
+    if (!content && pendingFiles.value.length > 0 && !streaming.value) {
+      message.warning('请先输入你想对附件做什么，例如：根据图片录入工单');
+    }
+    return;
+  }
   // 图片录入流程传入的附件（@click 直接调用时首参是事件对象，需过滤）
   const urls = Array.isArray(attachmentUrls) ? attachmentUrls : undefined;
 
   inputText.value = ''; // 发送后清空输入框
-  messages.value.push({ role: 'user', content, time: formatTime() });
+  // 【附件】待发送附件统一在此上传：图片 → 后端视觉识别；文档 → 后端抽取文本
+  let pendingUrls: string[] | undefined = urls;
+  const pendingNames: string[] = [];
+  if (pendingFiles.value.length > 0) {
+    streaming.value = true; // 上传期间锁定发送按钮
+    try {
+      for (const item of pendingFiles.value) {
+        const up = (await uploadFile({ file: item.file })) as unknown as string;
+        if (!up) throw new Error('上传返回为空');
+        pendingUrls = pendingUrls ?? [];
+        pendingUrls.push(up);
+        pendingNames.push(item.file.name);
+      }
+      pendingFiles.value.forEach((item) => {
+        if (item.preview) URL.revokeObjectURL(item.preview);
+      });
+      pendingFiles.value = [];
+    } catch {
+      message.error('附件上传失败，请检查网络后重试');
+      streaming.value = false;
+      return;
+    }
+  }
+  messages.value.push({
+    role: 'user',
+    content: pendingNames.length > 0 ? `${content}\n📎 附件：${pendingNames.join('、')}` : content,
+    time: formatTime(),
+  });
+  // 带附件的请求统一交给后端处理（视觉识别/文本抽取 + 意图理解），
+  // 不走前端的查询澄清/预填/引导等本地意图分支，避免附件请求被劫持
+  const hasAttachments = (pendingUrls?.length ?? 0) > 0;
+  // 【引导问法】用户在问功能入口/位置（在哪里/怎么找/菜单）时，
+  // 不走前端本地意图分支（澄清反问/预填/模板等），直接交后端引导模式给菜单路径
+  const guideQuestion =
+    /(在哪里|在哪|哪儿|什么位置|怎么找|如何找|功能入口|菜单)/.test(content);
 
   // 【单据模板分支（已收窄）】仅当用户明确索要"模板/空白单"时才本地生成模板链接；
   // "添加/创建/录入 + 工单" 等带真实字段的请求一律放行到后端——
   // 由 AI 调用录入 Function 工具直接写入 MES 真实数据库（用户要求：直接入库，不要 Word 模板）
   const docSchema = matchDocIntent(content);
-  if (docSchema && /(模板|空白|样例|示例单)/.test(content)) {
+  if (!hasAttachments && docSchema && /(模板|空白|样例|示例单)/.test(content)) {
     messages.value.push({
       role: 'assistant',
       content: `已为您生成${docSchema.title}模板，点击下方链接查看：`,
@@ -607,7 +903,7 @@ async function handleSend(attachmentUrls?: string[]) {
   }
 
   // 【新增：模糊工单查询澄清】"我想查看工单"等无具体条件的查询 → 先反问，不直接倾倒全表
-  if (matchVagueWorkOrderQuery(content)) {
+  if (!hasAttachments && !guideQuestion && matchVagueWorkOrderQuery(content)) {
     messages.value.push({
       role: 'assistant',
       content:
@@ -621,7 +917,7 @@ async function handleSend(attachmentUrls?: string[]) {
 
   // 【新增：任务包 D1】安灯异常上报：口述异常 → 草稿确认弹窗（提交走既有接口）
   const andonDraft = matchAndonReport(content);
-  if (andonDraft) {
+  if (!hasAttachments && !guideQuestion && andonDraft) {
     messages.value.push({
       role: 'assistant',
       content: '收到，我帮你起草了安灯呼叫单。请确认异常原因、等级与工位后提交：',
@@ -635,7 +931,7 @@ async function handleSend(attachmentUrls?: string[]) {
 
   // 【新增：任务包 D2】质检预填：命中"质检/检验预填 + 任务编号" → 过程检验单确认流程
   const qcCode = matchQcPrefill(content);
-  if (qcCode) {
+  if (!hasAttachments && !guideQuestion && qcCode) {
     messages.value.push({
       role: 'assistant',
       content: `✅ 已定位任务「${qcCode}」，即将为您预填过程检验单（检验数量默认为已生产数量，可修改）。确认无误后点击下方按钮：`,
@@ -648,14 +944,14 @@ async function handleSend(attachmentUrls?: string[]) {
   }
 
   // 【新增：任务包 D3】出入库操作引导（不影响纯数据查询）
-  if (matchWmsGuide(content)) {
+  if (!hasAttachments && !guideQuestion && matchWmsGuide(content)) {
     handleWmsGuide();
     return;
   }
 
   // 【新增：任务包 B】报工智能填单：命中"报工/填单/预填 + 任务编号" → 预填确认流程
   const prefillCode = matchFeedbackPrefill(content);
-  if (prefillCode) {
+  if (!hasAttachments && !guideQuestion && prefillCode) {
     handleFeedbackPrefillIntent(prefillCode);
     return;
   }
@@ -663,7 +959,7 @@ async function handleSend(attachmentUrls?: string[]) {
   // 【新增】只说了单据名词（如"生产工单"）：意图不明确，先反问澄清，
   // 不擅自猜测是要查询数据还是生成模板，避免答非所问
   const ambiguousNoun = matchAmbiguousDoc(content);
-  if (ambiguousNoun) {
+  if (!hasAttachments && !guideQuestion && ambiguousNoun) {
     messages.value.push({
       role: 'assistant',
       content: `您提到「${ambiguousNoun}」，想做什么呢？可点击下方选项快速操作，也可以直接补充说明，例如"查询已完成的生产工单"。`,
@@ -676,12 +972,19 @@ async function handleSend(attachmentUrls?: string[]) {
 
   // 【新增：导入解析】粘贴的单据文本（含"字段：值"多行/表格标题）→ 解析填充；
   // 疑问句不劫持，继续走后端问答
-  if (handlePastedDocText(content)) {
+  if (!hasAttachments && !guideQuestion && handlePastedDocText(content)) {
     scrollToBottom();
     return;
   }
 
-  const aiMsg = { role: 'assistant' as const, content: '', time: formatTime() };
+  const aiMsg = {
+    role: 'assistant' as const,
+    content: '',
+    time: formatTime(),
+    // 【识别场景标记】带附件且意图是识别/提取时，回答按纯文本展示，
+    // 不渲染成业务查询卡片（识别不是查询，要求是识别不是添加）
+    isRecognize: hasAttachments && /(识别|提取)/.test(content),
+  };
   messages.value.push(aiMsg); // AI 占位气泡（显示"正在思考"动画）
   streaming.value = true;
   abortController.value = new AbortController();
@@ -743,13 +1046,12 @@ async function handleSend(attachmentUrls?: string[]) {
         }
         const stripped = stripThink(full);
         endStream(
-          stripped ||
-            (full
-              ? `${full.replace(/<\/?think>/g, '').trim()}\n\n（注：以上为模型思考内容，未生成正式回答，请重新提问）`
-              : '（无返回内容，请重新提问）'),
+          // 【思考过程不展示】即使模型只输出了思考内容（<think> 无正文），
+          // 也不展示思考过程本身，只提示重新提问
+          stripped || '（模型本次未生成正式回答，请重新提问）',
         );
       },
-      urls, // 【图片录入】图片附件 URL：后端视觉模型识别后由 AI 提取字段录入
+      pendingUrls, // 【附件】挂起附件上传后的 URL：图片走视觉识别、文档走文本抽取
     );
   } catch (e: any) {
     // 连接建立阶段即抛错（鉴权失败/网络异常/服务不可用等）
@@ -825,22 +1127,40 @@ function cleanAiText(raw: string): string {
 /** 业务字段别名表：把模型输出的各种叫法归一成标准标签（加粗展示） */
 const FIELD_ALIASES: Array<[RegExp, string]> = [
   [/^(工单编号|单号|工单号|编号)$/, '工单编号'],
+  [/^(检验单号|检验单编号|质检单号)$/, '检验单号'],
+  [/^(检验类型|质检类型)$/, '检验类型'],
+  [/^(所属工单|关联工单)$/, '所属工单'],
+  [/^(任务编号|生产任务编号|生产任务)$/, '任务编号'],
+  [/^(报工数量|汇报数量)$/, '报工数量'],
+  [/^(报工人|报工人员|汇报人)$/, '报工人'],
   [/^(产品名称|产品|物料名称)$/, '产品名称'],
+  [/^(物料)$/, '物料'],
   [/^(物料编码|编码)$/, '物料编码'],
   [/^(规格|规格型号)$/, '规格型号'],
-  [/^(计划数量|计划数)$/, '计划数量'],
-  [/^(已生产数量|已生产|完工数量)$/, '已生产数量'],
+  [/^(检验数量|质检数量)$/, '检验数量'],
   [/^(合格数量)$/, '合格数量'],
-  [/^(不合格数量)$/, '不合格数量'],
+  [/^(不合格数量|不良数量)$/, '不合格数量'],
+  [/^(检验结论|结论|判定结果|检验结果|检测结果)$/, '检验结论'],
   [/^(报工进度|进度)$/, '报工进度'],
   [/^(工单状态|状态)$/, '工单状态'],
   [/^(开工时间|开始时间)$/, '开工时间'],
   [/^(完工时间|结束时间)$/, '完工时间'],
   [/^(工艺|工艺信息|工序)$/, '工序'],
   [/^(客户|客户名称)$/, '客户'],
+  [/^(供应商|供应商名称)$/, '供应商'],
   [/^(车间|车间名称)$/, '车间'],
   [/^(工位|工位名称)$/, '工位'],
+  [/^(班组|班组名称)$/, '班组'],
+  [/^(仓库|仓位)$/, '仓库'],
+  [/^(库位)$/, '库位'],
+  [/^(库区)$/, '库区'],
+  [/^(设备|设备名称)$/, '设备'],
+  [/^(设备编码|设备编号)$/, '设备编码'],
+  [/^(安灯|安灯类型)$/, '安灯类型'],
   [/^(库存数量|库存数|现存量|在库数量)$/, '库存数量'],
+  [/^(面积)$/, '面积'],
+  [/^(要求交期|交期)$/, '要求交期'],
+  [/^(备注)$/, '备注'],
   [/^(单位)$/, '单位'],
 ];
 
@@ -854,6 +1174,16 @@ function parseFieldLine(line: string): { label: string; value: string } | null {
   if (!value) return null;
   for (const [re, std] of FIELD_ALIASES) {
     if (re.test(rawLabel)) return { label: std, value };
+  }
+  // 【兜底】白名单外的业务字段（报工单号/工作站/报工时间等）原样保留，
+  // 保证任意业务类型的查询结果都完整展示，不再依赖白名单逐个枚举
+  if (
+    /^[\u4e00-\u9fa5A-Za-z0-9]{2,10}$/.test(rawLabel) &&
+    !/^(提示|注意|说明|警告|示例|例如|参考|第一步|第二步|第三步|第四步|第五步|第六步|第[一二三四五六七八九十\d]+步|操作路径|操作步骤|概念|快捷方式|代录|原因|回答|别名)$/.test(
+      rawLabel,
+    )
+  ) {
+    return { label: rawLabel, value };
   }
   return null;
 }
@@ -925,8 +1255,20 @@ function parseBusinessData(
       if (f.label === '工单状态' && f.value) statusSet.add(f.value.trim());
     }),
   );
+  // 【修复】业务类型按解析出的字段集合判断（不再在原文里搜关键词——
+  // 任务名"待检验"/工位"质检工位"等词会误触发检验/工单标题）
+  const labelSet = new Set<string>();
+  validItems.forEach((item) => item.forEach((f) => labelSet.add(f.label)));
   let title = `📋 查询结果（共 ${validItems.length} 条）`;
-  if (/工单|单号|生产/.test(raw)) {
+  if (labelSet.has('检验单号') || labelSet.has('检验类型') || labelSet.has('检验结论')) {
+    title = `🔍 过程检验单（IPQC）（共 ${validItems.length} 条）`;
+  } else if (labelSet.has('报工单号') || labelSet.has('报工数量')) {
+    title = `📝 生产报工记录（共 ${validItems.length} 条）`;
+  } else if (labelSet.has('库存数量')) {
+    title = `📦 库存查询结果（共 ${validItems.length} 条）`;
+  } else if (labelSet.has('任务编号') || labelSet.has('已生产数量')) {
+    title = `📑 生产任务（共 ${validItems.length} 条）`;
+  } else if (labelSet.has('工单编号')) {
     if (statusSet.size === 1 && statusSet.has('已完成')) {
       title = `✅ 已完成生产工单（共 ${validItems.length} 条）`;
     } else if (statusSet.size === 1 && statusSet.has('已取消')) {
@@ -938,12 +1280,20 @@ function parseBusinessData(
     } else {
       title = `🏭 生产工单（共 ${validItems.length} 条）`;
     }
-  } else if (/库存|仓位|仓库/.test(raw)) {
-    title = `📦 库存查询结果（共 ${validItems.length} 条）`;
-  } else if (/物料/.test(raw)) {
+  } else if (labelSet.has('物料编码') || labelSet.has('产品名称')) {
     title = `📦 物料信息（共 ${validItems.length} 条）`;
-  } else if (/设备/.test(raw)) {
+  } else if (labelSet.has('设备编码') || labelSet.has('设备')) {
     title = `🔧 设备信息（共 ${validItems.length} 条）`;
+  }
+  // 【展示过滤】生产任务与 IPQC 检验单卡片不展示合格/不合格数量：
+  // 质量数字以报工/检验页面为准，任务与检验列表只看进度与结论
+  if (title.includes('生产任务') || title.includes('过程检验单')) {
+    const filtered = validItems
+      .map((item) =>
+        item.filter((f) => f.label !== '合格数量' && f.label !== '不合格数量'),
+      )
+      .filter((item) => item.length >= 2);
+    if (filtered.length > 0) validItems = filtered;
   }
   return { title, items: validItems };
 }
@@ -956,49 +1306,76 @@ function handleWindowResize() {
 watch(
   () => [expanded.value],
   () => {
-    document.body.classList.toggle('mes-ai-panel-open', expanded.value);
+    syncBodyAvoid(expanded.value);
     if (expanded.value) scrollToBottom();
   },
 );
 
 onMounted(() => {
-  document.body.classList.toggle('mes-ai-panel-open', expanded.value);
+  syncBodyAvoid(expanded.value);
   initConversation();
   window.addEventListener('resize', handleWindowResize);
+  // 视口尺寸变化时把悬浮球/面板拉回可视范围
+  window.addEventListener('resize', clampAllToViewport);
 });
 
 onBeforeUnmount(() => {
   abortController.value?.abort();
   document.body.classList.remove('mes-ai-panel-open');
   window.removeEventListener('resize', handleWindowResize);
+  window.removeEventListener('resize', clampAllToViewport);
 });
 </script>
 
 <template>
-  <!-- 收起状态：右下角圆形悬浮按钮 -->
+  <!-- 收起状态：圆形悬浮按钮（可拖拽移动位置，点击展开） -->
   <Tooltip v-if="!expanded" title="MES 智能助手" placement="left">
-    <div class="mes-ai-fab" @click="setExpanded(true)">
+    <div
+      class="mes-ai-fab"
+      :style="fabStyle"
+      title="按住拖拽移动位置"
+      @mousedown="onDragStart($event, 'fab')"
+      @click="onFabClick"
+    >
       <IconifyIcon icon="lucide:bot" :size="26" />
     </div>
   </Tooltip>
 
-  <!-- 展开状态：完整对话面板（白底黑字） -->
+  <!-- 展开状态：完整对话面板（白底黑字，按住标题栏可拖拽移动） -->
   <transition name="mes-ai-slide">
-    <div v-show="expanded" class="mes-ai-panel" :style="panelStyle">
-      <!-- 头部：标题 + 最大化 / 新会话 / 最小化 -->
-      <div class="mes-ai-header">
+    <div
+      v-show="expanded"
+      class="mes-ai-panel"
+      :class="{ 'mes-ai-panel--max': maximized }"
+      :style="panelStyle"
+    >
+      <!-- 头部：标题（拖拽把手） + 最大化 / 新会话 / 最小化 -->
+      <div
+        class="mes-ai-header"
+        :class="{ 'mes-ai-header--draggable': !maximized }"
+        @mousedown="onDragStart($event, 'panel')"
+      >
         <div class="mes-ai-header__title">
           <IconifyIcon icon="lucide:bot" :size="18" class="mes-ai-primary" />
           <span>MES 智能助手</span>
           <span class="mes-ai-header__sub">{{ roleName }}</span>
         </div>
-        <div class="mes-ai-header__actions">
+        <div class="mes-ai-header__actions" @mousedown.stop>
           <Tooltip title="最大化/还原" placement="top">
             <span class="mes-ai-icon-btn" @click="toggleMaximized">
               <IconifyIcon
                 :icon="maximized ? 'lucide:minimize' : 'lucide:maximize'"
                 :size="14"
               />
+            </span>
+          </Tooltip>
+          <Tooltip title="历史会话" placement="top">
+            <span
+              class="mes-ai-icon-btn"
+              :class="{ 'mes-ai-icon-btn--active': historyOpen }"
+              @click="toggleHistory"
+            >
+              <IconifyIcon icon="lucide:history" :size="14" />
             </span>
           </Tooltip>
           <Tooltip title="重新开始会话" placement="top">
@@ -1014,8 +1391,42 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
+      <!-- 【历史会话列表】覆盖消息区显示，选择/删除历史对话 -->
+      <div v-if="historyOpen" class="mes-ai-history">
+        <div v-if="historyLoading" class="mes-ai-history__loading">
+          加载中...
+        </div>
+        <div v-else-if="historyList.length === 0" class="mes-ai-history__empty">
+          暂无历史会话
+        </div>
+        <div
+          v-for="item in historyList"
+          v-else
+          :key="item.id"
+          class="mes-ai-history__item"
+          :class="{ 'is-current': String(item.id) === conversationId }"
+          @click="switchConversation(item)"
+        >
+          <div class="mes-ai-history__main">
+            <div class="mes-ai-history__title">
+              {{ item.title || '未命名会话' }}
+            </div>
+            <div class="mes-ai-history__time">
+              {{ item.updateTime || item.createTime || '' }}
+            </div>
+          </div>
+          <span
+            class="mes-ai-history__del"
+            title="删除会话"
+            @click.stop="removeHistory(item)"
+          >
+            <IconifyIcon icon="lucide:trash-2" :size="13" />
+          </span>
+        </div>
+      </div>
+
       <!-- 消息区：占面板剩余高度，内部滚动，不带动整页滚动 -->
-      <div ref="messageListRef" class="mes-ai-messages">
+      <div v-show="!historyOpen" ref="messageListRef" class="mes-ai-messages">
         <div
           v-for="(msg, index) in messages"
           :key="index"
@@ -1031,7 +1442,7 @@ onBeforeUnmount(() => {
               <!-- AI 回复（关键格式化处理位置 3）：业务数据渲染成卡片，普通问答走清洗后的文本 -->
               <template v-if="msg.role === 'assistant' && msg.content">
                 <div
-                  v-if="parseBusinessData(msg.content)"
+                  v-if="!msg.isRecognize && parseBusinessData(msg.content)"
                   class="mes-ai-card"
                 >
                   <!-- 卡片标题 -->
@@ -1146,7 +1557,66 @@ onBeforeUnmount(() => {
 
       <!-- 输入区：白色圆角输入卡片 + 底部操作行 -->
       <div class="mes-ai-input">
+        <!-- 【交互改造】待发送附件区：📎 选择后先挂这里，用户输入意图后发送时才上传处理 -->
+        <div v-if="pendingFiles.length > 0" class="mes-ai-pending">
+          <div class="mes-ai-pending__files">
+            <span
+              v-for="(item, idx) in pendingFiles"
+              :key="`${item.file.name}-${idx}`"
+              class="mes-ai-pending__chip"
+            >
+              <img
+                v-if="item.preview"
+                :src="item.preview"
+                alt=""
+                class="mes-ai-pending__thumb"
+              />
+              <IconifyIcon
+                v-else
+                icon="lucide:file-text"
+                :size="14"
+                class="mes-ai-pending__icon"
+              />
+              <span class="mes-ai-pending__name" :title="item.file.name">
+                {{ item.file.name }}
+              </span>
+              <span
+                class="mes-ai-pending__remove"
+                title="移除"
+                @click="removePendingFile(idx)"
+              >×</span>
+            </span>
+          </div>
+          <!-- 快捷意图：点击填入输入框，用户可修改后发送 -->
+          <div class="mes-ai-pending__intents">
+            <template v-if="pendingFiles.some((f) => f.kind === 'image')">
+              <Button
+                size="small"
+                class="mes-ai-pending__intent"
+                @click="applyQuickIntent('根据图片中的单据信息，提取字段并录入对应的业务单据')"
+              >根据图片录入单据 →</Button>
+              <Button
+                size="small"
+                class="mes-ai-pending__intent"
+                @click="applyQuickIntent('识别图片中的字段内容')"
+              >识别图片字段 →</Button>
+            </template>
+            <template v-if="pendingFiles.some((f) => f.kind === 'doc')">
+              <Button
+                size="small"
+                class="mes-ai-pending__intent"
+                @click="applyQuickIntent('根据文档内容提取单据字段并录入 MES 系统')"
+              >根据文档录入单据 →</Button>
+              <Button
+                size="small"
+                class="mes-ai-pending__intent"
+                @click="applyQuickIntent('详细总结文档内容')"
+              >总结文档内容 →</Button>
+            </template>
+          </div>
+        </div>
         <TextArea
+          ref="intentInputRef"
           v-model:value="inputText"
           :auto-size="{ minRows: 2, maxRows: 6 }"
           class="mes-ai-textarea"
@@ -1158,7 +1628,7 @@ onBeforeUnmount(() => {
             <!-- 【新增：导入解析】附件按钮：上传 Word/Excel，自动识别单据并填充 -->
             <span
               class="mes-ai-icon-btn mes-ai-attach"
-              title="导入 Word/Excel，自动识别单据并填充预览"
+              title="上传图片 / Word / Excel：先添加到输入框上方，输入你的意图后发送"
               @click="fileInputRef?.click()"
             >
               <IconifyIcon icon="lucide:paperclip" :size="14" />
@@ -1179,6 +1649,7 @@ onBeforeUnmount(() => {
           ref="fileInputRef"
           accept=".docx,.xlsx,.xls,.txt,.png,.jpg,.jpeg,.webp,.bmp"
           class="mes-ai-file-input"
+          multiple
           type="file"
           @change="handleImportFile"
         />
@@ -1206,8 +1677,6 @@ onBeforeUnmount(() => {
 /* ========== 面板：固定白底黑字（不随主题变化，保证清晰可读） ========== */
 .mes-ai-panel {
   position: fixed;
-  right: 16px;
-  bottom: 20px;
   z-index: 1200;
   display: flex;
   flex-direction: column;
@@ -1219,6 +1688,58 @@ onBeforeUnmount(() => {
   box-shadow: 0 6px 24px rgb(0 0 0 / 22%);
 }
 
+/* ========== 最大化状态专属美化 ========== */
+/* 更深的悬浮阴影 + 更大圆角，与页面内容形成清晰层次 */
+.mes-ai-panel--max {
+  border-radius: 14px;
+  box-shadow:
+    0 24px 64px rgb(15 23 42 / 28%),
+    0 2px 8px rgb(15 23 42 / 10%);
+}
+
+/* 标题栏加高加重，拖拽把手更明显 */
+.mes-ai-panel--max .mes-ai-header {
+  padding: 14px 20px;
+}
+
+.mes-ai-panel--max .mes-ai-header__title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* 消息区：大空间下的呼吸感 */
+.mes-ai-panel--max .mes-ai-messages {
+  padding: 18px 22px;
+}
+
+/* 气泡放宽（大屏下长回答不挤） */
+.mes-ai-panel--max .mes-ai-bubble {
+  max-width: 86%;
+  padding: 10px 14px;
+}
+
+/* 正文与回答字号微增 */
+.mes-ai-panel--max .mes-ai-bubble,
+.mes-ai-panel--max .mes-ai-md {
+  font-size: 13.5px;
+}
+
+/* 输入区加宽内边距，与消息区对齐 */
+.mes-ai-panel--max .mes-ai-input {
+  padding: 14px 20px 10px;
+}
+
+.mes-ai-panel--max .mes-ai-textarea {
+  min-height: 52px;
+}
+
+/* 快捷选项 chips 稍大 */
+.mes-ai-panel--max .mes-ai-option {
+  padding: 5px 14px;
+  font-size: 13px;
+  border-radius: 14px;
+}
+
 /* ========== 头部 ========== */
 .mes-ai-header {
   display: flex;
@@ -1228,6 +1749,12 @@ onBeforeUnmount(() => {
   padding: 10px 12px;
   background: #ffffff;
   border-bottom: 1px solid #e5e7eb;
+}
+
+/* 非最大化时标题栏作为拖拽把手 */
+.mes-ai-header--draggable {
+  cursor: move;
+  user-select: none;
 }
 
 .mes-ai-header__title {
@@ -1411,7 +1938,8 @@ onBeforeUnmount(() => {
   line-height: inherit;
 }
 
-/* AI 回复 Markdown 内容排版（黑字） */
+/* ========== AI 回复 Markdown 排版美化（紧凑、清晰） ========== */
+/* 段落：小间距，避免大面积留白 */
 .mes-ai-md :deep(p) {
   margin: 0 0 6px;
   color: #1f2937;
@@ -1421,19 +1949,132 @@ onBeforeUnmount(() => {
   margin-bottom: 0;
 }
 
+/* 列表：序号与内容紧凑同行，条目间距小 */
 .mes-ai-md :deep(ul),
 .mes-ai-md :deep(ol) {
-  margin: 0 0 6px;
-  padding-left: 18px;
+  padding-left: 20px;
+  margin: 2px 0 8px;
   color: #1f2937;
 }
 
+.mes-ai-md :deep(li) {
+  padding: 1px 0;
+  margin: 0;
+}
+
+.mes-ai-md :deep(li:not(:last-child)) {
+  margin-bottom: 3px;
+}
+
+/* 关键修复：li 内嵌段落不再另起一行与大间距，与序号保持同行紧凑排版 */
+.mes-ai-md :deep(li > p) {
+  display: inline;
+  margin: 0;
+}
+
+/* 加粗文字：深色加粗突出 */
+.mes-ai-md :deep(strong) {
+  font-weight: 600;
+  color: #111827;
+}
+
+/* 标题：小尺寸加粗 + 上下小间距（气泡内不需要大标题） */
+.mes-ai-md :deep(h1),
+.mes-ai-md :deep(h2),
+.mes-ai-md :deep(h3),
+.mes-ai-md :deep(h4) {
+  font-weight: 600;
+  color: #111827;
+  margin: 8px 0 4px;
+}
+
+.mes-ai-md :deep(h1:first-child),
+.mes-ai-md :deep(h2:first-child),
+.mes-ai-md :deep(h3:first-child),
+.mes-ai-md :deep(h4:first-child) {
+  margin-top: 0;
+}
+
+/* 行内代码 */
 .mes-ai-md :deep(code) {
   padding: 1px 4px;
   font-size: 12px;
   color: #1f2937;
   background: #f3f4f6;
   border-radius: 4px;
+}
+
+/* 代码块 */
+.mes-ai-md :deep(pre) {
+  padding: 8px 10px;
+  margin: 4px 0 8px;
+  overflow-x: auto;
+  font-size: 12px;
+  line-height: 1.5;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.mes-ai-md :deep(pre code) {
+  padding: 0;
+  background: transparent;
+}
+
+/* 引用块：左侧蓝色竖线 */
+.mes-ai-md :deep(blockquote) {
+  padding: 4px 10px;
+  margin: 4px 0 8px;
+  color: #4b5563;
+  background: #f8fafc;
+  border-left: 3px solid #1677ff;
+  border-radius: 0 6px 6px 0;
+}
+
+.mes-ai-md :deep(blockquote p) {
+  margin: 0;
+}
+
+/* 表格：细边框 + 表头浅底 + 斑马纹（库存/工单等结构化数据更易读） */
+.mes-ai-md :deep(table) {
+  width: 100%;
+  margin: 4px 0 8px;
+  font-size: 12.5px;
+  border-collapse: collapse;
+}
+
+.mes-ai-md :deep(th),
+.mes-ai-md :deep(td) {
+  padding: 4px 8px;
+  text-align: left;
+  border: 1px solid #e5e7eb;
+}
+
+.mes-ai-md :deep(th) {
+  font-weight: 600;
+  color: #374151;
+  background: #f3f4f6;
+}
+
+.mes-ai-md :deep(tr:nth-child(2n) td) {
+  background: #fafafa;
+}
+
+/* 分隔线 */
+.mes-ai-md :deep(hr) {
+  margin: 8px 0;
+  border: none;
+  border-top: 1px dashed #e5e7eb;
+}
+
+/* 链接 */
+.mes-ai-md :deep(a) {
+  color: #1677ff;
+  text-decoration: none;
+}
+
+.mes-ai-md :deep(a:hover) {
+  text-decoration: underline;
 }
 
 /* "正在思考"加载动画 */
@@ -1493,6 +2134,82 @@ onBeforeUnmount(() => {
   padding: 10px 12px 8px;
   background: #ffffff;
   border-top: 1px solid #e5e7eb;
+}
+
+/* ========== 待发送附件区：chip + 快捷意图（挂在输入框上方） ========== */
+.mes-ai-pending {
+  margin-bottom: 8px;
+  padding: 8px;
+  background: #f9fafb;
+  border: 1px dashed #d1d5db;
+  border-radius: 10px;
+}
+
+.mes-ai-pending__files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mes-ai-pending__chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 2px 6px;
+  font-size: 12px;
+  color: #1f2937;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.mes-ai-pending__thumb {
+  width: 22px;
+  height: 22px;
+  margin-right: 4px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.mes-ai-pending__icon {
+  flex-shrink: 0;
+  margin-right: 4px;
+  color: #6b7280;
+}
+
+.mes-ai-pending__name {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mes-ai-pending__remove {
+  padding: 0 4px;
+  margin-left: 2px;
+  font-size: 14px;
+  line-height: 1;
+  color: #9ca3af;
+  cursor: pointer;
+}
+
+.mes-ai-pending__remove:hover {
+  color: #ef4444;
+}
+
+.mes-ai-pending__intents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.mes-ai-pending__intent {
+  font-size: 12px;
+  color: #1677ff;
+  background: #ffffff;
+  border-color: #bfdbfe;
+  border-radius: 8px;
 }
 
 /* 输入卡片：白底圆角，文字黑色，聚焦高亮蓝边 */
@@ -1556,9 +2273,9 @@ onBeforeUnmount(() => {
 /* ========== 收起状态：右下角圆形悬浮按钮 ========== */
 .mes-ai-fab {
   position: fixed;
-  right: 20px;
-  bottom: 24px;
   z-index: 1200;
+  user-select: none;
+  touch-action: none;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1651,6 +2368,78 @@ onBeforeUnmount(() => {
   background: transparent;
 }
 
+/* ========== 历史会话列表 ========== */
+.mes-ai-history {
+  position: absolute;
+  inset: 48px 0 0; /* 覆盖消息区（头部以下） */
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 10px;
+  background: #f8fafc;
+}
+
+.mes-ai-history__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 11px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  transition: border-color 0.2s;
+}
+
+.mes-ai-history__item:hover {
+  border-color: #1677ff;
+}
+
+.mes-ai-history__item.is-current {
+  background: #eff6ff;
+  border-color: #93c5fd;
+}
+
+.mes-ai-history__title {
+  max-width: 240px;
+  overflow: hidden;
+  font-size: 13px;
+  color: #1f2937;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mes-ai-history__time {
+  margin-top: 3px;
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.mes-ai-history__del {
+  flex-shrink: 0;
+  padding: 4px;
+  color: #9ca3af;
+  cursor: pointer;
+}
+
+.mes-ai-history__del:hover {
+  color: #ef4444;
+}
+
+.mes-ai-history__loading,
+.mes-ai-history__empty {
+  padding: 24px 0;
+  font-size: 12px;
+  color: #9ca3af;
+  text-align: center;
+}
+
+.mes-ai-icon-btn--active {
+  color: #1677ff;
+}
+
 /* ========== 小屏适配 ========== */
 @media (max-width: 1100px) {
   .mes-ai-panel {
@@ -1660,16 +2449,26 @@ onBeforeUnmount(() => {
 </style>
 
 <style>
-/* ========== 非 scoped：页面主体避让样式（作用于 body 与 MES 首页 Page 容器） ========== */
+/* ========== 非 scoped：全局避让样式（作用于 body 与页面主体容器） ========== */
 
-/* 面板展开时，标记了 mes-ai-avoid 的页面主体容器向左避让，不被面板遮挡 */
+/* 面板展开时：整个页面主体右移留出面板空间，不遮挡任何板块内容 */
+body.mes-ai-panel-open {
+  padding-right: 388px; /* 380 面板宽 + 8 缓冲 */
+  transition: padding-right 0.3s ease;
+}
+
+/* MES 首页 Page 容器沿用原有避让（配合 body 右移的叠加微调） */
 body.mes-ai-panel-open .mes-ai-avoid {
-  padding-right: 404px; /* 380 面板宽 + 16 右侧间距 + 8 缓冲 */
+  padding-right: 16px;
   transition: padding-right 0.3s ease;
 }
 
 /* 小屏不避让，面板悬浮覆盖 */
 @media (max-width: 1100px) {
+  body.mes-ai-panel-open {
+    padding-right: 0;
+  }
+
   body.mes-ai-panel-open .mes-ai-avoid {
     padding-right: 16px;
   }

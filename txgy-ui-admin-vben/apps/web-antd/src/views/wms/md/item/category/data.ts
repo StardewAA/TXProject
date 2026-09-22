@@ -11,7 +11,7 @@ import { handleTree } from '@vben/utils';
 import { Button } from 'ant-design-vue';
 
 import { z } from '#/adapter/form';
-import { getItemCategorySimpleList } from '#/api/wms/md/item/category';
+import { getEnabledItemCategorySimpleList } from '#/api/wms/md/item/category';
 
 /** 新增/修改商品分类的表单 */
 export function useFormSchema(formApi?: VbenFormApi): VbenFormSchema[] {
@@ -31,7 +31,7 @@ export function useFormSchema(formApi?: VbenFormApi): VbenFormSchema[] {
       componentProps: {
         allowClear: true,
         api: async () => {
-          const data = await getItemCategorySimpleList();
+          const data = await getEnabledItemCategorySimpleList();
           return [
             {
               id: 0,

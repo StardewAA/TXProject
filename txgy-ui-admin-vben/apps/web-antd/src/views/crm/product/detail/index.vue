@@ -8,7 +8,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { Page } from '@vben/common-ui';
 import { useTabs } from '@vben/hooks';
 
-import { Button, Card, message, Tabs } from 'ant-design-vue';
+import { Button, Card, Tabs } from 'ant-design-vue';
 
 import { getOperateLogPage } from '#/api/crm/operateLog';
 import { BizTypeEnum } from '#/api/crm/permission';
@@ -59,14 +59,7 @@ function handleBack() {
 
 /** 加载数据 */
 onMounted(() => {
-  // 路由参数兜底：非法 id（如 /crm/product/detail/id）会得到 NaN，提示并退回列表
-  const id = Number(route.params.id);
-  if (!Number.isSafeInteger(id) || id <= 0) {
-    message.warning('参数错误，产品不能为空！');
-    handleBack();
-    return;
-  }
-  productId.value = id;
+  productId.value = Number(route.params.id);
   getProductDetail();
 });
 </script>

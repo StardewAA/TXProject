@@ -31,7 +31,11 @@ public class AppKeFuChatController {
 
     @ApiAccessLog(requestEnable=false,responseEnable=false)
     @PostMapping("/open") @PreAuthorize("isAuthenticated()")
-    public CommonResult<KeFuChatModels.Thread> open(@Valid @RequestBody OpenRequest request){return success(service.open(require(1),request.scope(),request.shopId()));}
+    public CommonResult<KeFuChatModels.Thread> open(@Valid @RequestBody ChatOpenRequest request){
+        return success(request.productSkuId() == null
+                ? service.open(require(1),request.scope(),request.shopId())
+                : service.openProduct(require(1),request.scope(),request.shopId(),request.productSkuId()));
+    }
     @ApiAccessLog(requestEnable=false,responseEnable=false)
     @GetMapping("/thread") @PreAuthorize("isAuthenticated()")
     public CommonResult<KeFuChatModels.Thread> thread(@RequestParam String sessionId){return success(service.thread(require(1),sessionId,false));}

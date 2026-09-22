@@ -160,7 +160,8 @@ public class MesDataQueryService {
             count++;
             try {
                 // 复用工具的查询实现（protected 同包可见）：带用户筛选词 + 状态过滤条件查询
-                result.put(biz.getName(), tool.doQuery(tenantId, keyword, status, 10));
+                // 【修复】50 条与工具默认值对齐：原 10 条会截断结果（如设备台账 11 台只注入 10 台）
+                result.put(biz.getName(), tool.doQuery(tenantId, keyword, status, 50));
             } catch (Exception e) {
                 log.error("[queryRealtimeData][业务域({}) 查询异常 tenantId({})]", bizType, tenantId, e);
                 result.put(biz.getName(), "数据查询接口异常，请稍后重试");

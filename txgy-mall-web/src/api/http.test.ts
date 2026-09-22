@@ -50,6 +50,85 @@ describe('请求身份快照与刷新竞态', () => {
     expect(mocks.transport.mock.calls[2]![0].headers.get('Authorization')).toBe('Bearer account-a')
     expect(mocks.transport.mock.calls[2]![0].headers.get('tenant-id')).toBe('1')
   })
+  it('请求体被网关拒绝时显示可执行的中文提示', async () => {
+    const { AxiosError } = await import('axios')
+    const { request } = await import('./http')
+    mocks.transport.mockRejectedValueOnce(new AxiosError('Request failed with status code 413', undefined, undefined, undefined, { status: 413 } as never))
+    await expect(request({ url: '/product/enterprise-membership/apply', method: 'POST', data: {} }))
+      .rejects.toThrow('提交内容超过服务限制')
+    expect(mocks.message).toHaveBeenCalledWith(expect.stringContaining('1MB 以内'))
+  })
+  it('平台请求保留可信登录令牌但不发送经营租户请求头', async () => {
+    const { request, tokenStorage } = await import('./http')
+    tokenStorage.set('platform-access', 'platform-refresh')
+    await confirmed()
+    mocks.transport.mockResolvedValue(ok({ platformAccountId: 8 }))
+
+    await expect(request({ url: '/member/platform-account/session', scope: 'platform' }))
+      .resolves.toEqual({ platformAccountId: 8 })
+
+    const headers = mocks.transport.mock.calls[0]![0].headers
+    expect(headers.get('Authorization')).toBe('Bearer platform-access')
+    expect(headers.get('tenant-id')).toBeUndefined()
+  })
+  it('刷新页面后仅把平台账号租户当候选，并以无租户头的平台会话证明后恢复', async () => {
+    localStorage.setItem('mall-pc-tenant-context', JSON.stringify({
+      browseTenantId: '1', accountTenantId: '2009', accountSessionKind: 'platform',
+    }))
+    const { request, tokenStorage } = await import('./http')
+    const { getTenantContext } = await import('@/utils/tenant-context')
+    tokenStorage.set('platform-access', 'platform-refresh')
+    mocks.transport.mockImplementation(async config => config.url.endsWith('/platform-account/session')
+      ? ok({ platformAccountId: 31, canonicalMemberId: 77, sourceTenantId: 2009 }) : ok('cart'))
+
+    await expect(request({ url: '/trade/platform-cart/list', scope: 'platform' })).resolves.toBe('cart')
+
+    expect(getTenantContext()).toMatchObject({ browseTenantId: '1', accountTenantId: '2009',
+      accountUserId: '77', accountSessionKind: 'platform' })
+    const proof = mocks.transport.mock.calls[0]![0]
+    expect(proof.url).toBe('/member/platform-account/session')
+    expect(proof.headers.get('Authorization')).toBe('Bearer platform-access')
+    expect(proof.headers.get('tenant-id')).toBeUndefined()
+    const cart = mocks.transport.mock.calls[1]![0]
+    expect(cart.headers.get('Authorization')).toBe('Bearer platform-access')
+    expect(cart.headers.get('tenant-id')).toBeUndefined()
+  })
+  it('刷新页面的平台会话证明失败时清除本地令牌且不发送购物车请求', async () => {
+    localStorage.setItem('mall-pc-tenant-context', JSON.stringify({
+      browseTenantId: '1', accountTenantId: '2009', accountSessionKind: 'platform',
+    }))
+    const { request, tokenStorage } = await import('./http')
+    const { getTenantContext } = await import('@/utils/tenant-context')
+    tokenStorage.set('platform-access', 'platform-refresh')
+    mocks.transport.mockRejectedValueOnce(new Error('platform session offline'))
+
+    await expect(request({ url: '/trade/platform-cart/list', scope: 'platform' }))
+      .rejects.toThrow('平台登录身份无法确认')
+
+    expect(mocks.transport).toHaveBeenCalledTimes(1)
+    expect(mocks.transport.mock.calls[0]![0].url).toBe('/member/platform-account/session')
+    expect(tokenStorage.getAccess()).toBe('')
+    expect(tokenStorage.getRefresh()).toBe('')
+    expect(getTenantContext()).toMatchObject({ accountTenantId: null, accountUserId: null })
+  })
+  it('平台请求刷新令牌后仍用无租户头的平台会话核验再重放', async () => {
+    const { request, tokenStorage } = await import('./http')
+    const { confirmPlatformAccountContext, getTenantContext } = await import('@/utils/tenant-context')
+    tokenStorage.set('old-platform', 'old-platform-refresh')
+    confirmPlatformAccountContext({ tenantId: 2009, userId: 77 }, getTenantContext().epoch)
+    mocks.refresh.mockResolvedValue(ok({ accessToken: 'new-platform', refreshToken: 'new-platform-refresh', tenantId: 2009, userId: 77 }))
+    mocks.transport.mockImplementation(async config => config.url.endsWith('/platform-account/session')
+      ? ok({ platformAccountId: 31, canonicalMemberId: 77, sourceTenantId: 2009 })
+      : config.headers.get('Authorization') === 'Bearer old-platform' ? { data: { code: 401 } } : ok('done'))
+
+    await expect(request({ url: '/trade/platform-cart/list', scope: 'platform' })).resolves.toBe('done')
+
+    const proof = mocks.transport.mock.calls.find(([config]) => config.url.endsWith('/platform-account/session'))![0]
+    expect(proof.headers.get('Authorization')).toBe('Bearer new-platform')
+    expect(proof.headers.get('tenant-id')).toBeUndefined()
+    expect(mocks.refresh.mock.calls[0]![2].headers['tenant-id']).toBe('2009')
+    expect(tokenStorage.getAccess()).toBe('new-platform')
+  })
   it('同租户旧令牌并发401只刷新一次并使用新令牌重放', async () => {
     const { request, tokenStorage } = await import('./http')
     tokenStorage.set('old', 'old-refresh')
@@ -229,7 +308,7 @@ describe('请求身份快照与刷新竞态', () => {
     const { tokenStorage } = await import('./http')
     tokenStorage.set('old', 'old-refresh')
     await confirmed()
-    mocks.transport.mockResolvedValueOnce(ok({ validList: [{ id: 1, count: 2 }] }))
+    mocks.transport.mockResolvedValueOnce(ok({ tenantGroups: [{ tenantId: 1, tenantName: '一号租户', shops: [{ enterpriseId: 1, enterpriseName: '企业', shopId: 1, shopName: '店铺', items: [{ id: 1, quantity: 2, valid: true, selected: true }] }] }] }))
     const cart = useCartStore(); await cart.fetchCart(); expect(cart.count).toBe(2)
     const pending = deferred<ReturnType<typeof ok>>()
     mocks.transport.mockReturnValueOnce(pending.promise)
@@ -237,9 +316,9 @@ describe('请求身份快照与刷新竞态', () => {
     tokenStorage.set('new', 'new-refresh')
     await confirmed()
     expect(cart.items).toEqual([])
-    mocks.transport.mockResolvedValueOnce(ok({ validList: [{ id: 9, count: 4 }] }))
+    mocks.transport.mockResolvedValueOnce(ok({ tenantGroups: [{ tenantId: 1, tenantName: '一号租户', shops: [{ enterpriseId: 1, enterpriseName: '企业', shopId: 1, shopName: '店铺', items: [{ id: 9, quantity: 4, valid: true, selected: true }] }] }] }))
     await cart.fetchCart()
-    pending.resolve(ok({ validList: [{ id: 1, count: 99 }] })); await oldCart
+    pending.resolve(ok({ tenantGroups: [{ tenantId: 1, tenantName: '一号租户', shops: [{ enterpriseId: 1, enterpriseName: '企业', shopId: 1, shopName: '店铺', items: [{ id: 1, quantity: 99, valid: true, selected: true }] }] }] })); await oldCart
     expect(cart.count).toBe(4)
     expect(cart.items[0]?.id).toBe(9)
   })

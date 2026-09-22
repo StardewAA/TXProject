@@ -1,6 +1,7 @@
 package cn.iocoder.txgy.module.trade.service.cart;
 
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.txgy.module.product.api.sku.ProductSkuApi;
 import cn.iocoder.txgy.module.product.api.sku.dto.ProductSkuRespDTO;
 import cn.iocoder.txgy.module.product.api.spu.ProductSpuApi;
@@ -9,6 +10,7 @@ import cn.iocoder.txgy.module.trade.controller.app.cart.vo.*;
 import cn.iocoder.txgy.module.trade.convert.cart.TradeCartConvert;
 import cn.iocoder.txgy.module.trade.dal.dataobject.cart.CartDO;
 import cn.iocoder.txgy.module.trade.dal.mysql.cart.CartMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -29,11 +31,16 @@ class CartProductReviewTest {
             .setStatus(1).setStock(10).setSaleable(true);
 
     @BeforeEach void setup() {
+        TenantContextHolder.setTenantId(1L);
         ReflectionTestUtils.setField(service, "cartMapper", carts);
         ReflectionTestUtils.setField(service, "productSkuApi", skus);
         ReflectionTestUtils.setField(service, "productSpuApi", spus);
         when(skus.getSku(2L)).thenReturn(sku);
         when(spus.validateSpuList(List.of(1L))).thenReturn(CommonResult.success(List.of(spu)));
+    }
+
+    @AfterEach void tearDown() {
+        TenantContextHolder.clear();
     }
 
     @Test void approvedProductCanBeAdded() {

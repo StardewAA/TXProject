@@ -3,7 +3,7 @@ import type { OrderStatusCounts, TodoAction, TodoEntry, WorkbenchRole } from '@/
 export const todoActionNames: Record<TodoAction, string> = {
   PAYMENT: '可支付订单', RECEIVE: '待确认收货', COMMENT: '待评价', BUYER_RETURN: '待寄回商品',
   DELIVERY: '可发货订单', AFTER_AUDIT: '待审核售后', AFTER_RECEIVE: '待验收退货',
-  PLATFORM_REFUND: '待平台退款', ERP_EXCEPTION: 'ERP 异常待核实',
+  PLATFORM_REFUND: '待平台退款', ERP_EXCEPTION: '历史履约异常',
 }
 export const orderTabs: Array<{ value: string; label: string; count: keyof OrderStatusCounts }> = [
   { value: 'all', label: '全部', count: 'allCount' }, { value: '0', label: '待支付', count: 'unpaidCount' },

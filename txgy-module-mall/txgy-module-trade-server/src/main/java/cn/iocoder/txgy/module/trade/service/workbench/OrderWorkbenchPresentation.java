@@ -20,7 +20,7 @@ public class OrderWorkbenchPresentation {
         String block=OrderActionPolicy.deliveryBlock(order,items,erp);
         if(!security.hasPermission("trade:order:update"))block="当前账号没有订单发货权限";
         response.setDeliverable(block==null);response.setDeliveryBlockReason(block);response.setErpStatus(OrderActionPolicy.erpStatus(erp));
-        String pickup=OrderActionPolicy.erpBlock(erp,"OUTBOUND",null);
+        String pickup=null;
         if(!Integer.valueOf(10).equals(order.getStatus()) || !Boolean.TRUE.equals(order.getPayStatus())
                 || !Integer.valueOf(2).equals(order.getDeliveryType()) || !Integer.valueOf(0).equals(order.getRefundStatus())
                 || items.isEmpty() || items.stream().anyMatch(i->!Integer.valueOf(0).equals(i.getAfterSaleStatus())))pickup="订单不满足已付款、无退款售后的待核销条件";

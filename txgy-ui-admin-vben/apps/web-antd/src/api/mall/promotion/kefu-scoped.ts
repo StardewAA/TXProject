@@ -21,7 +21,7 @@ export interface ChatThread {
   faq: { id: string; question: string }[]; attachmentsEnabled: false;
 }
 export interface ChatMessage {
-  id: number; sessionId: string; senderRole: 'MEMBER' | 'AGENT' | 'FAQ' | 'SYSTEM';
+  id: number; sessionId: string; senderRole: 'MEMBER' | 'AGENT' | 'FAQ' | 'AI' | 'SYSTEM';
   text: string; createdAt: number; clientMessageId?: string; faqId?: string; faqVersion?: number;
   card?: ChatCard | null;
 }

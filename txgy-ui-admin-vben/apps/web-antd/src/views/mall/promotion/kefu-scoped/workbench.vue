@@ -169,7 +169,7 @@ onUnmounted(() => { stopTimer(); document.removeEventListener('visibilitychange'
 </script>
 
 <template>
-  <Page title="店铺范围客服 · 接待工作台" description="独立范围授权 + 本人开始接待后回复。当前首版为固定 FAQ 与人工客服，不是 AI 自动客服。">
+  <Page title="店铺范围客服 · 接待工作台" description="独立范围授权 + 本人开始接待后回复。顾客转人工后，AI 自动回复立即停止。">
     <section class="scoped-panel bg-card">
       <Alert type="info" show-icon message="待接待不代表有人在线；上线状态由服务器 90 秒租约决定。页面隐藏后停止在线续约；离开或断网后最迟随租约到期下线。附件暂不开放。" />
       <div class="scoped-toolbar">

@@ -12,8 +12,6 @@ import { IconifyIcon } from '@vben/icons';
 
 import { Button, message } from 'ant-design-vue';
 
-import aiAssistantIcon from '#/assets/imgs/ai-assistant-bear.png';
-
 import {
   createChatConversationMy,
   getChatConversationMy,
@@ -444,15 +442,11 @@ onBeforeUnmount(() => {
   <!-- 收起态：右下角悬浮球 -->
   <button
     v-if="!panelOpen"
-    class="fixed bottom-6 right-6 z-[1200] flex size-14 items-center justify-center rounded-full bg-white shadow-lg ring-1 ring-black/5 transition-all hover:scale-105 hover:shadow-xl"
+    class="fixed bottom-6 right-6 z-[1200] flex size-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg transition-all hover:scale-105 hover:bg-blue-500 hover:shadow-xl"
     title="AI 智能助手"
     @click="panelOpen = true"
   >
-    <img
-      :src="aiAssistantIcon"
-      alt="AI 智能助手"
-      class="size-14 rounded-full object-cover"
-    />
+    <IconifyIcon icon="lucide:sparkles" class="size-6" />
     <span
       class="absolute right-0 top-0 size-3 animate-pulse rounded-full bg-emerald-400 ring-2 ring-white"
     ></span>
@@ -474,11 +468,7 @@ onBeforeUnmount(() => {
       @touchstart="onHeaderDown"
     >
       <div class="flex items-center gap-2 overflow-hidden">
-        <img
-          :src="aiAssistantIcon"
-          alt="AI 智能助手"
-          class="size-5 flex-shrink-0 rounded-full bg-white object-cover"
-        />
+        <IconifyIcon icon="lucide:sparkles" class="size-4 flex-shrink-0" />
         <span class="text-sm font-medium">AI 智能助手</span>
         <span class="text-xs font-normal opacity-80">MES 生产助手</span>
       </div>
@@ -522,11 +512,7 @@ onBeforeUnmount(() => {
           v-if="activeConversation && messageList.length === 0"
           class="flex min-h-0 flex-1 flex-col items-center justify-center px-4"
         >
-          <img
-            :src="aiAssistantIcon"
-            alt="AI 智能助手"
-            class="size-16 rounded-full object-cover"
-          />
+          <IconifyIcon icon="lucide:bot" class="size-12 text-blue-400" />
           <div class="mt-3 text-base font-medium">
             你好，我是「MES 生产助手」
           </div>

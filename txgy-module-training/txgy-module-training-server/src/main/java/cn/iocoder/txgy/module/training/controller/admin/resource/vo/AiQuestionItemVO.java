@@ -9,7 +9,7 @@ import java.util.List;
 @Data
 public class AiQuestionItemVO {
 
-    @Schema(description = "题型：1 单选 2 多选 3 判断 4 实操问答 5 案例分析 6 填空 7 简答", example = "1")
+    @Schema(description = "题型：1 单选 2 多选 3 判断 4 实操问答 5 案例分析", example = "1")
     private Integer qtype;
 
     @Schema(description = "题干")

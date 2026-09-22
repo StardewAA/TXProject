@@ -45,6 +45,12 @@ public class AppMallImageAuthController {
     public CommonResult<AppAuthLoginRespVO> login(@Valid @RequestBody AppMallImageAuthReqVO.Login body, HttpServletRequest request) {
         return success(safe(() -> service.login(body, request.getRemoteAddr())));
     }
+    @PostMapping("/platform-login") @PermitAll @TenantIgnore
+    @ApiAccessLog(requestEnable = false, responseEnable = false)
+    public CommonResult<AppAuthLoginRespVO> platformLogin(
+            @Valid @RequestBody AppMallImageAuthReqVO.PlatformLogin body, HttpServletRequest request) {
+        return success(safe(() -> service.platformLogin(body, request.getRemoteAddr())));
+    }
 
     // Binding/deserialization happens before the endpoint and safe(). Keep credentials and rejected field
     // values out of the shared exception logger, which otherwise records exceptions and raw request bodies.

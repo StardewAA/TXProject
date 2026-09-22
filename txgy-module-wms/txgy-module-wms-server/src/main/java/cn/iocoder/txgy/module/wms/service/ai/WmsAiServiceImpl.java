@@ -2,6 +2,10 @@ package cn.iocoder.txgy.module.wms.service.ai;
 
 import cn.iocoder.txgy.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
+import cn.iocoder.txgy.module.wms.controller.admin.ai.vo.WmsAiApprovalAdviceReqVO;
+import cn.iocoder.txgy.module.wms.controller.admin.ai.vo.WmsAiApprovalAdviceRespVO;
+import cn.iocoder.txgy.module.wms.controller.admin.ai.vo.WmsAiCreateOrderReqVO;
+import cn.iocoder.txgy.module.wms.controller.admin.ai.vo.WmsAiCreateOrderRespVO;
 import cn.iocoder.txgy.module.wms.controller.admin.ai.vo.WmsAiRecognizeFileReqVO;
 import cn.iocoder.txgy.module.wms.controller.admin.ai.vo.WmsAiRecognizeRespVO;
 import cn.iocoder.txgy.module.wms.controller.admin.ai.vo.WmsAiRecognizeRespVO.AiEntity;
@@ -11,6 +15,7 @@ import cn.iocoder.txgy.module.wms.dal.dataobject.md.item.WmsItemDO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.md.item.WmsItemSkuDO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.md.merchant.WmsMerchantDO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.md.warehouse.WmsWarehouseDO;
+import cn.iocoder.txgy.module.wms.dal.mysql.inventory.WmsInventoryMapper;
 import cn.iocoder.txgy.module.wms.dal.mysql.md.item.WmsItemCategoryMapper;
 import cn.iocoder.txgy.module.wms.dal.mysql.md.item.WmsItemMapper;
 import cn.iocoder.txgy.module.wms.dal.mysql.md.item.WmsItemSkuMapper;
@@ -43,6 +48,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -98,14 +104,20 @@ public class WmsAiServiceImpl implements WmsAiService {
         ORDER_TYPE_NAMES.put(WmsOrderTypeConstants.SHIPMENT_PRODUCTION, "生产出库");
     }
 
-    @Value("${txgy.ai.siliconflow.api-key:}")
-    private String apiKey;
+    /**
+     * AI 客服的模型配置来源。
+     *
+     * 模型/地址/Key 优先取「AI 客服配置」菜单里选中的模型（模型与 Key 仍在 AI 模块统一维护，
+     * 见 ai_model / ai_api_key），未配置时回落容器环境变量 txgy.ai.siliconflow.*。
+     * 每次调用实时解析，所以界面上换模型后立即生效，无需重启容器。
+     */
+    @Resource
+    private WmsAiConfigService aiConfigService;
 
-    @Value("${txgy.ai.siliconflow.base-url:https://api.siliconflow.cn/v1/chat/completions}")
-    private String baseUrl;
-
-    @Value("${txgy.ai.siliconflow.model:deepseek-ai/DeepSeek-V4-Flash}")
-    private String model;
+    /** 取当前生效的模型配置（每次调用实时解析，支持界面切换后立即生效） */
+    private WmsAiRuntimeConfig runtime() {
+        return aiConfigService.resolveRuntimeConfig();
+    }
 
     /**
      * 拉取前端上传文件（相对路径 URL）时的网关基础地址；容器网络内默认走服务名 gateway
@@ -113,9 +125,24 @@ public class WmsAiServiceImpl implements WmsAiService {
     @Value("${txgy.ai.file-base-url:http://gateway:48080}")
     private String fileBaseUrl;
 
-    /** 视觉模型：识别上传的清单图片（打印/电子表格/手写） */
-    @Value("${txgy.ai.siliconflow.vision-model:Qwen/Qwen3-VL-32B-Instruct}")
-    private String visionModel;
+    // ==================== 确认建单依赖 ====================
+    // AI 只负责「识别 + 匹配主数据」，最终落库复用既有单据服务，
+    // 因此单据编号规则、状态机、审批联动、库存执行都与手工建单完全一致。
+
+    @Resource
+    private cn.iocoder.txgy.module.wms.service.order.receipt.WmsReceiptOrderService receiptOrderService;
+    @Resource
+    private cn.iocoder.txgy.module.wms.service.order.shipment.WmsShipmentOrderService shipmentOrderService;
+    @Resource
+    private cn.iocoder.txgy.module.wms.service.order.movement.WmsMovementOrderService movementOrderService;
+    @Resource
+    private cn.iocoder.txgy.module.wms.service.order.check.WmsCheckOrderService checkOrderService;
+    @Resource
+    private cn.iocoder.txgy.module.wms.service.order.receipt.WmsReceiptOrderDetailService receiptOrderDetailService;
+    @Resource
+    private cn.iocoder.txgy.module.wms.service.order.shipment.WmsShipmentOrderDetailService shipmentOrderDetailService;
+    @Resource
+    private WmsInventoryMapper inventoryMapper;
 
     @Resource
     private WmsItemMapper itemMapper;
@@ -149,7 +176,7 @@ public class WmsAiServiceImpl implements WmsAiService {
             return buildEmptyResp("请告诉我你想做什么（如「采购入库 200 米 预制直埋保温管 DN200 到 金岩原辅材料库」），"
                     + "或直接上传/拍照一张入库清单图片，我来帮你识别建单。");
         }
-        if (StrUtil.isBlank(apiKey)) {
+        if (!runtime().usable()) {
             log.error("[recognize] 系统未配置硅基流动 API Key");
             return buildEmptyResp("系统尚未配置大模型 API Key（txgy.ai.siliconflow.api-key），请联系管理员配置后再使用。");
         }
@@ -182,10 +209,10 @@ public class WmsAiServiceImpl implements WmsAiService {
         // 3. 大模型结构化抽取：文字走文本模型；上传了清单图片则走视觉模型（逐行识别，含手写）
         String content;
         if (hasImages) {
-            content = chatOnce(visionModel, buildExtractSystemPrompt(warehouses, suppliers, customers,
+            content = chatOnce(runtime().getVisionModel(), buildExtractSystemPrompt(warehouses, suppliers, customers,
                     itemCatalog, skusByItem, true), raw, images);
         } else {
-            content = chatOnce(model, buildExtractSystemPrompt(warehouses, suppliers, customers,
+            content = chatOnce(runtime().getModel(), buildExtractSystemPrompt(warehouses, suppliers, customers,
                     itemCatalog, skusByItem, false), raw, null);
         }
         if (StrUtil.isBlank(content)) {
@@ -207,7 +234,43 @@ public class WmsAiServiceImpl implements WmsAiService {
         // 5. 动作与单据类型：图片无动作信息时，默认按采购入库处理并提示可改
         String action = normalizeAction(json.getStr("action", ""), raw);
         String hint = json.getStr("orderTypeHint", "");
+
+        // 4.9 制度类问句不是建单指令：模型看到「入库/出库」字样容易误判成一张单据，
+        //     例如「出入库遵循什么原则」会被识别成入库单并要求补商品明细。
+        //     这类问句应转交问答链路（其中包含知识库检索）。
+        //     判据刻意收窄：只认制度类词，且文本里没有数字（有数字基本就是带数量的真实建单）。
+        if (!hasImages && isPolicyQuestion(raw)) {
+            String policyReply = aiChatService.chat(raw, sessionId);
+            if (StrUtil.isNotBlank(policyReply)) {
+                log.info("[recognize] 判定为制度类问句，转交问答链路：{}", raw);
+                return buildEmptyResp(policyReply);
+            }
+        }
         if ("UNKNOWN".equals(action) || StrUtil.isBlank(action)) {
+            // 5.0 图片也可能只是「商品清单」而不是单据：明细一行数量都没有，构不成出入库单。
+            //     此时若直接默认采购入库，用户就没法用图片做「添加商品」了。故先走建档闭环。
+            boolean imageLooksLikeItemList = hasImages && isItemListWithoutQuantity(json);
+            if (hasImages && imageLooksLikeItemList && missingDepth < 2) {
+                boolean wantsCreate = isBatchCreateIntent(raw) || isCreateOnlyIntent(raw);
+                WmsAiRecognizeRespVO createResp = buildMissingCreateResp(json, itemMap, skusByItem);
+                if (createResp != null) {
+                    log.info("[recognize] 图片识别为商品清单（无数量），走建档闭环 batchIntent={}", wantsCreate);
+                    WmsAiRecognizeRespVO done = handleMissingItemForCreate(raw, images, createResp, sessionId, missingDepth);
+                    if (done != null) {
+                        return asCreateOnlyResp(done, StrUtil.nullToEmpty(done.getReply()));
+                    }
+                    // 明细都能匹配到档案 → 告知已建档即可，不生成入库草稿
+                    String names0 = createResp.getItems().stream()
+                            .map(i -> i.getSku() == null ? "" : StrUtil.trimToEmpty(i.getSku().getName()))
+                            .filter(StrUtil::isNotBlank).distinct()
+                            .collect(Collectors.joining("、"));
+                    String tail0 = "如果这些商品是要入库/出库，请带上数量再发我（如「采购入库 … 20 件 到 金岩原辅材料库」）。";
+                    String readyReply0 = StrUtil.isBlank(names0)
+                            ? "没有从图片里识别到可建档的商品明细。要建商品档案请发商品名单；要入库/出库请带上数量。"
+                            : "图片里这些商品在【商品管理】中都已经有档案了：" + names0 + "。" + tail0;
+                    return asCreateOnlyResp(createResp, readyReply0);
+                }
+            }
             if (hasImages) {
                 action = "IN";
                 if (StrUtil.isBlank(hint)) {
@@ -322,6 +385,11 @@ public class WmsAiServiceImpl implements WmsAiService {
                 } else if (aiItem.getQuantity() == null) {
                     resp.getTips().add("“" + name + "”没识别到数量，请确认预览时填写。");
                 }
+                // 单价疑似取成整行金额时，把核对提示透出到气泡上（warnIfPriceLooksLikeTotal 已写入 remark）
+                if (isResolved(aiItem.getSku()) && aiItem.getRemark() != null
+                        && aiItem.getRemark().contains("可能把清单上的「金额」当成了单价")) {
+                    resp.getTips().add(aiItem.getRemark());
+                }
             }
         } else {
             resp.getTips().add("没有识别到具体要操作的商品，请确认预览时在明细中添加，或换一张更清晰的清单照片。");
@@ -377,7 +445,7 @@ public class WmsAiServiceImpl implements WmsAiService {
         if (CollUtil.isEmpty(files)) {
             return buildEmptyResp("没有收到清单文件。请点击输入框左侧按钮，选择 Excel/CSV/TXT/PDF 清单文件后再发送。");
         }
-        if (StrUtil.isBlank(apiKey)) {
+        if (!runtime().usable()) {
             return buildEmptyResp("AI 服务未配置，请联系管理员在系统配置中填写大模型 API Key。");
         }
         // 2. 逐个解析文件为文本（单个失败不影响其它文件）
@@ -420,8 +488,8 @@ public class WmsAiServiceImpl implements WmsAiService {
         // 4. 部分文件失败时，把失败原因透出给用户
         if (CollUtil.isNotEmpty(failures)) {
             String tip = "部分文件解析失败：" + String.join("；", failures);
+            // 只前置到 reply，不再同时追加到 tips：前端会把二者拼接，重复设置会显示两遍
             resp.setReply(tip + "\n" + StrUtil.nullToDefault(resp.getReply(), ""));
-            resp.getTips().add(0, tip);
         }
         return resp;
     }
@@ -571,12 +639,36 @@ public class WmsAiServiceImpl implements WmsAiService {
         }
     }
 
+    /**
+     * 是否为「问制度/规定」类问句（用于把制度问答从建单指令里摘出来）。
+     *
+     * <p>判据刻意收窄：
+     * 1. 只认制度类词，不含「怎么/如何」等泛疑问词，避免把「怎么新建商品」这类真指令挡掉；
+     * 2. 要求文本里没有数字——真实建单几乎都会带数量（如「岩棉板 20 件」），
+     *    而制度问句通常没有。两条同时满足才判定，尽量不误伤建单。
+     */
+    private boolean isPolicyQuestion(String text) {
+        String t = StrUtil.nullToEmpty(text);
+        if (t.matches(".*\\d.*")) {
+            return false;
+        }
+        for (String kw : new String[]{"要求", "规定", "标准", "制度", "流程", "规范",
+                "规则", "编号", "原则", "遵循", "依据", "条件", "禁止", "必须", "应当"}) {
+            if (t.contains(kw)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private WmsAiRecognizeRespVO buildEmptyResp(String reply) {
         WmsAiRecognizeRespVO resp = new WmsAiRecognizeRespVO();
         resp.setAction("UNKNOWN");
         resp.setActionName("未识别");
         resp.setItems(new ArrayList<>());
-        resp.setTips(Collections.singletonList(reply));
+        // 不要把 reply 再塞进 tips：前端会把 reply 与 tips 依次拼接展示
+        // （index.vue: [resp.reply, ...resp.tips].join('\n')），两边同时设置会让同一段话显示两遍。
+        resp.setTips(new ArrayList<>());
         resp.setReply(reply);
         resp.setBuildable(false);
         resp.setReady(false);
@@ -607,6 +699,12 @@ public class WmsAiServiceImpl implements WmsAiService {
             if (StrUtil.isBlank(name)) {
                 continue;
             }
+            // 防脏数据：模型偶尔会把「（用户补充：分类=xx）」这类说明文字当成商品名。
+            // 这类名字一旦建档就是垃圾档案，且会真实落库，因此在这里直接丢弃。
+            if (looksLikeMetaTextNotItemName(name)) {
+                log.warn("[recognize] 丢弃疑似说明性文字的“商品名”：{}", name);
+                continue;
+            }
             AiItem aiItem = buildAiItem(name, parseQuantity(itemNode.get("quantity")),
                     parseQuantity(itemNode.get("price")), itemMap, skusByItem, "");
             if (aiItem != null) {
@@ -614,6 +712,81 @@ public class WmsAiServiceImpl implements WmsAiService {
             }
         }
         return resp.getItems().isEmpty() ? null : resp;
+    }
+
+    /**
+     * 判定「抽出来的 items 是否是一份没有数量的商品清单」。
+     *
+     * <p>用于区分图片到底是一张单据（有数量）还是一份商品名单（没数量）：
+     * 数量全空/全 0 且至少有一行商品时，认为用户是想建档（添加商品），
+     * 而不是要我们凭空按采购入库生成草稿。
+     */
+    private boolean isItemListWithoutQuantity(JSONObject json) {
+        JSONArray arr = json == null ? null : json.getJSONArray("items");
+        if (arr == null || arr.isEmpty()) {
+            return false;
+        }
+        int named = 0;
+        for (Object o : arr) {
+            if (!(o instanceof JSONObject node)) {
+                continue;
+            }
+            String name = StrUtil.trim(node.getStr("name", ""));
+            if (StrUtil.isBlank(name)) {
+                continue;
+            }
+            named++;
+            BigDecimal q = parseQuantity(node.get("quantity"));
+            if (q != null && q.signum() > 0) {
+                return false; // 只要有一行带数量，就按单据处理
+            }
+        }
+        return named > 0;
+    }
+
+    /**
+     * 判断候选名是否其实是「说明性文字」而不是商品名。
+     *
+     * <p>触发场景：缺品建档反问后，用户回复「分类=保温材料，单位=立方米」，
+     * 系统把它拼成「（用户补充：补充建档信息：分类=保温材料）」回灌给模型，
+     * 模型会把它当成第二个商品名，从而建出「补充建档信息：分类=保温材料」这样的垃圾档案。
+     */
+    private boolean looksLikeMetaTextNotItemName(String name) {
+        if (StrUtil.isBlank(name)) {
+            return true;
+        }
+        String s = name.trim();
+        // 1. 明确的元信息标记词（「补充建档信息：分类=xx」就是从这里进来的）
+        if (s.contains("用户补充") || s.contains("补充建档信息") || s.contains("自动建档")
+                || s.contains("清单里") || s.contains("建档前") || s.contains("补充信息")
+                || s.contains("待新建") || s.contains("未建档")) {
+            return true;
+        }
+        // 2. 去掉「补充/说明/备注」等前缀后，如果形如「分类=xx」「单位=xx」这类字段表达式，
+        //    说明整串其实是字段说明而不是商品名（商品名里不会出现「key=值」）。
+        String core = s.replaceAll("^(补充|说明|备注|注明|追加)[^=：:]{0,8}[：:]?", "");
+        String[] keys = {"分类", "单位", "品牌", "价格", "单价", "重量", "规格", "条码", "类目"};
+        for (String k : keys) {
+            if (core.startsWith(k + "=") || core.startsWith(k + "：") || core.startsWith(k + ":")) {
+                return true;
+            }
+        }
+        // 3. 整串命中 2 个以上「key=值」，基本是参数说明
+        int kv = 0;
+        for (String k : keys) {
+            if (core.contains(k + "=") || core.contains(k + "：")) {
+                kv++;
+            }
+        }
+        if (kv >= 2) {
+            return true;
+        }
+        // 4. 长度异常：正常商品名不会长到 30 字以上
+        if (s.length() > 30) {
+            return true;
+        }
+        // 5. 以句号结尾或含换行的整句，基本是说明文字而非名称
+        return s.endsWith("。") || s.contains("\n");
     }
 
 
@@ -676,7 +849,7 @@ public class WmsAiServiceImpl implements WmsAiService {
             return buildAskResp(resp, "清单里有 " + missNames.size() + " 个商品还没建档：" + String.join("、", missNames) + "。\n"
                     + "建档前先跟你确认：\n"
                     + "· 回复「自动建档」：我会按分类「其他」一键建好这些商品（价格/重量以清单为准），并继续整理单据；\n"
-                    + "· 或回复「分类=电子元器件，单位=个，价格=3.5，重量=0.5kg」，按你指定的信息建档（分类不存在我会自动新建）。\n"
+                    + "· 或回复「分类=保温材料，单位=立方米，价格=150，重量=80kg」，按你指定的信息建档（分类不存在我会自动新建）。\n"
                     + "现有分类：" + listCategoryNamesBrief());
         }
         return createMissingAndRebuild(raw, images, resp, sessionId, missingDepth,
@@ -815,6 +988,11 @@ public class WmsAiServiceImpl implements WmsAiService {
             if (it.getSku() != null && !isResolved(it.getSku()) && hasNoCandidate(it.getSku())
                     && StrUtil.isNotBlank(it.getSku().getName())) {
                 String n = it.getSku().getName().trim();
+                // 双保险：说明性文字（如「补充建档信息：分类=xx」）不能进入自动建档，否则会落成垃圾档案
+                if (looksLikeMetaTextNotItemName(n)) {
+                    log.warn("[recognize] 自动建档前丢弃疑似说明性文字：{}", n);
+                    continue;
+                }
                 if (!names.contains(n)) {
                     names.add(n);
                 }
@@ -981,17 +1159,20 @@ public class WmsAiServiceImpl implements WmsAiService {
                 + "请从这句话里只做一件事：抽取“新建一个商品档案所需的字段”，严格只输出一个 JSON，不要任何解释：\n"
                 + "{\"name\":\"\",\"categoryName\":\"\",\"unit\":\"\",\"brandName\":\"\",\"specs\":[],\"barCode\":\"\",\"costPrice\":\"\",\"weight\":\"\"}\n"
                 + "字段含义：\n"
-                + "- name：这句话要处理/建档的“商品主体名”（如 鸡爪、预制直埋保温管）。\n"
-                + "- categoryName：用户明确提到的分类/类别/类目名（如“分类=休闲食品”“休闲食品类”），未提及填空串。\n"
-                + "- unit：用户提到的单位（箱/袋/kg/米/件等），未提及填空串。\n"
+                + "- name：这句话要处理/建档的“商品主体名”（如 岩棉板、预制直埋保温管）。\n"
+                + "- categoryName：用户明确提到的分类/类别/类目名（如“分类=保温材料”“保温材料类”），未提及填空串。\n"
+                + "- unit：用户提到的单位（件/立方米/米/kg/箱等），未提及填空串。\n"
                 + "- brandName：用户提到的品牌，未提及填空串。\n"
                 + "- specs：规格名数组，例如用户说“30袋/箱”“DN200”且这是指该商品的规格时放入数组；其余为 [].\n"
                 + "- barCode：明确出现的条码，没有填空串。\n"
                 + "- costPrice：用户提到的单价/价格/金额（如“单价3.5元”“价格=8块”），输出纯数字字符串；未提及填空串。\n"
                 + "- weight：用户明确提到的重量（如“每件10kg”“重500克”），原样输出保留单位；未提及填空串。\n"
                 + "注意：全部字段只能来自用户原话，严禁推测或编造；纯闲聊/寒暄时 name 填空串。\n"
+                + "【重要】文本里如出现「（用户补充：…）」这样的段落，那是用户对上一轮问题的补充说明（分类/单位/价格等），"
+                + "属于元信息，绝不是商品名。禁止把「用户补充」「补充建档信息」「分类=…」「单位=…」等说明性文字当作 name 输出；"
+                + "此时 name 必须留空字符串，只在 categoryName / unit / costPrice / weight 等对应字段里体现这些补充值。\n"
                 + "用户输入：\n" + text;
-        String content = chatOnce(model, prompt, "开始", null);
+        String content = chatOnce(runtime().getModel(), prompt, "开始", null);
         if (StrUtil.isBlank(content)) {
             return null;
         }
@@ -1208,10 +1389,41 @@ public class WmsAiServiceImpl implements WmsAiService {
         // 单价：优先清单/图片中识别到的价格，其次该 SKU 成本价
         if (price != null) {
             aiItem.setPrice(price);
+            warnIfPriceLooksLikeTotal(aiItem, keyword, quantity, price);
         } else if (isResolved(aiItem.getSku()) && aiItem.getSku().getPrice() != null) {
             aiItem.setPrice(aiItem.getSku().getPrice());
         }
         return aiItem;
+    }
+
+    /**
+     * 价格合理性自检：识别到的「单价」可能是清单上的整行金额。
+     *
+     * <p>典型误识别：清单金额列写 12000（该行合计），模型把它当成单价 → 确认卡片按
+     * 单价×数量 汇总，金额被放大到数量倍。这里与该 SKU 的档案成本价做量级比对，
+     * 相差过大时给出提示，让用户在提交前核对（不擅自改数，避免把正确价格改坏）。
+     */
+    private void warnIfPriceLooksLikeTotal(AiItem aiItem, String keyword, BigDecimal quantity, BigDecimal price) {
+        if (price == null || price.signum() <= 0) {
+            return;
+        }
+        BigDecimal ref = null;
+        if (isResolved(aiItem.getSku()) && aiItem.getSku().getPrice() != null) {
+            ref = aiItem.getSku().getPrice();
+        }
+        if (ref == null || ref.signum() <= 0) {
+            return;
+        }
+        // 单价高于档案价 20 倍以上，且数量>1（说明很可能把整行金额当单价了）
+        if (quantity != null && quantity.compareTo(BigDecimal.ONE) > 0
+                && price.compareTo(ref.multiply(BigDecimal.valueOf(20))) > 0) {
+            String msg = "「" + StrUtil.blankToDefault(keyword, "该商品") + "」识别到单价 " + price
+                    + "，明显高于档案成本价 " + ref + "，可能把清单上的「金额」当成了单价，"
+                    + "建议核对后再提交（若清单金额是整行合计，单价应为 金额÷数量）。";
+            aiItem.setRemark(StrUtil.isBlank(aiItem.getRemark()) ? msg : aiItem.getRemark() + "；" + msg);
+            log.warn("[recognize] 单价疑似整行金额：name={} quantity={} price={} ref={}",
+                    keyword, quantity, price, ref);
+        }
     }
 
     /**
@@ -1317,7 +1529,10 @@ public class WmsAiServiceImpl implements WmsAiService {
             return false;
         }
         for (AiItem item : resp.getItems()) {
-            if (!isResolved(item.getSku()) || item.getQuantity() == null) {
+            // 数量必须为正数：模型未识别到数量时会填 0/null，此前只判 null 会把
+            // 「quantity=0」也当作可提交，导致用户提交出零数量的入库单。
+            if (!isResolved(item.getSku()) || item.getQuantity() == null
+                    || item.getQuantity().signum() <= 0) {
                 return false;
             }
         }
@@ -1500,7 +1715,13 @@ public class WmsAiServiceImpl implements WmsAiService {
         prompt.append("- sourceWarehouse / targetWarehouse：仅 MOVE 时分别填移出/移入仓库；用户没提到就填空串，严禁猜测；其余情况都填空串。\n");
         prompt.append("- merchant：入库=供应商名，出库=客户名；没提到填空串。\n");
         prompt.append("- listRows：图片清单的明细总行数（仅图片输入时输出，无图片固定填 0）。\n");
-        prompt.append("- items：每种商品一行。name 尽量与下方“商品名录”中的完整名称一致（含规格，如“预制直埋保温管 DN200”）；quantity 为阿拉伯数字；unit 为数量单位；price 为该商品的单价/金额（纯数字，单位元，来自用户文字或清单原文，没有就填 0，严禁根据商品名猜测）。用户一次说多种商品时拆成多行。中文数字请转阿拉伯数字。\n");
+        prompt.append("- items：每种商品一行。name 尽量与下方“商品名录”中的完整名称一致（含规格，如“预制直埋保温管 DN200”）；quantity 为阿拉伯数字；unit 为数量单位；price 为【单价】（纯数字，单位元，来自用户文字或清单原文，没有就填 0，严禁根据商品名猜测）。用户一次说多种商品时拆成多行。中文数字请转阿拉伯数字。\n");
+        prompt.append("【price 专项要求——最容易出错的地方】\n");
+        prompt.append("  · price 只能是“单个单位的价钱”（单价/报价），绝不能填整行的合计金额。\n");
+        prompt.append("  · 清单上若同时有“数量 / 单价 / 金额”三列，price 取【单价】那一列；\n");
+        prompt.append("  · 若清单上只有“金额（合计）”而没有单价列，必须先自行计算 单价 = 金额 ÷ 数量 后再填入 price；\n");
+        prompt.append("  · 自检：填完后确认 price × quantity ≈ 清单该行金额。若相差十倍/百倍以上，说明取错列了，请改正。\n");
+        prompt.append("  · 数量为 0 或缺失时，price 填 0，禁止把该行金额直接当单价。\n");
         prompt.append("- remark：用户额外交代的内容放这里，没有就填空串。\n");
         prompt.append("- 关键：当 action=UNKNOWN 但用户文字或清单文件里有具体商品时，仍必须把这些商品逐行输出到 items（name 取商品名，没有数量时 quantity 填 0）；只有纯提问/闲聊才输出空 items。清单文件内容按「 | 」分隔逐行解析，一个商品一行，不要合并。\n");
         if (withImages) {
@@ -1512,6 +1733,7 @@ public class WmsAiServiceImpl implements WmsAiService {
             prompt.append("- 请输出 listRows=图片上清单的明细总行数（商品条目数，不含表头合计行）。\n");
             prompt.append("- 若个别文字实在无法辨认，输出你认为最可能的名称并在 name 末尾加“(存疑)”，不要遗漏该行。\n");
             prompt.append("- 清单上可见的单价/金额列（含手写价格）必须逐行输出到对应商品的 price（纯数字，元）；看不清或没有该列时填 0，严禁编造。\n");
+        prompt.append("- 特别注意：若该行只看到“金额/合计/总额”这类整行金额，且同时能看到数量，请输出【单价】= 金额 ÷ 数量，而不是把整行金额填进 price。\n");
             prompt.append("- 图片上没有出现仓库名称（或不确定）时，warehouse 必须填空串；没有出现供应商/客户名称时 merchant 必须填空串，绝不能根据单据内容或下方名录猜测填充。\n");
         }
         prompt.append("\n===== 当前系统仓库名录（请尽量使用其中准确名称）=====\n");
@@ -1556,6 +1778,8 @@ public class WmsAiServiceImpl implements WmsAiService {
      * 传了 images 时走多模态消息格式（text + image_url），供视觉模型识别清单图片。
      */
     private String chatOnce(String modelName, String systemPrompt, String userText, List<String> images) {
+        // 每次调用实时解析（支持界面换模型后立即生效）：地址、Key、超时、thinking 都取自当前配置
+        WmsAiRuntimeConfig cfg = runtime();
         try {
             JSONObject body = new JSONObject(true);
             body.set("model", modelName);
@@ -1592,15 +1816,24 @@ public class WmsAiServiceImpl implements WmsAiService {
             }
             messages.add(user);
             body.set("messages", messages);
+            // 火山方舟等推理模型可通过 thinking.type=disabled 关闭思考链，显著降低延迟
+            if (StrUtil.isNotBlank(cfg.getThinkingType())) {
+                JSONObject thinking = new JSONObject(true);
+                thinking.set("type", cfg.getThinkingType());
+                body.set("thinking", thinking);
+            }
 
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(baseUrl))
-                    .timeout(Duration.ofSeconds(90))
+                    .uri(URI.create(cfg.getBaseUrl()))
+                    .timeout(Duration.ofSeconds(cfg.getTimeoutSeconds()))
                     .header("Content-Type", "application/json")
-                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Authorization", "Bearer " + cfg.getApiKey())
                     .POST(HttpRequest.BodyPublishers.ofString(body.toString(), java.nio.charset.StandardCharsets.UTF_8))
                     .build();
+            long _t0 = System.currentTimeMillis();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            log.info("[chatOnce] done model={} status={} elapsed={}ms",
+                    modelName, response.statusCode(), System.currentTimeMillis() - _t0);
             if (response.statusCode() != 200) {
                 log.error("[chatOnce] 大模型调用失败，model={}，status={}，body={}", modelName, response.statusCode(), response.body());
                 return null;
@@ -1649,6 +1882,651 @@ public class WmsAiServiceImpl implements WmsAiService {
         } catch (Exception ex) {
             return null;
         }
+    }
+
+    // ==================== 确认建单 ====================
+
+    /**
+     * 确认建单：把用户已核对的草稿落库。
+     *
+     * <p>设计要点：
+     * 1) 只接受「已匹配到主数据」的明细行——未匹配的行直接报错，避免 AI 幻觉落库；
+     * 2) skuId 缺失时用 itemId 兜底解析（前端候选选中后可能只回填了 itemId）；
+     * 3) 落库一律走既有单据 Service，接口层的 @PreAuthorize 权限校验照常生效。
+     */
+    @Override
+    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
+    public WmsAiCreateOrderRespVO createOrder(WmsAiCreateOrderReqVO reqVO) {
+        String action = StrUtil.blankToDefault(reqVO.getAction(), "").trim().toUpperCase(Locale.ROOT);
+        if (!Arrays.asList("IN", "OUT", "MOVE", "CHECK").contains(action)) {
+            throw new IllegalArgumentException("不支持的单据动作：" + reqVO.getAction());
+        }
+        if (CollUtil.isEmpty(reqVO.getItems())) {
+            throw new IllegalArgumentException("商品明细不能为空");
+        }
+
+        // 1. 解析明细行的 SKU（必须有真实 skuId，否则拒绝，避免落脏数据）
+        List<SkuLine> lines = new ArrayList<>();
+        for (WmsAiCreateOrderReqVO.Item it : reqVO.getItems()) {
+            Long skuId = it.getSkuId();
+            if (skuId == null && it.getItemId() != null) {
+                skuId = resolveFirstSkuId(it.getItemId());
+            }
+            // 兜底：前端旧缓存或字段映射异常时可能只带商品名，后端自己按名称再查一次
+            if (skuId == null && StrUtil.isNotBlank(it.getName())) {
+                skuId = resolveSkuIdByKeyword(it.getName());
+            }
+            if (skuId == null) {
+                throw new IllegalArgumentException("商品「"
+                        + StrUtil.blankToDefault(it.getName(), "未命名") + "」未匹配到系统商品，无法建单，请在明细中选择");
+            }
+            if (it.getQuantity() == null || it.getQuantity().signum() <= 0) {
+                throw new IllegalArgumentException("商品「"
+                        + StrUtil.blankToDefault(it.getName(), "未命名") + "」的数量必须大于 0");
+            }
+            lines.add(new SkuLine(skuId, it.getQuantity(), it.getPrice()));
+        }
+
+        // 2. 按动作分派到既有单据服务
+        Long orderId;
+        switch (action) {
+            case "IN" -> orderId = createReceipt(reqVO, lines);
+            case "OUT" -> orderId = createShipment(reqVO, lines);
+            case "MOVE" -> {
+                // 移库必须明确移出仓与移入仓，且不能相同，否则会生成无意义的单据
+                if (reqVO.getWarehouseId() == null) {
+                    throw new IllegalArgumentException("移库单缺少「移出仓库」，请在确认卡片中选择");
+                }
+                if (reqVO.getTargetWarehouseId() == null) {
+                    throw new IllegalArgumentException("移库单缺少「移入仓库」，请在确认卡片中选择");
+                }
+                if (reqVO.getWarehouseId().equals(reqVO.getTargetWarehouseId())) {
+                    throw new IllegalArgumentException("移出仓库与移入仓库不能相同");
+                }
+                orderId = createMovement(reqVO, lines);
+            }
+            case "CHECK" -> {
+                if (reqVO.getWarehouseId() == null) {
+                    throw new IllegalArgumentException("盘库单缺少「盘库仓库」，请在确认卡片中选择");
+                }
+                orderId = createCheck(reqVO, lines);
+            }
+            default -> throw new IllegalArgumentException("不支持的单据动作：" + reqVO.getAction());
+        }
+        if (orderId == null) {
+            throw new IllegalStateException("单据创建失败，请稍后重试");
+        }
+
+        // 3. 回读单号返回给前端
+        String orderNo = readOrderNo(action, orderId);
+        WmsAiCreateOrderRespVO resp = new WmsAiCreateOrderRespVO();
+        resp.setOrderId(orderId);
+        resp.setOrderNo(orderNo);
+        resp.setReply("已生成" + ORDER_ACTION_NAMES.getOrDefault(action, "单据") + " " + StrUtil.nullToEmpty(orderNo)
+                + "（草稿）。" + ORDER_ACTION_HINTS.getOrDefault(action, "请到对应列表补充信息后提交审批。"));
+        log.info("[createOrder][AI 建单成功 action({}) orderId({}) orderNo({})]", action, orderId, orderNo);
+        return resp;
+    }
+
+    /** 动作 → 单据中文名（用于建单成功提示） */
+    private static final Map<String, String> ORDER_ACTION_NAMES = Map.of(
+            "IN", "入库单", "OUT", "出库单", "MOVE", "移库单", "CHECK", "盘库单");
+
+    /** 动作 → 后续操作提示（各类单据需要补充的信息不同） */
+    private static final Map<String, String> ORDER_ACTION_HINTS = Map.of(
+            "IN", "请到对应列表补充验收数量后提交审批。",
+            "OUT", "请到对应列表核对出库数量后提交审批。",
+            "MOVE", "请到移库单列表核对移出/移入仓库后提交审批。",
+            "CHECK", "请到盘库单列表填写实盘数量后提交审批。");
+
+    // ==================== AI 辅助审批 ====================
+
+    @Override
+    public WmsAiApprovalAdviceRespVO approvalAdvice(WmsAiApprovalAdviceReqVO reqVO) {
+        WmsAiApprovalAdviceRespVO resp = new WmsAiApprovalAdviceRespVO();
+        String orderType = StrUtil.blankToDefault(reqVO.getOrderType(), "").trim().toUpperCase(Locale.ROOT);
+        boolean isReceipt = "RECEIPT".equals(orderType);
+        if (!isReceipt && !"SHIPMENT".equals(orderType)) {
+            resp.setOk(Boolean.FALSE);
+            resp.setErrorMessage("不支持的单据类型：" + reqVO.getOrderType());
+            return resp;
+        }
+
+        // 1. 取单据主体
+        Long warehouseId;
+        String orderNo;
+        String bizNo;
+        String sourceModule;
+        Integer approvalStatus;
+        List<String> lineTexts = new ArrayList<>();
+        List<ApprovalLine> lines = new ArrayList<>();
+
+        if (isReceipt) {
+            var order = receiptOrderService.getReceiptOrder(reqVO.getOrderId());
+            if (order == null) {
+                resp.setOk(Boolean.FALSE);
+                resp.setErrorMessage("入库单不存在：" + reqVO.getOrderId());
+                return resp;
+            }
+            warehouseId = order.getWarehouseId();
+            orderNo = order.getNo();
+            bizNo = order.getBizOrderNo();
+            sourceModule = order.getSourceModule();
+            approvalStatus = order.getApprovalStatus();
+            var details = receiptOrderDetailService.getReceiptOrderDetailList(order.getId());
+            for (var d : details) {
+                lines.add(new ApprovalLine(d.getSkuId(), d.getQuantity(), d.getActualQuantity(),
+                        d.getQualifiedQuantity(), d.getUnqualifiedQuantity(), d.getPrice()));
+                lineTexts.add(buildLineText(d.getSkuId(), d.getQuantity(), d.getActualQuantity(),
+                        d.getQualifiedQuantity(), d.getUnqualifiedQuantity(), d.getPrice()));
+            }
+        } else {
+            var order = shipmentOrderService.getShipmentOrder(reqVO.getOrderId());
+            if (order == null) {
+                resp.setOk(Boolean.FALSE);
+                resp.setErrorMessage("出库单不存在：" + reqVO.getOrderId());
+                return resp;
+            }
+            warehouseId = order.getWarehouseId();
+            orderNo = order.getNo();
+            bizNo = order.getBizOrderNo();
+            sourceModule = order.getSourceModule();
+            approvalStatus = order.getApprovalStatus();
+            var details = shipmentOrderDetailService.getShipmentOrderDetailList(order.getId());
+            for (var d : details) {
+                lines.add(new ApprovalLine(d.getSkuId(), d.getQuantity(), null, null, null, d.getPrice()));
+                lineTexts.add(buildLineText(d.getSkuId(), d.getQuantity(), null, null, null, d.getPrice()));
+            }
+        }
+
+        resp.setDetailCount(lines.size());
+
+        // 2. 后端先算出「事实」（库存、验收、价格），再交给模型归纳，避免模型凭空推断
+        WmsWarehouseDO warehouse = warehouseId == null ? null : warehouseMapper.selectById(warehouseId);
+        String warehouseName = warehouse == null ? "未指定仓库"
+                : StrUtil.blankToDefault(warehouse.getName(), "未命名仓库");
+
+        Map<Long, BigDecimal> stockMap = queryStock(warehouseId, lines);
+
+        // 3. 规则层：先给出确定性风险，模型只做归纳与措辞
+        List<WmsAiApprovalAdviceRespVO.Risk> risks = new ArrayList<>();
+        StringBuilder facts = new StringBuilder();
+        facts.append("单据类型：").append(isReceipt ? "入库单" : "出库单").append('\n');
+        facts.append("单号：").append(StrUtil.nullToEmpty(orderNo)).append('\n');
+        facts.append("来源业务单号：").append(StrUtil.blankToDefault(bizNo, "无")).append('\n');
+        facts.append("来源系统：").append(StrUtil.blankToDefault(sourceModule, "WMS 自建")).append('\n');
+        facts.append("仓库：").append(warehouseName).append('\n');
+        facts.append("当前审批状态码：").append(approvalStatus).append("（0 待提交 / 1 审批中 / 2 已通过 / 3 已拒绝）").append('\n');
+        facts.append("明细行数：").append(lines.size()).append('\n');
+        facts.append("明细：\n");
+        for (String t : lineTexts) {
+            facts.append("  - ").append(t).append('\n');
+        }
+
+        // 仓库已关闭
+        if (warehouse != null && warehouse.getStatus() != null
+                && !CommonStatusEnum.ENABLE.getStatus().equals(warehouse.getStatus())) {
+            risks.add(risk("HIGH", "仓库已关闭",
+                    "仓库「" + warehouseName + "」当前为关闭状态，不应继续出入库业务"));
+        }
+        if (lines.isEmpty()) {
+            risks.add(risk("HIGH", "单据无明细", "该单据没有任何商品明细，无法执行出入库"));
+        }
+
+        for (ApprovalLine line : lines) {
+            String skuName = lineTexts.isEmpty() ? String.valueOf(line.skuId()) : skuLabel(line.skuId());
+            BigDecimal stock = line.skuId() == null ? null : stockMap.get(line.skuId());
+            BigDecimal qty = line.quantity() == null ? BigDecimal.ZERO : line.quantity();
+
+            if (isReceipt) {
+                // 入库：实际数 = 合格数 + 不合格数，且不得超过申请数
+                BigDecimal actual = line.actualQuantity();
+                BigDecimal qualified = line.qualifiedQuantity();
+                BigDecimal unqualified = line.unqualifiedQuantity();
+                if (actual == null && qualified == null) {
+                    risks.add(risk("MEDIUM", "未填验收数量",
+                            skuName + " 尚未填写验收数量，审批通过后无法据实入库"));
+                } else {
+                    BigDecimal q = qualified == null ? BigDecimal.ZERO : qualified;
+                    BigDecimal u = unqualified == null ? BigDecimal.ZERO : unqualified;
+                    BigDecimal sum = q.add(u);
+                    if (actual != null && sum.compareTo(actual) != 0) {
+                        risks.add(risk("HIGH", "验收数量不平衡",
+                                skuName + " 合格数 " + q + " + 不合格数 " + u + " = " + sum
+                                        + "，与实收数 " + actual + " 不一致"));
+                    }
+                    if (actual != null && actual.compareTo(qty) > 0) {
+                        risks.add(risk("HIGH", "验收超出申请数",
+                                skuName + " 实收 " + actual + " 大于申请数 " + qty));
+                    }
+                }
+            } else {
+                // 出库：库存是否足够
+                if (stock == null) {
+                    risks.add(risk("MEDIUM", "库存未知",
+                            skuName + " 在该仓库查不到库存记录，无法判断是否够出库"));
+                } else if (stock.compareTo(qty) < 0) {
+                    risks.add(risk("HIGH", "库存不足",
+                            skuName + " 当前库存 " + stock + "，本单需出库 " + qty
+                                    + "，缺口 " + qty.subtract(stock)));
+                }
+            }
+        }
+
+        // 4. 模型归纳（失败不影响规则层结论）
+        String suggestion;
+        String summary = null;
+        String reason = null;
+        boolean hasHigh = risks.stream().anyMatch(r -> "HIGH".equals(r.getLevel()));
+        boolean hasMedium = risks.stream().anyMatch(r -> "MEDIUM".equals(r.getLevel()));
+
+        String modelOut = null;
+        if (runtime().usable()) {
+            try {
+                String sys = buildApprovalAdviceSystemPrompt();
+                modelOut = chatOnce(runtime().getModel(), sys, facts.toString(), null);
+            } catch (Exception e) {
+                log.warn("[approvalAdvice][模型调用失败，改用规则结论] orderId({}) err({})",
+                        reqVO.getOrderId(), e.getMessage());
+            }
+        }
+
+        if (StrUtil.isNotBlank(modelOut)) {
+            JSONObject json = tryParseJsonObject(modelOut);
+            if (json != null) {
+                summary = json.getStr("summary");
+                reason = json.getStr("reason");
+                String s = StrUtil.blankToDefault(json.getStr("suggestion"), "").trim().toUpperCase(Locale.ROOT);
+                if (Arrays.asList("APPROVE", "REJECT", "MANUAL").contains(s)) {
+                    suggestion = s;
+                } else {
+                    suggestion = ruleSuggestion(hasHigh, hasMedium, lines.isEmpty());
+                }
+                // 模型列出的补充风险（去重后追加）
+                JSONArray modelRisks = json.getJSONArray("risks");
+                if (modelRisks != null) {
+                    for (Object o : modelRisks) {
+                        if (!(o instanceof JSONObject ro)) {
+                            continue;
+                        }
+                        String title = ro.getStr("title");
+                        String detail = ro.getStr("detail");
+                        if (StrUtil.isBlank(title)) {
+                            continue;
+                        }
+                        boolean dup = risks.stream().anyMatch(r -> StrUtil.equals(r.getTitle(), title));
+                        if (!dup) {
+                            risks.add(risk(StrUtil.blankToDefault(ro.getStr("level"), "LOW"), title,
+                                    StrUtil.blankToDefault(detail, title)));
+                        }
+                    }
+                }
+            } else {
+                // 模型没按 JSON 返回时，至少把文本当作摘要
+                summary = modelOut.length() > 500 ? modelOut.substring(0, 500) : modelOut;
+                suggestion = ruleSuggestion(hasHigh, hasMedium, lines.isEmpty());
+            }
+        } else {
+            suggestion = ruleSuggestion(hasHigh, hasMedium, lines.isEmpty());
+        }
+
+        if (hasHigh && !"REJECT".equals(suggestion)) {
+            // 有高危风险时不允许给出「建议通过」的乐观结论
+            suggestion = "MANUAL";
+        }
+        if (StrUtil.isBlank(summary)) {
+            summary = (isReceipt ? "入库单 " : "出库单 ") + StrUtil.nullToEmpty(orderNo)
+                    + "，仓库「" + warehouseName + "」，共 " + lines.size() + " 行明细。";
+        }
+        if (StrUtil.isBlank(reason)) {
+            reason = risks.isEmpty()
+                    ? "未发现明显异常，单据关键字段齐全。"
+                    : "存在 " + risks.size() + " 项需关注事项，详见风险列表。";
+        }
+
+        resp.setSuggestion(suggestion);
+        resp.setSuggestionLabel(suggestionLabel(suggestion));
+        resp.setSummary(summary);
+        resp.setReason(reason);
+        resp.setRisks(risks);
+        if (!runtime().usable()) {
+            resp.setErrorMessage("未配置大模型 API Key，本结论仅由规则生成");
+        }
+        log.info("[approvalAdvice][orderId({}) type({}) suggestion({}) risks({})]",
+                reqVO.getOrderId(), orderType, suggestion, risks.size());
+        return resp;
+    }
+
+    /** 审批建议用的明细行（兼容入库的验收字段） */
+    private record ApprovalLine(Long skuId, BigDecimal quantity, BigDecimal actualQuantity,
+                                BigDecimal qualifiedQuantity, BigDecimal unqualifiedQuantity,
+                                BigDecimal price) {
+    }
+
+    /** 查询这些 SKU 在指定仓库的库存（查不到则不放入 map，调用方据此提示「库存未知」） */
+    private Map<Long, BigDecimal> queryStock(Long warehouseId, List<ApprovalLine> lines) {
+        Map<Long, BigDecimal> map = new HashMap<>();
+        if (warehouseId == null || lines.isEmpty()) {
+            return map;
+        }
+        List<Long> skuIds = lines.stream().map(ApprovalLine::skuId).filter(Objects::nonNull).distinct().toList();
+        for (Long skuId : skuIds) {
+            try {
+                var inv = inventoryMapper.selectBySkuIdAndWarehouseId(skuId, warehouseId);
+                if (inv != null && inv.getQuantity() != null) {
+                    map.put(skuId, inv.getQuantity());
+                }
+            } catch (Exception e) {
+                // 单条库存查询失败不影响整体审批建议
+                log.warn("[approvalAdvice][库存查询失败 skuId({}) warehouseId({}) err({})]",
+                        skuId, warehouseId, e.getMessage());
+            }
+        }
+        return map;
+    }
+
+    private String skuLabel(Long skuId) {
+        if (skuId == null) {
+            return "未知商品";
+        }
+        WmsItemSkuDO sku = itemSkuMapper.selectById(skuId);
+        if (sku == null) {
+            return "SKU(" + skuId + ")";
+        }
+        String itemName = null;
+        if (sku.getItemId() != null) {
+            WmsItemDO item = itemMapper.selectById(sku.getItemId());
+            itemName = item == null ? null : item.getName();
+        }
+        return StrUtil.blankToDefault(itemName, "") + " / "
+                + StrUtil.blankToDefault(sku.getName(), sku.getCode());
+    }
+
+    private String buildLineText(Long skuId, BigDecimal quantity, BigDecimal actual,
+                                 BigDecimal qualified, BigDecimal unqualified, BigDecimal price) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(skuLabel(skuId));
+        sb.append("，申请数量 ").append(quantity == null ? "-" : quantity);
+        if (actual != null) {
+            sb.append("，实收 ").append(actual);
+        }
+        if (qualified != null || unqualified != null) {
+            sb.append("，合格 ").append(qualified == null ? 0 : qualified)
+                    .append("，不合格 ").append(unqualified == null ? 0 : unqualified);
+        }
+        sb.append("，单价 ").append(price == null ? "未提供" : price);
+        return sb.toString();
+    }
+
+    private WmsAiApprovalAdviceRespVO.Risk risk(String level, String title, String detail) {
+        WmsAiApprovalAdviceRespVO.Risk r = new WmsAiApprovalAdviceRespVO.Risk();
+        r.setLevel(level);
+        r.setTitle(title);
+        r.setDetail(detail);
+        return r;
+    }
+
+    private String ruleSuggestion(boolean hasHigh, boolean hasMedium, boolean empty) {
+        if (empty || hasHigh) {
+            return "MANUAL";
+        }
+        return hasMedium ? "MANUAL" : "APPROVE";
+    }
+
+    private String suggestionLabel(String suggestion) {
+        return switch (suggestion == null ? "" : suggestion) {
+            case "APPROVE" -> "建议通过";
+            case "REJECT" -> "建议驳回";
+            default -> "需要人工判断";
+        };
+    }
+
+    private JSONObject tryParseJsonObject(String text) {
+        if (StrUtil.isBlank(text)) {
+            return null;
+        }
+        String t = text.trim();
+        // 去掉 ```json ``` 包裹
+        if (t.startsWith("```")) {
+            int first = t.indexOf('\n');
+            int last = t.lastIndexOf("```");
+            if (first > 0 && last > first) {
+                t = t.substring(first + 1, last).trim();
+            }
+        }
+        int s = t.indexOf('{');
+        int e = t.lastIndexOf('}');
+        if (s < 0 || e <= s) {
+            return null;
+        }
+        try {
+            return JSONUtil.parseObj(t.substring(s, e + 1));
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private String buildApprovalAdviceSystemPrompt() {
+        return """
+                你是仓储单据的审批辅助。审批人会看到你给出的结论，但最终决定由人做出。
+                下面会给你一张入库单或出库单的【真实事实】：仓库、明细、库存、验收数量、单价。
+                请只依据这些事实判断，不要臆测未提供的信息。
+
+                判断要点：
+                - 出库：库存是否足够；数量是否明显异常；单据信息是否缺失。
+                - 入库：实收是否等于合格+不合格；验收是否超出申请数量；是否尚未填写验收数量。
+                - 仓库是否已关闭；明细是否为空；来源单号是否缺失。
+                - 若关键信息不足（如未填验收数量、查不到库存），应给 MANUAL 而不是 APPROVE。
+
+                请严格只输出一个 JSON 对象（不要加解释、不要用 markdown 代码块），字段：
+                {
+                  "suggestion": "APPROVE | REJECT | MANUAL",
+                  "summary": "一到两句中文摘要，说明这是什么单、什么仓库、多少明细",
+                  "risks": [ { "level": "HIGH | MEDIUM | LOW", "title": "简短标题", "detail": "一句话说明" } ],
+                  "reason": "给出该建议的理由，一句话"
+                }
+                规则：有硬性错误（库存不足、验收不平衡、验收超申请数、仓库关闭、无明细）时 suggestion 必须是 MANUAL 或 REJECT，不得给 APPROVE。
+                """;
+    }
+
+    /** 明细行（已解析出真实 SKU） */
+    private record SkuLine(Long skuId, BigDecimal quantity, BigDecimal price) {
+    }
+
+    /**
+     * 生成单据编号，与前端 {@code generateOrderNo} 保持同一格式：前缀 + MMDD + 4 位随机数。
+     *
+     * <p>单号在入库/出库单里是必填项（后端有唯一性校验），此处生成后仍需依赖
+     * 数据库唯一索引兜底；极小概率碰撞时由调用方重试。
+     */
+    private String generateOrderNo(String prefix) {
+        java.time.LocalDate today = java.time.LocalDate.now();
+        String mmdd = String.format("%02d%02d", today.getMonthValue(), today.getDayOfMonth());
+        return prefix + mmdd + String.format("%04d", java.util.concurrent.ThreadLocalRandom.current().nextInt(10_000));
+    }
+
+    /** 用商品编号解析第一个可用 SKU（前端仅回填 itemId 时的兜底） */
+    private Long resolveFirstSkuId(Long itemId) {
+        List<WmsItemSkuDO> skus = itemSkuMapper.selectListByItemId(itemId);
+        return CollUtil.isEmpty(skus) ? null : skus.get(0).getId();
+    }
+
+    /**
+     * 按商品名 / 商品编码 / SKU 名 兜底解析 SKU。
+     *
+     * <p>用途：前端若因旧缓存或字段映射异常只提交了展示名称（未带 skuId/itemId），
+     * 后端自行按名称匹配一次，避免「未匹配到系统商品」导致建单失败。
+     * 匹配不到时返回 null，由调用方给出明确提示。
+     */
+    private Long resolveSkuIdByKeyword(String keyword) {
+        String kw = keyword.trim();
+        if (StrUtil.isBlank(kw)) {
+            return null;
+        }
+        // 1) 先按商品名/商品编码精确匹配
+        List<WmsItemDO> items = itemMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<WmsItemDO>()
+                        .eq(WmsItemDO::getName, kw)
+                        .or().eq(WmsItemDO::getCode, kw));
+        if (CollUtil.isNotEmpty(items)) {
+            Long skuId = resolveFirstSkuId(items.get(0).getId());
+            if (skuId != null) {
+                return skuId;
+            }
+        }
+        // 2) 名称可能是前端拼接出来的重复串（如"岩棉板 1200×600×50 岩棉板 1200×600×50"），
+        //    按空格切分后逐个去重片段，取最长的片段做模糊匹配。
+        for (String token : candidateKeywords(kw)) {
+            List<WmsItemDO> fuzzy = itemMapper.selectList(
+                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<WmsItemDO>()
+                            .like(WmsItemDO::getName, token)
+                            .or().like(WmsItemDO::getCode, token)
+                            .last("LIMIT 1"));
+            if (CollUtil.isNotEmpty(fuzzy)) {
+                Long skuId = resolveFirstSkuId(fuzzy.get(0).getId());
+                if (skuId != null) {
+                    return skuId;
+                }
+            }
+        }
+        // 3) 最后再试 SKU 名（规格）匹配
+        List<WmsItemSkuDO> skus = itemSkuMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<WmsItemSkuDO>()
+                        .like(WmsItemSkuDO::getName, kw)
+                        .last("LIMIT 1"));
+        return CollUtil.isEmpty(skus) ? null : skus.get(0).getId();
+    }
+
+    /**
+     * 把可能重复/超长的商品名拆成候选关键词，长的优先。
+     *
+     * <p>例："岩棉板 1200×600×50 岩棉板 1200×600×50"
+     * → ["岩棉板 1200×600×50", "岩棉板", "1200×600×50"]
+     */
+    private List<String> candidateKeywords(String keyword) {
+        String kw = keyword.trim().replaceAll("\\s+", " ");
+        LinkedHashSet<String> out = new LinkedHashSet<>();
+        out.add(kw);
+        String[] parts = kw.split(" ");
+        // 取前一半（拼接串的前半段就是完整名称）
+        if (parts.length >= 2) {
+            int half = parts.length / 2;
+            out.add(String.join(" ", java.util.Arrays.copyOfRange(parts, 0, half)));
+        }
+        // 再按单个片段补充（从长到短）
+        java.util.Arrays.stream(parts)
+                .filter(p -> p.length() >= 2)
+                .sorted((a, b) -> b.length() - a.length())
+                .forEach(out::add);
+        return new ArrayList<>(out.stream()
+                .filter(s -> StrUtil.isNotBlank(s) && s.length() >= 2)
+                .collect(Collectors.toList()));
+    }
+
+    private Long createReceipt(WmsAiCreateOrderReqVO reqVO, List<SkuLine> lines) {
+        cn.iocoder.txgy.module.wms.controller.admin.order.receipt.vo.order.WmsReceiptOrderSaveReqVO save =
+                new cn.iocoder.txgy.module.wms.controller.admin.order.receipt.vo.order.WmsReceiptOrderSaveReqVO();
+        save.setNo(generateOrderNo("RK"));
+        save.setType(reqVO.getType() == null
+                ? WmsOrderTypeConstants.RECEIPT_PURCHASE : reqVO.getType());
+        save.setOrderTime(LocalDateTime.now());
+        save.setWarehouseId(reqVO.getWarehouseId());
+        save.setMerchantId(reqVO.getMerchantId());
+        save.setRemark(StrUtil.blankToDefault(reqVO.getRemark(), "AI 助手建单"));
+        save.setDetails(lines.stream().map(l -> {
+            var d = new cn.iocoder.txgy.module.wms.controller.admin.order.receipt.vo.detail.WmsReceiptOrderDetailSaveReqVO();
+            d.setSkuId(l.skuId());
+            d.setQuantity(l.quantity());
+            d.setPrice(l.price());
+            // 验收数量先与申请数量一致，避免提交审批时因「实际数≠合格数+不合格数」被拦；
+            // 用户仍可在单据页按实际收货情况修改。
+            d.setActualQuantity(l.quantity());
+            d.setQualifiedQuantity(l.quantity());
+            d.setUnqualifiedQuantity(BigDecimal.ZERO);
+            return d;
+        }).collect(Collectors.toList()));
+        return receiptOrderService.createReceiptOrder(save);
+    }
+
+    private Long createShipment(WmsAiCreateOrderReqVO reqVO, List<SkuLine> lines) {
+        cn.iocoder.txgy.module.wms.controller.admin.order.shipment.vo.order.WmsShipmentOrderSaveReqVO save =
+                new cn.iocoder.txgy.module.wms.controller.admin.order.shipment.vo.order.WmsShipmentOrderSaveReqVO();
+        save.setNo(generateOrderNo("CK"));
+        save.setType(reqVO.getType() == null
+                ? WmsOrderTypeConstants.SHIPMENT_SALE : reqVO.getType());
+        save.setOrderTime(LocalDateTime.now());
+        save.setWarehouseId(reqVO.getWarehouseId());
+        save.setMerchantId(reqVO.getMerchantId());
+        save.setRemark(StrUtil.blankToDefault(reqVO.getRemark(), "AI 助手建单"));
+        save.setDetails(lines.stream().map(l -> {
+            var d = new cn.iocoder.txgy.module.wms.controller.admin.order.shipment.vo.detail.WmsShipmentOrderDetailSaveReqVO();
+            d.setSkuId(l.skuId());
+            d.setQuantity(l.quantity());
+            d.setPrice(l.price());
+            return d;
+        }).collect(Collectors.toList()));
+        return shipmentOrderService.createShipmentOrder(save);
+    }
+
+    /** 移库单：复用既有移库服务落库（单号规则、状态机、审批联动与手工建单一致） */
+    private Long createMovement(WmsAiCreateOrderReqVO reqVO, List<SkuLine> lines) {
+        cn.iocoder.txgy.module.wms.controller.admin.order.movement.vo.order.WmsMovementOrderSaveReqVO save =
+                new cn.iocoder.txgy.module.wms.controller.admin.order.movement.vo.order.WmsMovementOrderSaveReqVO();
+        save.setNo(generateOrderNo("YK"));
+        save.setOrderTime(LocalDateTime.now());
+        save.setSourceWarehouseId(reqVO.getWarehouseId());
+        save.setTargetWarehouseId(reqVO.getTargetWarehouseId());
+        save.setRemark(StrUtil.blankToDefault(reqVO.getRemark(), "AI 助手建单"));
+        save.setDetails(lines.stream().map(l -> {
+            var d = new cn.iocoder.txgy.module.wms.controller.admin.order.movement.vo.detail.WmsMovementOrderDetailSaveReqVO();
+            d.setSkuId(l.skuId());
+            d.setQuantity(l.quantity());
+            d.setPrice(l.price());
+            return d;
+        }).collect(Collectors.toList()));
+        return movementOrderService.createMovementOrder(save);
+    }
+
+    /**
+     * 盘库单：复用既有盘库服务落库。
+     *
+     * <p>盘库的「实盘数量」必须由人现场清点，AI 只能按用户口述的数量预填，
+     * 因此这里把 quantity（账面申请数）与 checkQuantity（实盘数）都置为用户给出的数量，
+     * 用户到单据页核对后再改。
+     */
+    private Long createCheck(WmsAiCreateOrderReqVO reqVO, List<SkuLine> lines) {
+        cn.iocoder.txgy.module.wms.controller.admin.order.check.vo.order.WmsCheckOrderSaveReqVO save =
+                new cn.iocoder.txgy.module.wms.controller.admin.order.check.vo.order.WmsCheckOrderSaveReqVO();
+        save.setNo(generateOrderNo("PK"));
+        save.setOrderTime(LocalDateTime.now());
+        save.setWarehouseId(reqVO.getWarehouseId());
+        save.setRemark(StrUtil.blankToDefault(reqVO.getRemark(), "AI 助手建单"));
+        save.setDetails(lines.stream().map(l -> {
+            var d = new cn.iocoder.txgy.module.wms.controller.admin.order.check.vo.detail.WmsCheckOrderDetailSaveReqVO();
+            d.setSkuId(l.skuId());
+            d.setQuantity(l.quantity());
+            d.setCheckQuantity(l.quantity());
+            d.setPrice(l.price());
+            return d;
+        }).collect(Collectors.toList()));
+        return checkOrderService.createCheckOrder(save);
+    }
+
+    private String readOrderNo(String action, Long orderId) {
+        if ("IN".equals(action)) {
+            var order = receiptOrderService.getReceiptOrder(orderId);
+            return order == null ? null : order.getNo();
+        }
+        if ("MOVE".equals(action)) {
+            var order = movementOrderService.getMovementOrder(orderId);
+            return order == null ? null : order.getNo();
+        }
+        if ("CHECK".equals(action)) {
+            var order = checkOrderService.getCheckOrder(orderId);
+            return order == null ? null : order.getNo();
+        }
+        var order = shipmentOrderService.getShipmentOrder(orderId);
+        return order == null ? null : order.getNo();
     }
 
 }

@@ -11,6 +11,7 @@ import cn.iocoder.txgy.module.member.dal.mysql.tenant.MallCustomerAffiliationMap
 import cn.iocoder.txgy.module.member.framework.tenant.config.*;
 import cn.iocoder.txgy.module.member.service.auth.MemberAuthServiceImpl;
 import cn.iocoder.txgy.module.member.service.user.MemberUserService;
+import cn.iocoder.txgy.module.member.service.platform.MemberPlatformAccountService;
 import cn.iocoder.txgy.module.product.api.enterprise.ProductEnterpriseCustomerApi;
 import cn.iocoder.txgy.module.system.api.logger.LoginLogApi;
 import cn.iocoder.txgy.module.system.api.sms.SmsCodeApi;
@@ -219,5 +220,6 @@ class MallCustomerRegistrationTransactionTest {
         @Bean SmsCodeApi sms() { return mock(SmsCodeApi.class); }
         @Bean SocialUserApi socialUser() { return mock(SocialUserApi.class); }
         @Bean SocialClientApi socialClient() { return mock(SocialClientApi.class); }
+        @Bean MemberPlatformAccountService platformAccounts() { return mock(MemberPlatformAccountService.class); }
     }
 }

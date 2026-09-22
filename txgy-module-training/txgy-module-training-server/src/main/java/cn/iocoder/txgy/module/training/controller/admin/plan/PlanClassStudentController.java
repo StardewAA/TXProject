@@ -4,14 +4,14 @@ import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.excel.core.util.ExcelUtils;
 import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentAddReqVO;
+import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentImportAllocateReqVO;
+import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentImportAllocateRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentImportExcelVO;
+import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentImportParseRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentImportRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentPageReqVO;
 import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentRespVO;
-import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentScopePreviewRespVO;
-import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentScopeReqVO;
 import cn.iocoder.txgy.module.training.dal.dataobject.plan.StudentTaskDO;
-import cn.iocoder.txgy.module.training.service.plan.ClassStudentScopeService;
 import cn.iocoder.txgy.module.training.service.plan.ClassStudentServiceImpl;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -38,28 +38,12 @@ public class PlanClassStudentController {
 
     @Resource
     private ClassStudentServiceImpl classStudentService;
-    @Resource
-    private ClassStudentScopeService classStudentScopeService;
 
     @PostMapping("/add")
     @Operation(summary = "批量添加学员（自动生成「课程 × 学员」学习任务；已在班自动跳过）")
     @PreAuthorize("@ss.hasAnyPermissions('training:plan:student:add', 'training:plan:student')")
     public CommonResult<Integer> addStudents(@Valid @RequestBody ClassStudentAddReqVO reqVO) {
         return success(classStudentService.addStudents(reqVO));
-    }
-
-    @PostMapping("/scope-preview")
-    @Operation(summary = "参与对象筛选：预览命中人员（不落库，用于加入前确认）")
-    @PreAuthorize("@ss.hasAnyPermissions('training:plan:student:add', 'training:plan:student')")
-    public CommonResult<ClassStudentScopePreviewRespVO> previewScope(@Valid @RequestBody ClassStudentScopeReqVO reqVO) {
-        return success(classStudentScopeService.previewScope(reqVO));
-    }
-
-    @PostMapping("/add-by-scope")
-    @Operation(summary = "按参与对象筛选条件批量加入学员（部门/岗位，自动生成学习任务；已在班自动跳过）")
-    @PreAuthorize("@ss.hasAnyPermissions('training:plan:student:add', 'training:plan:student')")
-    public CommonResult<Integer> addStudentsByScope(@Valid @RequestBody ClassStudentScopeReqVO reqVO) {
-        return success(classStudentScopeService.addStudentsByScope(reqVO));
     }
 
     @DeleteMapping("/remove")
@@ -109,6 +93,24 @@ public class PlanClassStudentController {
                                                                 @RequestParam("file") MultipartFile file) throws Exception {
         List<ClassStudentImportExcelVO> list = ExcelUtils.read(file, ClassStudentImportExcelVO.class);
         return success(classStudentService.importStudents(classId, list, autoCreateUser));
+    }
+
+    @PostMapping("/import-parse")
+    @Operation(summary = "解析 Excel 学员名单（按手机号匹配系统账号，不落库，供人工指定培训班）")
+    @Parameter(name = "file", description = "Excel 文件", required = true)
+    @PreAuthorize("@ss.hasAnyPermissions('training:plan:student:import', 'training:plan:student:add', 'training:plan:student')")
+    public CommonResult<ClassStudentImportParseRespVO> parseImportFile(@RequestParam("file") MultipartFile file)
+            throws Exception {
+        List<ClassStudentImportExcelVO> list = ExcelUtils.read(file, ClassStudentImportExcelVO.class);
+        return success(classStudentService.parseImportRows(list));
+    }
+
+    @PostMapping("/import-allocate")
+    @Operation(summary = "按人工指定的「学员 → 培训班」明细批量入班（自动生成学习任务；已在班自动跳过）")
+    @PreAuthorize("@ss.hasAnyPermissions('training:plan:student:import', 'training:plan:student:add', 'training:plan:student')")
+    public CommonResult<ClassStudentImportAllocateRespVO> importAndAllocate(
+            @Valid @RequestBody ClassStudentImportAllocateReqVO reqVO) {
+        return success(classStudentService.importAndAllocate(reqVO));
     }
 
 }

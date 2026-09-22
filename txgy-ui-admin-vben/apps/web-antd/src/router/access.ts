@@ -286,12 +286,23 @@ async function generateAccess(options: GenerateMenuAndRoutesOptions) {
       const menus = JSON.parse(
         JSON.stringify(accessMenus),
       ) as AppRouteRecordRaw[];
+      // 1) 注入 CRM 首页菜单项（无需后端配置）
+      injectCrmMenus(menus, accessStore.accessCodes);
+      // 先完成「后端菜单 → 路由记录」转换，再把 CRM 的扁平子菜单重组为分组：
+      // 分组必须发生在转换之后，否则子菜单路径会被拼接成 /crm/<分组>/xxx，导致地址变化。
       // 注入「AI对话助手」菜单项（前端演示用，无需后端配置）
       injectAiChatMenu(menus, accessStore.accessCodes);
-      return convertServerMenuToRouteRecordStringComponent(
-        filterMallPromotionMenus(
-          filterHrmEmployeePortalRecruitMenus(
-            transformMesMenus(transformWmsMenus(menus)),
+
+      // 2) 转换与过滤：MES / WMS 变换 → 菜单过滤 → 路由记录转换 → CRM 分组
+      //    注意分组必须在 convert 之后：否则子菜单路径会被拼成 /crm/<分组>/xxx，地址就变了
+      return renameTopMenus(
+        groupCrmSideMenus(
+          convertServerMenuToRouteRecordStringComponent(
+            filterMallPromotionMenus(
+              filterHrmEmployeePortalRecruitMenus(
+                transformMesMenus(transformWmsMenus(menus)),
+              ),
+            ),
           ),
         ),
       );
@@ -389,6 +400,220 @@ function transformMesMenus(menus: AppRouteRecordRaw[]): AppRouteRecordRaw[] {
 }
 
 /**
+ * 在后端菜单中注入 CRM 首页菜单项。
+ *
+ * 说明：AI 对话助手**不再**作为侧边栏菜单项注入（已改为 CRM 首页内的弹窗唤起，
+ * 侧边栏不再展示该入口）。整页版助手组件仍保留在 views/crm/ai-chat，
+ * 供首页的 AI 弹窗复用，其 AI 接口、权限与提示词逻辑均未改动。
+ *
+ * 找到 CRM 中心（path 为 /crm 的节点），作为其子项挂载；
+ * 若未找到则挂载为顶级菜单，保证功能可见。
+ */
+/**
+ * 注入「AI对话助手」菜单项（安全兜底占位实现）。
+ * 说明：原始实现在远端 revert 合并事故中丢失（只剩调用点），
+ * 当前以空实现兜底——保证登录/菜单流程不崩溃；AI 助手菜单暂不额外注入。
+ * 待 AI 助手小组补回真实实现后，替换本函数即可。
+ */
+function injectAiChatMenu(
+  _menus: AppRouteRecordRaw[],
+  _accessCodes: string[] | null | undefined,
+): void {
+  // intentionally empty — see doc above
+}
+
+function injectCrmMenus(
+  menus: AppRouteRecordRaw[],
+  permissions: unknown[] | null | undefined,
+) {
+  const crmParent = findMenu(menus, (m) => m?.path === '/crm');
+  const hasCrmPermission = (permissions ?? []).some((permission) =>
+    String(permission ?? '').startsWith('crm:'),
+  );
+  if (!hasCrmPermission) {
+    return;
+  }
+  const homeItem = {
+    id: 990_002,
+    name: 'CRM 首页',
+    componentName: 'CrmHome',
+    path: 'home',
+    component: 'views/crm/home/index.vue',
+    icon: 'lucide:home',
+    meta: {},
+    visible: true,
+    // 排序值设为 -2：CRM 首页固定排在最前（「待办事项」sort=0）
+    sort: -2,
+    keepAlive: true,
+    parentId: crmParent ? crmParent.id : 0,
+  };
+  if (crmParent) {
+    crmParent.children = crmParent.children ?? [];
+    if (
+      !crmParent.children.some(
+        (c) => (c.componentName || c.name) === homeItem.componentName,
+      )
+    ) {
+      // 同时插入数组首位，兼容不按 sort 排序的渲染场景
+      crmParent.children.unshift(homeItem);
+    }
+  } else {
+    // 兜底：作为顶级菜单，并包裹 BasicLayout
+    menus.push({ ...homeItem, component: 'BasicLayout', children: [{ ...homeItem }] });
+  }
+}
+
+/**
+ * CRM 侧边栏二级分组配置
+ *
+ * 只描述「哪些菜单归到哪个分组、组内按什么顺序展示」，不涉及任何路由数据。
+ * 分组的落地放在路由转换之后（见 {@link groupCrmSideMenus}），
+ * 因此子菜单的 path 保持绝对路径原值，页面地址与改造前完全一致。
+ *
+ * 说明：「售后管理」自身是目录（下含质保档案 / 回访计划 / 任务 / 记录 / 问题工单 / 售后设置），
+ * 按需求作为独立一级项展示，不并入分组。
+ */
+const CRM_SIDE_GROUPS: Array<{
+  icon: string;
+  key: string;
+  members: Array<{ order: number; path: string }>;
+  title: string;
+}> = [
+  {
+    key: 'customer-resource',
+    title: '客户资源管理',
+    icon: 'lucide:users',
+    members: [
+      { path: '/crm/clue', order: 10 },
+      { path: '/crm/customer', order: 20 },
+      { path: '/crm/contact', order: 30 },
+      { path: '/crm/customer/pool', order: 40 },
+    ],
+  },
+  {
+    key: 'sales-business',
+    title: '销售业务管理',
+    icon: 'lucide:briefcase',
+    members: [
+      { path: '/crm/product', order: 10 },
+      { path: '/crm/business', order: 20 },
+      { path: '/crm/quotation', order: 30 },
+      { path: '/crm/contract', order: 40 },
+      { path: '/crm/receivable', order: 50 },
+      { path: '/crm/receivable-plan', order: 60 },
+    ],
+  },
+];
+
+/**
+ * CRM 一级菜单重命名（只改菜单展示名，路由名与页面地址都不变）
+ */
+const CRM_MENU_TITLE_OVERRIDES: Record<string, string> = {
+  '/crm/backlog': '待办中心',
+};
+
+/**
+ * 顶级菜单重命名（只覆盖菜单展示名 meta.title，不动 path / name，路由名与地址不变）
+ *
+ * 与 {@link transformWmsMenus} 中「AI 智能助手 → WMS 首页」的改名保持同一套做法：
+ * 菜单文案属于后端 system_menu 数据，这里只按前端展示需要做覆盖，
+ * 不改数据库、不影响其他应用与权限。
+ */
+const TOP_MENU_TITLE_OVERRIDES: Record<string, string> = {
+  '/crm': '客户关系管理系统',
+};
+
+/**
+ * CRM 一级菜单展示顺序覆盖
+ *
+ * 目的：按需求顺序排列（CRM 首页 → 待办中心 → 客户资源管理 → 销售业务管理 → 售后管理 → …）。
+ * - 待办中心：后端 sort=0，但 0 在渲染链路里会被当成"未设置"而落到最后，改为 1；
+ * - 售后管理：后端 sort=90，会排到两个分组（100/101）之前，改为 102。
+ */
+const CRM_MENU_ORDER_OVERRIDES: Record<string, number> = {
+  '/crm/backlog': 1,
+  '/crm/after-sale': 102,
+};
+
+/**
+ * 把 CRM 下扁平的子菜单重组为「分组（可展开/折叠）+ 子菜单」两层结构
+ *
+ * 关键点：
+ * 1. 必须在 convertServerMenuToRouteRecordStringComponent **之后**执行：
+ *    此时子菜单的 path 已是绝对路径（/crm/clue 等），本函数只是往菜单树里插入容器节点，
+ *    不参与任何路径拼接，因此「页面跳转与路由地址完全不变」；
+ *    （若在转换前做嵌套，框架会把子路径拼成 /crm/<分组>/xxx，地址就变了）
+ * 2. 未被分组的菜单（CRM 首页、待办事项、全局检索、数据统计、系统配置等）保持原样，
+ *    仍作为 CRM 的一级项展示，功能入口不会丢失；
+ * 3. 分组节点 component 为空（目录型，与后端目录菜单一致），只负责承载与展开子菜单。
+ */
+function groupCrmSideMenus(menus: any[]): any[] {
+  const crm = menus.find((menu) => menu?.path === '/crm');
+  const children: any[] = Array.isArray(crm?.children) ? crm.children : [];
+  if (!crm || children.length === 0) {
+    return menus;
+  }
+
+  // 1. 菜单重命名 / 展示顺序覆盖（只动 meta，不动 path 与 name，路由与跳转不受影响）
+  for (const child of children) {
+    const path = String(child?.path ?? '');
+    const title = CRM_MENU_TITLE_OVERRIDES[path];
+    if (title) {
+      child.meta = { ...(child.meta ?? {}), title };
+    }
+    const order = CRM_MENU_ORDER_OVERRIDES[path];
+    if (order !== undefined) {
+      child.meta = { ...(child.meta ?? {}), order };
+    }
+  }
+
+  // 2. 分组：按配置把成员挂到分组容器下，并按需求顺序重排组内菜单
+  const groupedPaths = new Set<string>();
+  const groups = CRM_SIDE_GROUPS.map((group, index) => {
+    const members = group.members
+      .map((member) => {
+        const child = children.find(
+          (c) => String(c?.path ?? '') === member.path,
+        );
+        if (!child) {
+          return undefined;
+        }
+        groupedPaths.add(member.path);
+        // 组内顺序以配置为准（覆盖后端 sort），仅影响菜单展示顺序
+        child.meta = { ...(child.meta ?? {}), order: member.order };
+        return child;
+      })
+      .filter((child) => child !== undefined);
+
+    return {
+      // 目录型节点：无组件，仅承载子菜单
+      component: '',
+      meta: {
+        hideInMenu: false,
+        icon: group.icon,
+        // 排在「CRM 首页(-2) / 待办中心(0)」之后，按配置顺序递增
+        order: 100 + index,
+        title: group.title,
+      },
+      name: `crmGroup${index}`,
+      path: `/crm/group-${group.key}`,
+      children: members,
+    };
+  }).filter((group) => group.children.length > 0);
+
+  if (groups.length === 0) {
+    return menus;
+  }
+
+  // 未纳入分组的菜单保持原有层级与顺序（含 CRM 首页、待办中心、售后管理、数据统计等独立一级项）
+  const rest = children.filter(
+    (child) => !groupedPaths.has(String(child?.path ?? '')),
+  );
+  crm.children = [...rest, ...groups];
+  return menus;
+}
+
+/**
  * 在后端菜单中注入「AI对话助手」菜单项（前端演示用）。
  * 找到 CRM 中心（path 为 /crm 的节点），作为其子项挂载；
  * 若未找到则挂载为顶级菜单，保证功能可见。
@@ -432,6 +657,23 @@ function injectAiChatMenu(
     // 兜底：作为顶级菜单，并包裹 BasicLayout
     menus.push({ ...item, component: 'BasicLayout', children: [{ ...item }] });
   }
+}
+
+/**
+ * 顶级菜单重命名（按 {@link TOP_MENU_TITLE_OVERRIDES} 覆盖展示名）
+ *
+ * 在路由转换完成之后执行，只改 meta.title：
+ * 菜单标题取自 meta.title，路由名取自 name / componentName，
+ * 因此改名不会影响已有的路由跳转（例如按路由名 push）。
+ */
+function renameTopMenus(menus: any[]): any[] {
+  for (const menu of menus) {
+    const title = TOP_MENU_TITLE_OVERRIDES[String(menu?.path ?? '')];
+    if (title) {
+      menu.meta = { ...(menu.meta ?? {}), title };
+    }
+  }
+  return menus;
 }
 
 function findMenu(

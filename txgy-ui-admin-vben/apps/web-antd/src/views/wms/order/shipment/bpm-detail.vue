@@ -8,6 +8,7 @@ import { Alert, Button, message } from 'ant-design-vue';
 import { getShipmentOrder, getShipmentExecution } from '#/api/wms/order/shipment';
 import { getInventoryList } from '#/api/wms/inventory';
 import { buildApprovalDetailLocation } from '#/views/bpm/approval-route';
+import AiApprovalAdvice from '../shared/ai-approval-advice.vue';
 const props = defineProps<{ id?: number | string }>();
 const emit = defineEmits<{ navigate: [] }>();
 const router = useRouter();
@@ -57,6 +58,8 @@ watch(() => props.id, refresh, { immediate: true });
       <span v-if="onCurrentApproval">当前已在本单 BPM 审批页</span>
       <Button :loading="inventoryLoading" @click="queryInventory">查询出货仓库账面库存</Button>
     </div>
+    <!-- AI 辅助审批建议：供审批人参考，不影响单据状态 -->
+    <AiApprovalAdvice :order-id="props.id" order-type="SHIPMENT" />
     <Alert v-if="inventoryQueried" type="info" show-icon :message="`出货仓库：${order.warehouseName || '未命名仓库'}（本单商品当前库存）`">
       <template #description>
         <div v-for="(line, index) in order.details" :key="line.id ?? index">

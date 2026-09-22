@@ -40,6 +40,15 @@ export interface SupplierProduct {
   stock?: number
   skus: SupplierSku[]
 }
+export interface SupplierQuoteSku {
+  id: number
+  spuId: number
+  productName: string
+  specification: string
+  price: number
+  barCode?: string
+  picUrl?: string
+}
 export interface SupplierOptions {
   properties?:{id:number;name:string;values:{id:number;name:string}[]}[]
   brands: { id: number; name: string }[]
@@ -65,6 +74,7 @@ export const supplierApi = {
   options: (shopId: number) => request<SupplierOptions>({ url: path + '/options', params: { shopId } }),
   page: (params: Record<string, unknown>) => request<PageResult<SupplierProduct>>({ url: path + '/page', params }),
   detail: (shopId: number, id: number) => request<SupplierProduct>({ url: path + '/get', params: { shopId, id } }),
+  quoteSkus: (shopId: number) => request<SupplierQuoteSku[]>({ url: path + '/quote-skus', params: { shopId } }),
   save: (data: SupplierProduct) => request<number>({ url: path + '/save', method: 'POST', data }),
   status: (shopId: number, id: number, status: number, expectedVersion: number) => request<boolean>({ url: path + '/status', method: 'PUT', params: { shopId, id, status, expectedVersion } }),
   submitReview: (data: ProductReviewCommand) => request<boolean>({ url: path + '/review-submit', method: 'POST', data }),

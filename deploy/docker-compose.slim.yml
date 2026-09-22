@@ -18,12 +18,23 @@ services:
       JAVA_OPTS: -Xms256m -Xmx1024m
 
   # AI 服务（含 MES AI 权限助手）：使用专用快速构建（仅编译 ai-server 及其依赖）
+  # dns: 固定公共 DNS——容器继承宿主机 resolv.conf，宿主机开机初期外网未就绪时
+  #      会出现外网域名解析失败（DeepSeek/视觉模型 API 全部 UnknownHostException）
   ai:
     build:
       context: ..
       dockerfile: deploy/backend/Dockerfile.ai
+    dns:
+      - 223.5.5.5
+      - 114.114.114.114
     environment:
       JAVA_OPTS: -Xms256m -Xmx1024m
+
+  # 商城促销/客服服务：只编译 promotion-server 及其 reactor 依赖，避免被无关 ERP 模块阻断。
+  promotion:
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile.promotion
 
   # Windows Docker Desktop 上 nacos 获取本机 IP 失败（InetUtils.refreshIp NPE），改用 hostname 模式
   nacos:

@@ -5,6 +5,8 @@ import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.txgy.module.member.controller.app.auth.vo.AppAuthLoginRespVO;
 import cn.iocoder.txgy.module.member.controller.app.tenant.vo.AppMallImageAuthReqVO;
 import cn.iocoder.txgy.module.member.service.auth.MemberAuthService;
+import cn.iocoder.txgy.module.member.service.platform.MemberPlatformAccountService;
+import cn.iocoder.txgy.module.member.service.platform.MemberPlatformLoginCandidate;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,6 +26,7 @@ class MallImageAuthServiceTest {
     @Mock private MallAccountPolicy policy;
     @Mock private MallImageChallengeService challenges;
     @Mock private MemberAuthService auth;
+    @Mock private MemberPlatformAccountService platformAccounts;
     @InjectMocks private MallImageAuthService service;
 
     @BeforeEach void setup() {
@@ -148,6 +151,40 @@ class MallImageAuthServiceTest {
         assertEquals(MallImageChallengeService.LIMITED.getCode(),
                 assertThrows(ServiceException.class, () -> service.login(login(), "peer")).getCode());
         verifyNoInteractions(auth);
+    }
+
+    @Test void platformLoginDerivesTenantAndCanonicalMemberOnlyFromReadyMapping() {
+        AppMallImageAuthReqVO.PlatformLogin body = new AppMallImageAuthReqVO.PlatformLogin();
+        body.setAccount(" Buyer_1 "); body.setPassword("1234");
+        MemberPlatformLoginCandidate candidate = new MemberPlatformLoginCandidate()
+                .setCanonicalMemberId(77L).setSourceTenantId(9001L)
+                .setCredentialType("LOGIN_NAME").setCredentialIdentifier("buyer_1")
+                .setPlatformAccountId(8L).setPlatformNo("PM0008");
+        when(platformAccounts.resolveLoginRequired("buyer_1")).thenReturn(candidate);
+        when(auth.loginWithPlatformAccount(77L, "buyer_1", "1234")).thenAnswer(call -> {
+            assertEquals(9001L, TenantContextHolder.getTenantId());
+            assertFalse(TenantContextHolder.isIgnore());
+            return new AppAuthLoginRespVO().setTenantId(9001L).setUserId(77L);
+        });
+
+        assertEquals(77L, service.platformLogin(body, "peer").getUserId());
+
+        var order = inOrder(challenges, platformAccounts, auth);
+        order.verify(challenges).limitPasswordAttempts("buyer_1", "peer");
+        order.verify(platformAccounts).resolveLoginRequired("buyer_1");
+        order.verify(auth).loginWithPlatformAccount(77L, "buyer_1", "1234");
+        assertEquals(9002L, TenantContextHolder.getTenantId());
+        assertTrue(TenantContextHolder.isIgnore());
+    }
+
+    @Test void platformLoginCannotBypassGlobalBudget() {
+        AppMallImageAuthReqVO.PlatformLogin body = new AppMallImageAuthReqVO.PlatformLogin();
+        body.setAccount("buyer_1"); body.setPassword("1234"); body.setTenantId(9001L);
+        doThrow(exception(MallImageChallengeService.LIMITED)).when(challenges)
+                .limitPasswordAttempts("buyer_1", "peer");
+
+        assertThrows(ServiceException.class, () -> service.platformLogin(body, "peer"));
+        verifyNoInteractions(platformAccounts, auth);
     }
 
     private static AppMallImageAuthReqVO.Register registration() {

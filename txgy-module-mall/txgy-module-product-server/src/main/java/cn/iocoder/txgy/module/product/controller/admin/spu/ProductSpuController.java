@@ -9,11 +9,10 @@ import cn.iocoder.txgy.module.product.controller.admin.spu.vo.*;
 import cn.iocoder.txgy.module.product.convert.spu.ProductSpuConvert;
 import cn.iocoder.txgy.module.product.dal.dataobject.sku.ProductSkuDO;
 import cn.iocoder.txgy.module.product.dal.dataobject.spu.ProductSpuDO;
-import cn.iocoder.txgy.module.product.dal.dataobject.shop.ProductShopDO;
 import cn.iocoder.txgy.module.product.enums.spu.ProductSpuStatusEnum;
+import cn.iocoder.txgy.module.product.service.enterprise.ProductAdminBusinessScopeService;
 import cn.iocoder.txgy.module.product.service.sku.ProductSkuService;
 import cn.iocoder.txgy.module.product.service.sku.dto.ProductWmsStockReconciliationDTO;
-import cn.iocoder.txgy.module.product.service.shop.ProductShopService;
 import cn.iocoder.txgy.module.product.service.spu.ProductSpuService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -34,9 +33,6 @@ import java.util.Map;
 import static cn.iocoder.txgy.framework.apilog.core.enums.OperateTypeEnum.EXPORT;
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.txgy.framework.common.pojo.PageParam.PAGE_SIZE_NONE;
-import static cn.iocoder.txgy.framework.common.exception.enums.GlobalErrorCodeConstants.FORBIDDEN;
-import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
-import static cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
 
 @Tag(name = "管理后台 - 商品 SPU")
 @RestController
@@ -49,16 +45,13 @@ public class ProductSpuController {
     @Resource
     private ProductSkuService productSkuService;
     @Resource
-    private ProductShopService productShopService;
+    private ProductAdminBusinessScopeService businessScopeService;
 
     @PostMapping("/create")
     @Operation(summary = "创建商品 SPU")
     @PreAuthorize("@ss.hasPermission('product:spu:create')")
     public CommonResult<Long> createProductSpu(@Valid @RequestBody ProductSpuSaveReqVO createReqVO) {
-        ProductShopDO managedShop = getManagedShop();
-        if (managedShop != null) {
-            createReqVO.setShopId(managedShop.getId());
-        }
+        validateWriteShop(createReqVO.getShopId());
         return success(productSpuService.createSpu(createReqVO));
     }
 
@@ -67,10 +60,7 @@ public class ProductSpuController {
     @PreAuthorize("@ss.hasPermission('product:spu:update')")
     public CommonResult<Boolean> updateSpu(@Valid @RequestBody ProductSpuSaveReqVO updateReqVO) {
         validateManagedSpu(productSpuService.getSpu(updateReqVO.getId()));
-        ProductShopDO managedShop = getManagedShop();
-        if (managedShop != null) {
-            updateReqVO.setShopId(managedShop.getId());
-        }
+        validateWriteShop(updateReqVO.getShopId());
         productSpuService.updateSpu(updateReqVO);
         return success(true);
     }
@@ -105,7 +95,7 @@ public class ProductSpuController {
         if (spu == null) {
             return success(null);
         }
-        validateManagedSpu(spu);
+        validateReadableSpu(spu);
         // 查询商品 SKU
         List<ProductSkuDO> skus = productSkuService.getSkuListBySpuId(spu.getId());
         return success(ProductSpuConvert.INSTANCE.convert(spu, skus));
@@ -116,10 +106,7 @@ public class ProductSpuController {
     @PreAuthorize("@ss.hasPermission('product:spu:query')")
     public CommonResult<List<ProductSpuSimpleRespVO>> getSpuSimpleList() {
         List<ProductSpuDO> list = productSpuService.getSpuListByStatus(ProductSpuStatusEnum.ENABLE.getStatus());
-        ProductShopDO managedShop = getManagedShop();
-        if (managedShop != null) {
-            list.removeIf(spu -> !managedShop.getId().equals(spu.getShopId()));
-        }
+        filterManagedSpus(list);
         // 降序排序后，返回给前端
         list.sort(Comparator.comparing(ProductSpuDO::getSort).reversed());
         return success(BeanUtils.toBean(list, ProductSpuSimpleRespVO.class));
@@ -131,10 +118,7 @@ public class ProductSpuController {
     @PreAuthorize("@ss.hasPermission('product:spu:query')")
     public CommonResult<List<ProductSpuRespVO>> getSpuList(@RequestParam("spuIds") Collection<Long> spuIds) {
         List<ProductSpuDO> spus = productSpuService.getSpuList(spuIds);
-        ProductShopDO managedShop = getManagedShop();
-        if (managedShop != null) {
-            spus.removeIf(spu -> !managedShop.getId().equals(spu.getShopId()));
-        }
+        filterManagedSpus(spus);
         return success(ProductSpuConvert.INSTANCE.convertForSpuDetailRespListVO(
                 spus, productSkuService.getSkuListBySpuId(convertSpuIds(spus))));
     }
@@ -185,31 +169,52 @@ public class ProductSpuController {
     }
 
     private void applyManagedShopScope(ProductSpuPageReqVO reqVO) {
-        ProductShopDO managedShop = getManagedShop();
-        if (managedShop != null) {
-            reqVO.setShopId(managedShop.getId());
+        ProductAdminBusinessScopeService.Scope scope = businessScopeService.currentScope();
+        // 始终覆盖客户端绑定的隐藏字段，防止伪造 shopIds 扩大范围。
+        reqVO.setShopIds(null);
+        if (scope.unrestricted()) {
+            if (reqVO.getShopId() != null) {
+                businessScopeService.requireShopResource(scope.adminUserId(), reqVO.getShopId());
+            }
+            return;
         }
+        if (reqVO.getShopId() != null && !scope.shopIds().contains(reqVO.getShopId())) {
+            businessScopeService.requireShop(scope.adminUserId(), reqVO.getShopId());
+        }
+        reqVO.setShopIds(scope.shopIds().isEmpty() ? List.of(-1L) : scope.shopIds());
     }
 
     private void validateManagedSpu(ProductSpuDO spu) {
-        ProductShopDO managedShop = getManagedShop();
-        if (managedShop != null && spu != null && !managedShop.getId().equals(spu.getShopId())) {
-            throw exception(FORBIDDEN);
-        }
+        if (spu != null) validateWriteShop(spu.getShopId());
     }
 
-    private ProductShopDO getManagedShop() {
-        return productShopService.getShopByManagerUserId(getLoginUserId());
+    private void validateReadableSpu(ProductSpuDO spu) {
+        if (spu == null) return;
+        if (spu.getShopId() == null) {
+            businessScopeService.requireTenantManager(businessScopeService.currentAdminUserId());
+            return;
+        }
+        businessScopeService.requireCurrentShopResource(spu.getShopId());
+    }
+
+    private void validateWriteShop(Long shopId) {
+        // 商品经营必须落到显式企业/店铺授权。tenant_admin/super_admin 的 unrestricted
+        // 仅用于治理侧查询与审核，不能代替商家的经营授权。
+        businessScopeService.requireMerchantShop(businessScopeService.currentAdminUserId(), shopId);
+    }
+
+    private void filterManagedSpus(List<ProductSpuDO> spus) {
+        ProductAdminBusinessScopeService.Scope scope = businessScopeService.currentScope();
+        if (!scope.unrestricted()) spus.removeIf(spu -> !scope.shopIds().contains(spu.getShopId()));
     }
 
     /** null 表示平台管理员可查看全部；空集合表示商家当前没有商品。 */
     private Collection<Long> getManagedSpuScope() {
-        ProductShopDO managedShop = getManagedShop();
-        if (managedShop == null) {
-            return null;
-        }
+        ProductAdminBusinessScopeService.Scope scope = businessScopeService.currentScope();
+        if (scope.unrestricted()) return null;
+        if (scope.shopIds().isEmpty()) return List.of();
         ProductSpuPageReqVO reqVO = new ProductSpuPageReqVO();
-        reqVO.setShopId(managedShop.getId());
+        reqVO.setShopIds(scope.shopIds());
         reqVO.setPageSize(PAGE_SIZE_NONE);
         return convertSpuIds(productSpuService.getSpuPage(reqVO).getList());
     }

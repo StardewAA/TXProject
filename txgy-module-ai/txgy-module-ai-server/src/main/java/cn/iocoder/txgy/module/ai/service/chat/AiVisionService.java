@@ -51,12 +51,30 @@ public class AiVisionService {
     private AiApiKeyService apiKeyService;
 
     /**
+     * 识别结果缓存：同一次对话中图片会以「当前消息附件」和「历史消息附件」出现各一次，
+     * 不缓存会对同一张图重复调用视觉模型（多花 10 秒以上）。按附件 URL 缓存，上限 200 条。
+     */
+    private final java.util.Map<String, String> extractCache =
+            java.util.Collections.synchronizedMap(new java.util.LinkedHashMap<>(64, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(java.util.Map.Entry<String, String> eldest) {
+                    return size() > 200;
+                }
+            });
+
+    /**
      * 识别图片中的单据字段内容（多厂商自动回退）
      *
      * @param imageUrl 图片访问地址（AI 附件 URL，服务端可下载）
      * @return 「字段:值」文本；全部厂商失败返回 null
      */
     public String extractImageText(String imageUrl) {
+        // 0. 命中缓存直接返回（同图只识别一次）
+        String cached = extractCache.get(imageUrl);
+        if (cached != null) {
+            log.info("[extractImageText][命中缓存 url({})]", imageUrl);
+            return cached;
+        }
         // 1. 下载图片并转 Base64（data URL 形式传给视觉模型）
         // 附件 URL 面向浏览器生成（宿主机回环地址），AI 容器内需改写为 Compose 网络内的网关地址
         String downloadUrl = imageUrl
@@ -88,6 +106,7 @@ public class AiVisionService {
                 if (StrUtil.isNotBlank(text)) {
                     log.info("[extractImageText][识别成功 platform({}) model({}) 文本长度({})]",
                             platform, model, text.length());
+                    extractCache.put(imageUrl, text.trim());
                     return text.trim();
                 }
                 log.warn("[extractImageText][识别为空 platform({}) model({})]", platform, model);

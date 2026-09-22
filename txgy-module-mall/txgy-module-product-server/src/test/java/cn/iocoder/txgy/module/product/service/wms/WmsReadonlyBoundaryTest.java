@@ -5,6 +5,7 @@ import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.txgy.module.product.service.sku.ProductSkuServiceImpl;
 import cn.iocoder.txgy.module.product.service.sku.adapter.ProductWmsInventoryDatabaseAdapter;
 import cn.iocoder.txgy.module.product.service.wms.readonly.*;
+import cn.iocoder.txgy.module.wms.api.stock.WmsStockReadApi;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.*;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -53,7 +54,7 @@ class WmsReadonlyBoundaryTest {
         assertThrows(ServiceException.class,()->service.outboundSkuStock(null));
         assertThrows(ServiceException.class,()->service.inboundReturnSkuStock("return",null));
         assertThrows(ServiceException.class,()->service.syncWmsStockCache(null));
-        var legacy=new ProductWmsInventoryDatabaseAdapter();
+        var legacy=new ProductWmsInventoryDatabaseAdapter(mock(WmsStockReadApi.class));
         assertThrows(ServiceException.class,()->legacy.reserve("order",List.of()));
         assertThrows(ServiceException.class,()->legacy.release("order",List.of()));
         assertThrows(ServiceException.class,()->legacy.outbound("order",List.of()));

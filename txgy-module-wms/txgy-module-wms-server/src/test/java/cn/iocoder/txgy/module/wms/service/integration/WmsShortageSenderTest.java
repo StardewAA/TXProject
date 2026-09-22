@@ -16,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
 
 class WmsShortageSenderTest {
     JdbcTemplate jdbc;
@@ -44,6 +45,11 @@ class WmsShortageSenderTest {
         jdbc.update("INSERT INTO wms_shipment_order(id,no,type,order_time,status,source_module,biz_order_no,warehouse_id) VALUES(1,'WMS-MES-SEND-001',202,CURRENT_TIMESTAMP,0,'MES','SEND-001',1)");
         jdbc.update("INSERT INTO wms_shipment_order_detail(id,order_id,sku_id,warehouse_id,quantity,source_line_no) VALUES(1,1,1,1,3,1)");
         transaction.execute(s->shortages.check(1L));
+        // ERP shortages now use the dedicated Feign collaboration-B callback. These tests
+        // exercise the generic HTTP outbox path, so route the fixture through MES instead.
+        jdbc.update("UPDATE wms_shortage_event SET target_system='MES' WHERE order_id=1");
+        var collaborationOrderGService = mock(WmsCollaborationOrderGService.class);
+        ReflectionTestUtils.setField(sender,"collaborationOrderGService",collaborationOrderGService);
         server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
         server.createContext("/receive",exchange->{
             calls.incrementAndGet();
@@ -58,10 +64,13 @@ class WmsShortageSenderTest {
         server.stop(0); TenantContextHolder.clear(); jdbc.execute("SHUTDOWN");
     }
     String event() { return (String)shortages.list(1L).getFirst().get("eventId"); }
-    boolean send(boolean manual) { return transaction.execute(s->sender.send(event(),manual)); }
+    boolean send(boolean manual) {
+        jdbc.update("UPDATE wms_shortage_event SET target_system='MES' WHERE event_id=?", event());
+        return transaction.execute(s->sender.send(event(),manual));
+    }
     void configure() {
-        env.setProperty("wms.shortage.targets.erp.0.url","http://127.0.0.1:"+server.getAddress().getPort()+"/receive");
-        env.setProperty("wms.shortage.targets.erp.0.token","test-only-placeholder");
+        env.setProperty("wms.shortage.targets.mes.0.url","http://127.0.0.1:"+server.getAddress().getPort()+"/receive");
+        env.setProperty("wms.shortage.targets.mes.0.token","test-only-placeholder");
     }
     @Test void unconfiguredThenConfirmedReceivesStableEventOnlyOnce() {
         assertFalse(send(false)); assertEquals(0,calls.get());
@@ -130,6 +139,7 @@ class WmsShortageSenderTest {
     @Test void cancellationRetainsHistoryAndSendsCancelledVersion() {
         configure(); assertTrue(send(false));
         transaction.executeWithoutResult(s->shortages.cancel(1L));
+        jdbc.update("UPDATE wms_shortage_event SET target_system='MES' WHERE order_id=1");
         jdbc.update("UPDATE wms_shipment_order SET deleted=1 WHERE id=1");
         String id=jdbc.queryForObject("SELECT event_id FROM wms_shortage_event LIMIT 1",String.class);
         assertEquals(Boolean.TRUE,transaction.execute(s->sender.send(id,false)));
@@ -140,7 +150,7 @@ class WmsShortageSenderTest {
         configure();
         for(int i=0;i<100;i++) {
             jdbc.update("INSERT INTO wms_shortage_event(tenant_id,event_id,event_version,order_id,line_id,target_system,shortage_status,payload,notification_status,next_attempt_time,created_time)"
-                    + " VALUES(0,?,1,1,?,'MES','OPEN','{}','WAITING_INTEGRATION',CURRENT_TIMESTAMP,?)",
+                    + " VALUES(0,?,1,1,?,'CRM','OPEN','{}','WAITING_INTEGRATION',CURRENT_TIMESTAMP,?)",
                     "waiting-"+i,100+i,java.time.LocalDateTime.now().minusDays(2));
         }
         jdbc.update("UPDATE wms_shortage_event SET notification_status='PENDING',next_attempt_time=? WHERE event_id=?",

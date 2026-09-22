@@ -8,17 +8,9 @@ export namespace WmsWarehouseApi {
     id?: number;
     code?: string;
     name?: string;
-    warehouseType?: string;
-    status?: number;
-    organizationName?: string;
-    city?: string;
-    address?: string;
     remark?: string;
     sort?: number;
     createTime?: Date;
-    creator?: string;
-    updateTime?: Date;
-    updater?: string;
   }
 }
 

@@ -126,13 +126,6 @@ services:
       JAVA_OPTS: -Xms256m -Xmx512m -XX:+UseG1GC
     ports:
       - "${GATEWAY_PORT:-48080}:48080"
-      # 48081 是给「前端 dev 代理直连」用的：apps/web-antd/vite.config.ts 里
-      # /admin-api/system、/admin-api/infra 被改写为 http://127.0.0.1:48081/admin-api
-      # （同事按「宿主机 JVM 跑 system/infra」的方式配置的）。本机是容器栈、没有这两个
-      # 宿主 JVM，若不映射该端口，登录/租户/菜单等 /admin-api/system/** 请求会 502。
-      # 这里把 48081 也指向网关：网关本身就按 /admin-api/** 前缀路由，system 与 infra
-      # 都能正确转发，无需改动仓库里共享的 vite.config.ts。
-      - "127.0.0.1:48081:48080"
     depends_on:
       mysql:
         condition: service_healthy
@@ -368,6 +361,11 @@ services:
       <<: *txgy-env
       JAVA_OPTS: -Xms256m -Xmx512m -XX:+UseG1GC
     mem_limit: 850m
+    volumes:
+      # 知识库向量缓存：SimpleVectorStore 把向量写成 /root/vector_store/*.json，
+      # 不挂卷时容器一旦重建（升级部署即 rm + run）向量就丢，
+      # 表现为「知识库检索突然答不出东西」且不报错。挂卷后可跨重建保留。
+      - txgy-vector-store:/root/vector_store
 
   # 管理后台前端（vben dist）静态托管 + /admin-api 反向代理到网关。
   # nginx 使用 resolver + 变量实现动态 DNS 解析：业务容器重建后 IP 变化时不会复用旧地址
@@ -432,6 +430,8 @@ services:
 volumes:
   mysql-data:
   nacos-data:
+  # 知识库向量缓存（跨容器重建保留，见 ai 服务的 volumes 说明）
+  txgy-vector-store:
 
 networks:
   txgy-dev:

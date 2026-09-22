@@ -4,6 +4,7 @@ import type { NotificationItem } from '@vben/layouts';
 import type { SystemTenantApi } from '#/api/system/tenant';
 
 import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 
 import { useAccess } from '@vben/access';
 import { AuthenticationLoginExpiredModal, useVbenModal } from '@vben/common-ui';
@@ -42,13 +43,24 @@ import { router } from '#/router';
 import { useAuthStore } from '#/store';
 import LoginForm from '#/views/_core/authentication/login.vue';
 import FmsAccountSetSwitch from '#/views/fms/components/account-set/account-set-switch.vue';
+// 【全局 AI 助手】挂在基础布局上，仅在 MES 系统板块（/mes 下所有页面）显示，
+// 切换到 CRM/ERP/培训等其他板块时隐藏；板块内切换页面对话记录保持不丢失
+import MesAiChatPanel from '#/views/mes/home/modules/MesAiChatPanel.vue';
+
+const route = useRoute();
+/** 当前是否处于 MES 系统板块（菜单根路径 /mes 下所有页面，含 MES 首页） */
+const isMesRoute = computed(() => route.path.startsWith('/mes'));
 
 const userStore = useUserStore();
+
+
 const authStore = useAuthStore();
 const accessStore = useAccessStore();
 const { hasAccessByCodes } = useAccess();
 const { destroyWatermark, updateWatermark } = useWatermark();
 const { closeOtherTabs, refreshTab } = useTabs();
+
+
 
 const notifications = ref<NotificationItem[]>([]);
 const unreadCount = ref(0);
@@ -345,4 +357,6 @@ watch(
     </template>
   </BasicLayout>
   <HelpModal />
+  <!-- 【全局 AI 助手】悬浮球/对话面板，仅 MES 系统板块内显示 -->
+  <MesAiChatPanel v-if="isMesRoute" />
 </template>

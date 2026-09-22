@@ -43,29 +43,32 @@ CLASS_STATUS_OPTIONS.forEach((item) => {
   statusColorMap[item.value] = item.color as string;
 });
 
-/**
- * 日期格式化：后端日期字段为「毫秒时间戳」，直接调用 .slice() 会抛
- * TypeError（曾导致培训管理子页面崩溃、切换模块后页面渲染残缺），
- * 此处统一格式化为 YYYY-MM-DD，并兼容字符串日期。
- */
-function formatDate(value?: null | number | string) {
-  if (value === null || value === undefined || value === '') {
-    return '-';
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return String(value).slice(0, 10);
-  }
-  const pad = (num: number) => String(num).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-}
-
 const selectOptions = computed(() =>
   classList.value.map((item) => ({
     label: item.name || `培训班 ${item.id}`,
     value: item.id!,
   })),
 );
+
+/**
+ * 培训班截止时间展示：
+ * 后端该字段可能返回字符串（yyyy-MM-dd HH:mm:ss），也可能返回时间戳，
+ * 因此统一格式化为 yyyy-MM-dd，避免直接 slice 导致页面渲染报错。
+ */
+function formatDeadline(value?: string | number | null): string {
+  if (value === null || value === undefined || value === '') {
+    return '';
+  }
+  if (typeof value === 'string') {
+    return value.slice(0, 10);
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
 
 async function loadOptions() {
   loading.value = true;
@@ -212,7 +215,7 @@ onMounted(init);
         <span>学员 {{ currentClass.studentCount ?? 0 }} 人</span>
         <span>课程 {{ currentClass.courseCount ?? 0 }} 门</span>
         <span v-if="currentClass.deadline">
-          截止 {{ formatDate(currentClass.deadline) }}
+          截止 {{ formatDeadline(currentClass.deadline) }}
         </span>
       </Space>
     </template>

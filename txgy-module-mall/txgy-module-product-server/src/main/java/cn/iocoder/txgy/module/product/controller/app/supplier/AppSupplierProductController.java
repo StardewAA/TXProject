@@ -26,6 +26,10 @@ public class AppSupplierProductController {
     public CommonResult<SupplierProductService.Detail> get(@RequestParam Long shopId, @RequestParam Long id) {
         return success(service.detail(memberId(), shopId, id));
     }
+    @GetMapping("/quote-skus")
+    public CommonResult<java.util.List<SupplierProductService.QuoteSkuOption>> quoteSkus(@RequestParam Long shopId) {
+        return success(service.quoteSkuOptions(memberId(), shopId));
+    }
     @PostMapping("/save")
     public CommonResult<Long> save(@Valid @RequestBody SupplierProductSaveReqVO req) { return success(service.save(memberId(), req)); }
     @PutMapping("/status")

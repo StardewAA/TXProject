@@ -27,6 +27,18 @@ public interface ErrorCodeConstants {
     ErrorCode MALL_AUTH_CODE_INVALID = new ErrorCode(1_004_003_011, "验证码无效、已使用或已过期，请重新获取");
     ErrorCode MALL_AUTH_RATE_LIMITED = new ErrorCode(1_004_003_012, "操作过于频繁，请稍后重试");
     ErrorCode MALL_AUTH_SEND_FAILED = new ErrorCode(1_004_003_013, "验证码发送未确认，请稍后重新获取");
+    ErrorCode PLATFORM_ACCOUNT_NOT_READY = new ErrorCode(1_004_003_014, "平台账号尚未完成安全映射，请联系平台处理");
+    ErrorCode PLATFORM_ADDRESS_NOT_FOUND = new ErrorCode(1_004_003_015, "收货地址不存在或不属于当前平台账号");
+    ErrorCode PLATFORM_ACCOUNT_IDENTITY_CONFLICT = new ErrorCode(1_004_003_016,
+            "该登录标识已存在或存在冲突，请使用原账号登录或联系平台处理");
+    ErrorCode PLATFORM_ACCOUNT_IDENTITY_UPDATE_CONFLICT = new ErrorCode(1_004_003_017,
+            "手机号修改失败：平台账号映射不唯一或新手机号已被使用");
+    ErrorCode PLATFORM_ACCOUNT_REVIEW_FORBIDDEN = new ErrorCode(1_004_003_018,
+            "仅平台租户管理员可处理平台账号身份归并");
+    ErrorCode PLATFORM_ACCOUNT_REVIEW_INVALID = new ErrorCode(1_004_003_019,
+            "平台账号身份归并请求无效或关联数据已变化，请刷新后重试");
+    ErrorCode PLATFORM_ACCOUNT_REVIEW_CONFLICT = new ErrorCode(1_004_003_020,
+            "平台账号身份归并存在冲突，已拒绝本次操作");
 
     // ========== 用户收件地址 1-004-004-000 ==========
     ErrorCode ADDRESS_NOT_EXISTS = new ErrorCode(1_004_004_000, "用户收件地址不存在");

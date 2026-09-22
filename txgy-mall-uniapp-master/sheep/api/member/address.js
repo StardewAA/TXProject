@@ -13,6 +13,13 @@ const AddressApi = {
       custom: { auth: true, showLoading: false },
     });
   },
+  // 平台结算沿用平台账号来源会员的地址。该接口本身仍是旧会员接口，
+  // tenant-id 只能取自已核验的平台会话，绝不取页面参数或当前浏览租户。
+  getPlatformAddressList: () => request({
+    url: '/member/address/list',
+    method: 'GET',
+    custom: { scope: 'platform-account', auth: true, showLoading: false },
+  }),
   // 创建用户收件地址
   createAddress: (data) => {
     return request({

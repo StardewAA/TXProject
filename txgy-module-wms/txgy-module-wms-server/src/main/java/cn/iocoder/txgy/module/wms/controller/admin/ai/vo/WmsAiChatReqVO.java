@@ -9,7 +9,7 @@ import lombok.Data;
 public class WmsAiChatReqVO {
 
     @Schema(description = "用户关于 WMS 数据的任意提问",
-            example = "鸡爪库存还有多少？低于 20 的要提醒", requiredMode = Schema.RequiredMode.REQUIRED)
+            example = "岩棉板库存还有多少？低于 20 的要提醒", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotEmpty(message = "提问内容不能为空")
     private String text;
 

@@ -10,9 +10,12 @@ import cn.iocoder.txgy.module.mes.controller.admin.wm.arrivalnotice.vo.MesWmArri
 import cn.iocoder.txgy.module.mes.dal.dataobject.wm.arrivalnotice.MesWmArrivalNoticeDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.wm.arrivalnotice.MesWmArrivalNoticeLineDO;
 import cn.iocoder.txgy.module.mes.dal.mysql.wm.arrivalnotice.MesWmArrivalNoticeMapper;
+import cn.iocoder.txgy.module.mes.enums.MesBizTypeConstants;
 import cn.iocoder.txgy.module.mes.enums.wm.MesWmArrivalNoticeStatusEnum;
+import cn.iocoder.txgy.module.mes.service.qc.iqc.MesQcIqcService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -40,6 +43,9 @@ public class MesWmArrivalNoticeServiceImpl implements MesWmArrivalNoticeService 
     private MesWmArrivalNoticeLineService arrivalNoticeLineService;
     @Resource
     private cn.iocoder.txgy.module.mes.service.md.vendor.MesMdVendorService vendorService;
+    @Resource
+    @Lazy // 避免循环依赖（IQC Service 完成检验后会回调本 Service 回写）
+    private MesQcIqcService iqcService;
 
     @Override
     public Long createArrivalNotice(MesWmArrivalNoticeSaveReqVO createReqVO) {
@@ -98,7 +104,7 @@ public class MesWmArrivalNoticeServiceImpl implements MesWmArrivalNoticeService 
     @Transactional(rollbackFor = Exception.class)
     public void submitArrivalNotice(Long id) {
         // 1.1 校验存在 + 草稿状态
-        validateArrivalNoticeExistsAndDraft(id);
+        MesWmArrivalNoticeDO notice = validateArrivalNoticeExistsAndDraft(id);
         // 1.2 检查是否有行项目
         List<MesWmArrivalNoticeLineDO> lines = arrivalNoticeLineService.getArrivalNoticeLineListByNoticeId(id);
         if (CollUtil.isEmpty(lines)) {
@@ -112,6 +118,20 @@ public class MesWmArrivalNoticeServiceImpl implements MesWmArrivalNoticeService 
             // 需要检验，进入待质检
             arrivalNoticeMapper.updateById(new MesWmArrivalNoticeDO()
                     .setId(id).setStatus(MesWmArrivalNoticeStatusEnum.PENDING_QC.getStatus()));
+            // R1 自动建单：为需检行自动生成 IQC 草稿（幂等；失败不阻断提交流程）
+            for (MesWmArrivalNoticeLineDO line : lines) {
+                if (!Boolean.TRUE.equals(line.getIqcCheckFlag()) || line.getIqcId() != null) {
+                    continue;
+                }
+                try {
+                    iqcService.generateIqcDraft(MesBizTypeConstants.WM_ARRIVAL_NOTICE, notice.getId(), line.getId(),
+                            notice.getCode(), notice.getVendorId(), line.getItemId(), line.getArrivalQuantity(),
+                            notice.getArrivalDate());
+                } catch (Exception e) {
+                    log.warn("[submitArrivalNotice][到货通知单({}) 行({}) 自动生成 IQC 失败，跳过]",
+                            id, line.getId(), e);
+                }
+            }
             return;
         }
         // 不需要检验，直接进入待入库

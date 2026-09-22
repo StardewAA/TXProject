@@ -27,9 +27,14 @@
                 NULL AS workOrderId,
                 NULL AS workstationId,
                 NULL AS taskId,
-                NULL AS clientId
+                NULL AS clientId,
+                q.id AS qcId
             FROM mes_wm_arrival_notice n
                 JOIN mes_wm_arrival_notice_line l ON n.id = l.notice_id
+                LEFT JOIN mes_qc_iqc q ON q.source_doc_type = ${@cn.iocoder.txgy.module.mes.enums.MesBizTypeConstants@WM_ARRIVAL_NOTICE}
+                    AND q.source_doc_id = n.id AND q.source_line_id = l.id
+                    AND q.status = ${@cn.iocoder.txgy.module.mes.enums.qc.MesQcStatusEnum@DRAFT.status}
+                    AND q.deleted = 0
             WHERE n.status = ${@cn.iocoder.txgy.module.mes.enums.wm.MesWmArrivalNoticeStatusEnum@PENDING_QC.status}
               AND l.iqc_check_flag = 1
               AND l.iqc_id IS NULL
@@ -52,9 +57,14 @@
                 NULL AS workOrderId,
                 NULL AS workstationId,
                 NULL AS taskId,
-                NULL AS clientId
+                NULL AS clientId,
+                q.id AS qcId
             FROM mes_wm_outsource_receipt r
                 JOIN mes_wm_outsource_receipt_line rl ON r.id = rl.receipt_id
+                LEFT JOIN mes_qc_iqc q ON q.source_doc_type = ${@cn.iocoder.txgy.module.mes.enums.MesBizTypeConstants@WM_OUTSOURCE_RECPT}
+                    AND q.source_doc_id = r.id AND q.source_line_id = rl.id
+                    AND q.status = ${@cn.iocoder.txgy.module.mes.enums.qc.MesQcStatusEnum@DRAFT.status}
+                    AND q.deleted = 0
             WHERE r.status = ${@cn.iocoder.txgy.module.mes.enums.wm.MesWmOutsourceReceiptStatusEnum@CONFIRMED.status}
               AND rl.iqc_check_flag = 1
               AND rl.iqc_id IS NULL
@@ -77,10 +87,15 @@
                 pp.work_order_id AS workOrderId,
                 pp.workstation_id AS workstationId,
                 pp.task_id AS taskId,
-                NULL AS clientId
+                NULL AS clientId,
+                q.id AS qcId
             FROM mes_wm_product_produce_line ppl
                 JOIN mes_wm_product_produce pp ON ppl.produce_id = pp.id
                 JOIN mes_pro_feedback pf ON pp.feedback_id = pf.id
+                LEFT JOIN mes_qc_ipqc q ON q.source_doc_type = ${@cn.iocoder.txgy.module.mes.enums.MesBizTypeConstants@PRO_FEEDBACK}
+                    AND q.source_doc_id = pf.id AND q.source_line_id = ppl.id
+                    AND q.status = ${@cn.iocoder.txgy.module.mes.enums.qc.MesQcStatusEnum@DRAFT.status}
+                    AND q.deleted = 0
             WHERE ppl.quality_status = ${@cn.iocoder.txgy.module.mes.enums.wm.MesWmQualityStatusEnum@PENDING.status}
               AND ppl.deleted = 0
               AND pp.deleted = 0
@@ -102,9 +117,14 @@
                 NULL AS workOrderId,
                 NULL AS workstationId,
                 NULL AS taskId,
-                s.client_id AS clientId
+                s.client_id AS clientId,
+                q.id AS qcId
             FROM mes_wm_product_sales s
                 JOIN mes_wm_product_sales_line sl ON s.id = sl.sales_id
+                LEFT JOIN mes_qc_oqc q ON q.source_doc_type = ${@cn.iocoder.txgy.module.mes.enums.MesBizTypeConstants@WM_PRODUCT_SALES}
+                    AND q.source_doc_id = s.id AND q.source_line_id = sl.id
+                    AND q.status = ${@cn.iocoder.txgy.module.mes.enums.qc.MesQcStatusEnum@DRAFT.status}
+                    AND q.deleted = 0
             WHERE sl.oqc_check_flag = 1
               AND sl.oqc_id IS NULL
               AND s.status = ${@cn.iocoder.txgy.module.mes.enums.wm.MesWmProductSalesStatusEnum@CONFIRMED.status}
@@ -127,9 +147,14 @@
                 ri.work_order_id AS workOrderId,
                 ri.workstation_id AS workstationId,
                 NULL AS taskId,
-                NULL AS clientId
+                NULL AS clientId,
+                q.id AS qcId
             FROM mes_wm_return_issue ri
                 JOIN mes_wm_return_issue_line ril ON ri.id = ril.issue_id
+                LEFT JOIN mes_qc_rqc q ON q.source_doc_type = ${@cn.iocoder.txgy.module.mes.enums.MesBizTypeConstants@WM_RETURN_ISSUE}
+                    AND q.source_doc_id = ri.id AND q.source_line_id = ril.id
+                    AND q.status = ${@cn.iocoder.txgy.module.mes.enums.qc.MesQcStatusEnum@DRAFT.status}
+                    AND q.deleted = 0
             WHERE ri.status = ${@cn.iocoder.txgy.module.mes.enums.wm.MesWmReturnIssueStatusEnum@CONFIRMED.status}
               AND ril.rqc_check_flag = 1
               AND ril.rqc_id IS NULL
@@ -153,9 +178,14 @@
                 NULL AS workOrderId,
                 NULL AS workstationId,
                 NULL AS taskId,
-                r.client_id AS clientId
+                r.client_id AS clientId,
+                q.id AS qcId
             FROM mes_wm_return_sales r
                 JOIN mes_wm_return_sales_line rl ON r.id = rl.return_id
+                LEFT JOIN mes_qc_rqc q ON q.source_doc_type = ${@cn.iocoder.txgy.module.mes.enums.MesBizTypeConstants@WM_RETURN_SALES}
+                    AND q.source_doc_id = r.id AND q.source_line_id = rl.id
+                    AND q.status = ${@cn.iocoder.txgy.module.mes.enums.qc.MesQcStatusEnum@DRAFT.status}
+                    AND q.deleted = 0
             WHERE r.status = ${@cn.iocoder.txgy.module.mes.enums.wm.MesWmReturnSalesStatusEnum@CONFIRMED.status}
               AND rl.rqc_check_flag = 1
               AND rl.rqc_id IS NULL

@@ -1,5 +1,7 @@
 package cn.iocoder.txgy.module.wms.framework.rpc.config;
 
+import cn.iocoder.txgy.module.ai.api.knowledge.AiKnowledgeApi;
+import cn.iocoder.txgy.module.ai.api.model.AiChatModelApi;
 import cn.iocoder.txgy.module.bpm.api.task.BpmProcessInstanceApi;
 import cn.iocoder.txgy.module.erp.api.wms.ErpWmsCallbackApi;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
@@ -11,6 +13,7 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration(value = "wmsRpcConfiguration", proxyBeanMethods = false)
 @EnableFeignClients(clients = {AdminUserApi.class, DeptApi.class, PermissionApi.class,
-        BpmProcessInstanceApi.class, ErpWmsCallbackApi.class, TradeWmsCallbackApi.class})
+        BpmProcessInstanceApi.class, ErpWmsCallbackApi.class,
+        AiChatModelApi.class, AiKnowledgeApi.class, TradeWmsCallbackApi.class})
 public class RpcConfiguration {
 }

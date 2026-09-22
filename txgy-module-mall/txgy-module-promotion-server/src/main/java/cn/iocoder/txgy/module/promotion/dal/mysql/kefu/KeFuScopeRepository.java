@@ -7,6 +7,7 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 /** Explicit tenant predicates on EVERY read/write; never depends on an ignored-table setting. */
@@ -41,6 +42,38 @@ public class KeFuScopeRepository {
         List<Session> rows = jdbc.query("SELECT * FROM promotion_kefu_session WHERE tenant_id=? AND id=?"
                 + (lock ? " FOR UPDATE" : ""), SESSION, tenant, id);
         return rows.isEmpty() ? null : rows.getFirst();
+    }
+
+    /**
+     * Looks up only a platform conversation owned by the authenticated member account.
+     *
+     * <p>The target tenant is deliberately not an input.  It is recovered from the server-created
+     * binding and joined back to the session tenant, so changing a request header or guessing a
+     * session UUID cannot move a conversation into another shop scope.</p>
+     */
+    public Session getPlatformOwned(long memberTenant, long member, String id, boolean lock) {
+        List<Session> rows = jdbc.query("SELECT s.* FROM promotion_kefu_platform_session p "
+                        + "JOIN promotion_kefu_session s ON s.id=p.session_id AND s.tenant_id=p.session_tenant_id "
+                        + "WHERE p.member_tenant_id=? AND p.member_id=? AND p.session_id=?"
+                        + (lock ? " FOR UPDATE" : ""), SESSION, memberTenant, member, id);
+        return rows.isEmpty() ? null : rows.getFirst();
+    }
+
+    public boolean hasPlatformOwner(String id) {
+        List<Boolean> rows = jdbc.query("SELECT TRUE FROM promotion_kefu_platform_session WHERE session_id=?",
+                (rs, row) -> rs.getBoolean(1), id);
+        return !rows.isEmpty();
+    }
+
+    /** Binds a target-tenant session to one authenticated platform member account, once. */
+    public boolean bindPlatformOwner(Session session, long memberTenant, long member, long productSkuId) {
+        jdbc.update("INSERT INTO promotion_kefu_platform_session(session_id,session_tenant_id,member_tenant_id,member_id,product_sku_id) "
+                        + "VALUES(?,?,?,?,?) ON DUPLICATE KEY UPDATE session_id=session_id",
+                session.id(), session.tenantId(), memberTenant, member, productSkuId);
+        Integer matches = jdbc.queryForObject("SELECT COUNT(*) FROM promotion_kefu_platform_session "
+                        + "WHERE session_id=? AND session_tenant_id=? AND member_tenant_id=? AND member_id=?",
+                Integer.class, session.id(), session.tenantId(), memberTenant, member);
+        return Objects.equals(matches, 1);
     }
 
     public List<Session> list(long tenant, String scope, long shop, String state, int limit, int offset) {
