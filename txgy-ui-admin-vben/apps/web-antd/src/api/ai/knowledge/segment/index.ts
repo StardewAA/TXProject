@@ -79,3 +79,17 @@ export function searchKnowledgeSegment(params: any) {
     params,
   });
 }
+
+/**
+ * 重建知识库向量索引
+ *
+ * 用途：SQL 批量导入分段、或向量库重启后内存向量丢失时，把该知识库下所有分段重新向量化。
+ * 注意：当前向量库为进程内 SimpleVectorStore（落盘到 ai 容器 ~/vector_store/*.json），
+ * ai 服务容器重建后需要重新调用一次本接口，否则知识库检索不到内容。
+ */
+export function reindexKnowledgeSegment(knowledgeId: number) {
+  return requestClient.put<boolean>('/ai/knowledge/segment/reindex', undefined, {
+    params: { knowledgeId },
+    timeout: 600_000,
+  });
+}

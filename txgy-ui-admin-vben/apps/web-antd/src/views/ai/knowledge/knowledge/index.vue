@@ -13,6 +13,7 @@ import {
   deleteKnowledge,
   getKnowledgePage,
 } from '#/api/ai/knowledge/knowledge';
+import { reindexKnowledgeSegment } from '#/api/ai/knowledge/segment';
 import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
@@ -68,6 +69,25 @@ function handleRetrieval(id: number) {
     name: 'AiKnowledgeRetrieval',
     query: { id },
   });
+}
+
+/**
+ * 重建向量索引
+ *
+ * SQL 批量导入的分段没有向量，检索不到；向量库重启后内存向量也会丢。
+ * 该动作把知识库下所有分段重新向量化（运维动作，权限 ai:knowledge:update）。
+ */
+async function handleReindex(row: AiKnowledgeKnowledgeApi.Knowledge) {
+  const hideLoading = message.loading({
+    content: `正在重建「${row.name}」的向量索引…`,
+    duration: 0,
+  });
+  try {
+    await reindexKnowledgeSegment(row.id!);
+    message.success('向量索引已重建，现在可以正常召回该知识库内容');
+  } finally {
+    hideLoading();
+  }
 }
 
 const [Grid, gridApi] = useVbenVxeGrid({
@@ -144,6 +164,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
               icon: ACTION_ICON.SEARCH,
               auth: ['ai:knowledge:query'],
               onClick: handleRetrieval.bind(null, row.id),
+            },
+            {
+              label: '重建向量索引',
+              type: 'link',
+              icon: ACTION_ICON.REFRESH,
+              auth: ['ai:knowledge:update'],
+              onClick: handleReindex.bind(null, row),
             },
             {
               label: $t('common.delete'),

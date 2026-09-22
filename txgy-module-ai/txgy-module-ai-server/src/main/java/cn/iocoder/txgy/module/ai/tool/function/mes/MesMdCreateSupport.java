@@ -124,4 +124,52 @@ public abstract class MesMdCreateSupport<Req> implements Function<Req, Map<Strin
         return TenantContextHolder.getTenantId();
     }
 
+    /** 操作人（写入 creator/updater 字段）：取登录用户，取不到时退回 '1'（与 MES 既有工具一致） */
+    protected String currentOperator() {
+        Long userId = cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId();
+        return userId != null ? String.valueOf(userId) : "1";
+    }
+
+    /**
+     * 在本租户档案表内把关键词解析为唯一记录编号（单据录入工具复用）
+     *
+     * 匹配顺序：编码/名称精确 → 忽略空格比较 → 名称模糊；无匹配或多匹配都抛
+     * {@link IllegalArgumentException}（带候选提示），由调用方转成给模型/用户的失败原因。
+     *
+     * @param tenantId 租户编号
+     * @param table    档案表名（如 mes_md_item），必须含 id/code/name 三列
+     * @param keyword  用户给出的名称或编码原文
+     * @param label    业务名词（用于失败文案，如「物料」）
+     */
+    protected Long resolveId(Long tenantId, String table, String keyword, String label) {
+        String kwNorm = keyword.replaceAll("[\\s　]+", "");
+        List<Map<String, Object>> exact = jdbcTemplate.queryForList(
+                "SELECT id, code, name FROM " + table
+                        + " WHERE tenant_id = ? AND deleted = 0 AND (code = ? OR name = ?"
+                        + " OR REPLACE(name, ' ', '') = ?) LIMIT 2",
+                tenantId, keyword, keyword, kwNorm);
+        if (exact.size() == 1) {
+            return ((Number) exact.get(0).get("id")).longValue();
+        }
+        if (exact.size() > 1) {
+            throw new IllegalArgumentException(label + "「" + keyword + "」在本租户存在多条同名记录，请提供唯一的编码");
+        }
+        List<Map<String, Object>> fuzzy = jdbcTemplate.queryForList(
+                "SELECT id, code, name FROM " + table
+                        + " WHERE tenant_id = ? AND deleted = 0"
+                        + " AND REPLACE(name, ' ', '') LIKE CONCAT('%', ?, '%') LIMIT 6",
+                tenantId, kwNorm);
+        if (fuzzy.isEmpty()) {
+            throw new IllegalArgumentException("在本租户档案中未找到" + label + "「" + keyword + "」，请核对名称或编码");
+        }
+        if (fuzzy.size() > 1) {
+            String candidates = fuzzy.stream()
+                    .map(row -> String.valueOf(row.get("code")) + " " + row.get("name"))
+                    .collect(java.util.stream.Collectors.joining("；"));
+            throw new IllegalArgumentException(label + "「" + keyword + "」匹配到多条记录，请提供更精确的名称或编码。候选："
+                    + candidates);
+        }
+        return ((Number) fuzzy.get(0).get("id")).longValue();
+    }
+
 }

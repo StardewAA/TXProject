@@ -355,6 +355,12 @@ services:
       dockerfile: Dockerfile.runtime
       args:
         JAR_FILE: app.jar
+    # 知识库向量持久化：当前向量库是进程内 SimpleVectorStore，代码会把它定时落盘到
+    # ${user.home}/vector_store/simple_<EmbeddingModel>.json（容器内即 /root/vector_store）。
+    # 不挂卷时容器一重建/重启向量就丢，知识库检索不到、必须手动点「重建向量索引」。
+    # 只影响 ai 服务本身：其他模块（MES/ERP/WMS…）不共用这套向量库。
+    volumes:
+      - ai-vector-store:/root/vector_store
     # ai 的 jar 最大（419MB），构建器与向量库相关类较多，元空间给宽一些
     environment:
       <<: *backend-env
@@ -404,6 +410,8 @@ volumes:
   mysql-data:
   redis-data:
   nacos-data:
+  # ai 知识库向量文件（SimpleVectorStore 落盘目录，见 ai 服务 volumes 注释）
+  ai-vector-store:
 
 networks:
   txgy-dev:
