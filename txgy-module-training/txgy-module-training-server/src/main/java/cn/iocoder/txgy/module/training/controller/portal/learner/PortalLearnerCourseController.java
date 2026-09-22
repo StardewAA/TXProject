@@ -10,6 +10,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
+import cn.iocoder.txgy.framework.tenant.core.util.TenantUtils;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,6 +34,9 @@ import static cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtil
 @RequestMapping("/training/portal/learner/course")
 @Validated
 public class PortalLearnerCourseController {
+
+    /** 个人学员（tenant_id=0）读取集团统一维护的课程目录。 */
+    private static final Long PLATFORM_CATALOG_TENANT_ID = 1L;
 
     @Resource
     private LearnerCourseService learnerCourseService;
@@ -73,12 +78,33 @@ public class PortalLearnerCourseController {
         return success(result);
     }
 
+    private void executeInCatalogTenant(Runnable runnable) {
+        Long tenantId = TenantContextHolder.getTenantId();
+        if (tenantId != null && tenantId == 0L) {
+            TenantUtils.execute(PLATFORM_CATALOG_TENANT_ID, runnable);
+            return;
+        }
+        runnable.run();
+    }
+
+    private <T> T executeInCatalogTenant(java.util.concurrent.Callable<T> callable) {
+        Long tenantId = TenantContextHolder.getTenantId();
+        if (tenantId != null && tenantId == 0L) {
+            return TenantUtils.execute(PLATFORM_CATALOG_TENANT_ID, callable);
+        }
+        try {
+            return callable.call();
+        } catch (Exception exception) {
+            throw new RuntimeException(exception);
+        }
+    }
+
     @GetMapping("/detail")
     @Operation(summary = "获得课程学习详情（含媒资逐项进度）")
     @Parameter(name = "id", description = "课程 ID", required = true)
     @PreAuthorize("isAuthenticated()")
     public CommonResult<LearnerCourseDetailRespVO> getCourseDetail(@RequestParam("id") Long id) {
-        return success(learnerCourseService.getCourseDetail(getLoginUserId(), id));
+        return success(executeInCatalogTenant(() -> learnerCourseService.getCourseDetail(getLoginUserId(), id)));
     }
 
     @PostMapping("/enroll-self")
@@ -86,7 +112,7 @@ public class PortalLearnerCourseController {
     @Parameter(name = "id", description = "课程 ID", required = true)
     @PreAuthorize("isAuthenticated()")
     public CommonResult<Boolean> enrollSelf(@RequestParam("id") Long id) {
-        learnerCourseService.enrollSelf(getLoginUserId(), id);
+        executeInCatalogTenant(() -> learnerCourseService.enrollSelf(getLoginUserId(), id));
         return success(true);
     }
 
