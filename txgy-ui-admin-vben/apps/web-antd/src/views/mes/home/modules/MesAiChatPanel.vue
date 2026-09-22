@@ -1,16 +1,20 @@
 <script lang="ts" setup>
 /**
- * MES 首页 - 右侧固定悬浮 AI 对话面板（白底黑字，清晰易读）
+ * MES 工业级 AI 助手（右下角悬浮入口 + 浮动对话面板，跟随主题深浅色）
  *
- * 1. fixed 固定定位（右 16px / 下 20px）；面板固定白色背景 + 黑色文字，不随主题变化
- * 2. 宽 380px（最大化 560px），高 min(720px, 视口-32px)；消息区内部滚动
- * 3. 最小化收起为右下角悬浮球（悬停"MES 智能助手"）；支持最大化切换；默认收起（进入页面不自动弹出，点击悬浮球才展开）
- * 4. 对接现有 AI 流式接口：权限拦截在后端，越权返回拒绝话术直接渲染
- * 5. Enter 发送 / Shift+Enter 换行；会话仅当前页面缓存，刷新清空
+ * 视觉：核心视觉为 src/assets/imgs/ai-assistant.png（机器人图标，未重绘）；
+ *      蓝色玻璃质感底盘 + 克制光晕，禁止霓虹/粒子/大幅旋转等游戏化效果。
+ * 1. 悬浮球：固定 right 24 / bottom 24（≤1024 缩为 48px，≤768 缩为 46px 且靠边 16px），
+ *    不套大面积纯色圆底，图标本身即视觉主体；hover 轻微放大 + 上浮；
+ *    思考中仅外圈缓慢呼吸（不旋转图标）。
+ * 2. 面板：右下角浮动卡片 380×520（bottom 88 紧贴悬浮球上方），不挤压页面、不做全屏。
+ * 3. 顶栏：机器人头像 + 「AI 智能助手」/「MES 生产运营智能分析」 + 历史 / 重开 / 最小化 / 关闭。
+ * 4. 首屏为欢迎区与 4 个 MES 快捷分析入口；输入区含常用指令快捷条、附件、语音。
+ * 5. 对接现有 AI 流式接口：权限拦截在后端，越权返回拒绝话术直接渲染；Enter 发送 / Shift+Enter 换行。
  */
 import type { AiChatMessageApi } from '#/api/ai/chat/message';
 
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 
 import { IconifyIcon } from '@vben/icons';
 
@@ -27,7 +31,11 @@ import {
 } from '#/api/ai/chat/message';
 import { getMyPage } from '#/api/ai/model/chatRole';
 import { uploadFile } from '#/api/infra/file';
+// AI 助手核心视觉资源（由参考图处理生成：透明底 + 玻璃蓝底 + 原始机器人造型，未重绘）
+import assistantIcon from '#/assets/imgs/ai-assistant.png';
 import { MarkdownView } from '#/components/markdown-view';
+// 错误分类提示与思考标签剥离：与「AI首页/门户首页」助手共用（src/utils/ai-chat.ts）
+import { describeRequestError, stripThink } from '#/utils/ai-chat';
 
 // 【新增模块 1、2、3】Word 单据链接 / Vben 预览弹窗 / 模板数据
 import MesDocPreviewModal from './MesDocPreviewModal.vue';
@@ -56,21 +64,17 @@ const props = withDefaults(
   defineProps<{
     /** AI 角色编号（不传则按 roleName 自动查找，仍找不到时使用该回退值） */
     fallbackRoleId?: number;
-    /** 面板展开时是否推动页面主体避让（给 body 加 class） */
-    pushBody?: boolean;
     /** AI 角色名称（用于自动查找角色编号） */
     roleName?: string;
   }>(),
   {
     fallbackRoleId: 20, // 兜底：MES 生产助手角色编号
-    pushBody: true,
     roleName: 'MES 生产助手',
   },
 );
 
-/** 面板状态：默认收起为悬浮球（进入页面不自动弹出，点击悬浮球才展开）；最大化切换 */
+/** 面板状态：默认收起为悬浮球（进入页面不自动弹出，点击悬浮球才展开） */
 const expanded = ref(false);
-const maximized = ref(false);
 /** 会话就绪标记（创建成功后才能发送） */
 const conversationReady = ref(false);
 /** 流式接收中 */
@@ -96,6 +100,8 @@ const messages = ref<
     /** 【新增：任务包 D】质检预填：任务编号（确认后打开检验单弹窗） */
     qcPrefillTaskCode?: string;
     role: 'assistant' | 'user';
+    /** 模型的思考过程（气泡内折叠展示，正文仍只展示清洗后的回答） */
+    think?: string;
     time: string;
   }[]
 >([]);
@@ -152,33 +158,6 @@ function matchQcPrefill(text: string): string | null {
     /(?:任务号|任务编号|任务|工单号|工单编号|编号)(?:是|为|叫|[:：])?\s*([A-Za-z0-9_-]{3,32})/,
   );
   return labeled?.[1] ?? t.match(/[A-Za-z0-9_-]{3,32}/)?.[0] ?? null;
-}
-
-/**
- * 【新增：任务包 D3】出入库操作引导：命中"入库/出库 + 流程/怎么/如何"等操作类问法
- * （纯数据查询如"库存多少"不受影响，仍走业务查询）
- */
-function matchWmsGuide(text: string): boolean {
-  const t = (text ?? '').trim();
-  if (!t || t.length > 30) return false;
-  return /((怎么|如何|什么流程|哪些步骤|什么步骤).{0,8}(入库|出库))|((入库|出库).{0,10}(流程|步骤|怎么操作|如何操作|怎么填|如何填|怎么办理|如何办理))/.test(
-    t,
-  );
-}
-
-/** 【新增：任务包 D3】出入库操作引导消息 */
-function handleWmsGuide() {
-  messages.value.push({
-    role: 'assistant',
-    content:
-      '出入库单据的操作路径如下（AI 不代写单据，具体操作在「仓储管理」菜单完成）：\n' +
-      '1. 入库：到达通知 → 收货 → 质检（如需）→ 上架；成品入库走「产品入库」。\n' +
-      '2. 出库：领料出库（生产领料）/ 销售出库（发货）/ 其他出库，按对应单据创建并审核。\n' +
-      '3. 我可以帮你先查数据：点击下方选项查库存或待检任务，确认后再去页面操作。',
-    options: ['查询全部库存', '有哪些待检任务', '我要上报异常'],
-    time: formatTime(),
-  });
-  scrollToBottom();
 }
 
 /** 【新增：任务包 D1】安灯上报成功回执 */
@@ -412,202 +391,16 @@ const messageListRef = ref<HTMLDivElement>();
 /** 流式中断控制器 */
 const abortController = ref<AbortController>();
 
-/** ========== 悬浮球 / 面板拖拽定位 ==========
- * 初始固定在视口右下角；用户可拖拽移动（悬浮球整体拖拽、面板按住标题栏拖拽），
- * 拖拽后的位置存入 localStorage，刷新后恢复上次位置 */
-const FAB_SIZE = 52;
-const PANEL_WIDTH = 380;
-const PANEL_HEIGHT_FALLBACK = 720;
-
-function clampPos(x: number, y: number, w: number, h: number) {
-  return {
-    x: Math.min(Math.max(0, x), Math.max(0, window.innerWidth - w)),
-    y: Math.min(Math.max(0, y), Math.max(0, window.innerHeight - h)),
-  };
-}
-
-function loadPos(key: string, defX: number, defY: number) {
-  try {
-    const raw = localStorage.getItem(key);
-    if (raw) {
-      const p = JSON.parse(raw);
-      if (Number.isFinite(p?.x) && Number.isFinite(p?.y)) {
-        return { x: p.x, y: p.y };
-      }
-    }
-  } catch {
-    /* 忽略反序列化失败，使用默认位置 */
-  }
-  return { x: defX, y: defY };
-}
-
-function savePos(key: string, pos: { x: number; y: number }) {
-  try {
-    localStorage.setItem(key, JSON.stringify(pos));
-  } catch {
-    /* 存储不可用时忽略 */
-  }
-}
-
-/** 悬浮球初始位置：右下角（right 20 / bottom 24） */
-const fabPos = ref(
-  loadPos(
-    'mes-ai-fab-pos',
-    window.innerWidth - FAB_SIZE - 20,
-    window.innerHeight - FAB_SIZE - 24,
-  ),
-);
-/** 面板初始位置：右下角（right 16 / top 20） */
-const panelPos = ref(
-  loadPos('mes-ai-panel-pos', window.innerWidth - PANEL_WIDTH - 16, 20),
-);
-/** 最大化停靠位置（默认右侧贴边、top 88，可拖拽后记忆） */
-const maxPos = ref(loadPos('mes-ai-max-pos', window.innerWidth - 488, 88));
-
-const fabStyle = computed(() => ({
-  left: `${fabPos.value.x}px`,
-  top: `${fabPos.value.y}px`,
-}));
-
-/** 面板尺寸：最大化默认停靠屏幕右侧（全高抽屉式，可拖拽后记忆），普通尺寸按拖拽位置定位 */
-const panelStyle = computed(() => {
-  if (maximized.value) {
-    const w = Math.min(480, window.innerWidth - 64);
-    const p = clampPos(maxPos.value.x, maxPos.value.y, w, window.innerHeight - 108);
-    return {
-      width: `${w}px`,
-      height: `${Math.round(window.innerHeight - p.y - 20)}px`,
-      left: `${p.x}px`,
-      top: `${p.y}px`,
-    };
-  }
-  return {
-    height: 'min(720px, calc(100vh - 32px))',
-    width: '380px',
-    left: `${panelPos.value.x}px`,
-    top: `${panelPos.value.y}px`,
-  };
-});
-
-/** 拖拽状态（模块级即可，同一时刻只拖一个元素） */
-interface DragState {
-  target: 'fab' | 'panel';
-  startX: number;
-  startY: number;
-  origX: number;
-  origY: number;
-  moved: boolean;
-}
-let dragState: null | DragState = null;
-/** 上一次拖拽是否发生了移动（用于区分「拖拽」与「点击」） */
-let lastDragMoved = false;
-
-function onDragMove(e: MouseEvent) {
-  if (!dragState) return;
-  const dx = e.clientX - dragState.startX;
-  const dy = e.clientY - dragState.startY;
-  if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
-    dragState.moved = true;
-  }
-  const isFab = dragState.target === 'fab';
-  const isPanelMax = dragState.target === 'panel' && maximized.value;
-  const w = isFab ? FAB_SIZE : isPanelMax ? Math.min(480, window.innerWidth - 64) : PANEL_WIDTH;
-  const h = isFab
-    ? FAB_SIZE
-    : isPanelMax
-      ? window.innerHeight - 88
-      : Math.min(PANEL_HEIGHT_FALLBACK, window.innerHeight - 32);
-  const p = clampPos(dragState.origX + dx, dragState.origY + dy, w, h);
-  if (isFab) {
-    fabPos.value = p;
-    savePos('mes-ai-fab-pos', p);
-  } else if (isPanelMax) {
-    maxPos.value = p;
-    savePos('mes-ai-max-pos', p);
-  } else {
-    panelPos.value = p;
-    savePos('mes-ai-panel-pos', p);
-  }
-}
-
-function onDragEnd() {
-  window.removeEventListener('mousemove', onDragMove);
-  window.removeEventListener('mouseup', onDragEnd);
-  document.body.style.userSelect = '';
-  lastDragMoved = dragState?.moved ?? false;
-  dragState = null;
-}
-
-/** 拖拽入口：悬浮球整体 / 面板标题栏（最大化时同样可拖拽，位置独立记忆） */
-function onDragStart(e: MouseEvent, target: 'fab' | 'panel') {
-  const pos =
-    target === 'fab'
-      ? fabPos.value
-      : maximized.value
-        ? maxPos.value
-        : panelPos.value;
-  dragState = {
-    target,
-    startX: e.clientX,
-    startY: e.clientY,
-    origX: pos.x,
-    origY: pos.y,
-    moved: false,
-  };
-  lastDragMoved = false;
-  document.body.style.userSelect = 'none';
-  window.addEventListener('mousemove', onDragMove);
-  window.addEventListener('mouseup', onDragEnd);
-}
-
-/** 悬浮球点击：拖拽结束后未移动才视为点击展开 */
-function onFabClick() {
-  if (lastDragMoved) {
-    lastDragMoved = false;
-    return;
-  }
-  setExpanded(true);
-}
-
-// 视口尺寸变化时把两个元素拉回可视范围
-function clampAllToViewport() {
-  fabPos.value = clampPos(fabPos.value.x, fabPos.value.y, FAB_SIZE, FAB_SIZE);
-  if (maximized.value) {
-    const w = Math.min(480, window.innerWidth - 64);
-    maxPos.value = clampPos(
-      maxPos.value.x,
-      maxPos.value.y,
-      w,
-      window.innerHeight - 108,
-    );
-  } else {
-    panelPos.value = clampPos(
-      panelPos.value.x,
-      panelPos.value.y,
-      PANEL_WIDTH,
-      Math.min(PANEL_HEIGHT_FALLBACK, window.innerHeight - 32),
-    );
-  }
-}
+/** ========== 悬浮球 ==========
+ * 固定在右下角（right 24 / bottom 24）：位置完全交给 CSS，因此天然避开浏览器滚动条；
+ * 不再支持拖拽 —— 工业后台要求入口位置稳定，避免被拖到遮挡内容的位置。
+ * 尺寸变化由 CSS 媒体查询处理（≤1024px 缩到 48px，≤768px 缩到 46px 并靠近边缘）。 */
+/** 尺寸/位置均由 CSS 控制：52px（right 24 / bottom 24），≤1024 为 48px，≤768 为 46px */
 
 /** 时间戳轻量展示（HH:mm） */
 function formatTime(): string {
   const d = new Date();
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
-/** 剥离回复文本中的 <think> 思考过程标签（面板只展示最终回答） */
-function stripThink(content: string): string {
-  if (!content) return content;
-  // 含思考开始标签才进入思考处理；未闭合时返回空（流式中先显示"正在思考"）
-  if (content.includes('<think>')) {
-    if (content.includes('</think>')) {
-      return content.slice(content.indexOf('</think>') + 8).replace(/^\s+/, '');
-    }
-    return '';
-  }
-  // 无思考标签：直接展示正文（避免正常回答被误判为思考内容）
-  return content;
 }
 
 /** 滚动消息区到底部 */
@@ -618,75 +411,25 @@ async function scrollToBottom() {
   }
 }
 
-/** 同步页面主体避让 class：pushBody 为 false 时始终不挤压页面（面板悬浮覆盖在内容之上） */
-function syncBodyAvoid(open: boolean) {
-  document.body.classList.toggle(
-    'mes-ai-panel-open',
-    props.pushBody !== false && open,
-  );
-}
-
-/** 展开/收起切换：同步管理 body 避让 class */
+/** 展开 / 收起（收起为右下角悬浮球）：面板是浮动卡片，完全不影响页面布局 */
 function setExpanded(v: boolean) {
   expanded.value = v;
-  syncBodyAvoid(v);
   if (v) scrollToBottom();
 }
 
-/** 最大化/还原切换 */
-function toggleMaximized() {
-  maximized.value = !maximized.value;
-  scrollToBottom();
+/**
+ * 关闭面板：中断正在进行的流式输出后收起为悬浮球。
+ * 与「最小化」的区别：最小化只收起、保留当前回答继续输出；关闭会停止本次生成。
+ */
+function closePanel() {
+  abortController.value?.abort();
+  abortController.value = undefined;
+  streaming.value = false;
+  setExpanded(false);
 }
 
 /** 初始化进行中标记：防止并发初始化导致出现两段欢迎语 */
 const initLoading = ref(false);
-
-/**
- * 请求错误分类提示：把底层异常翻译成面向用户的友好提示。
- *
- * 判断顺序：鉴权失效（401/403）> 网络层异常（断网/超时/CORS）> 后端业务异常（带 msg）> 服务不可用（5xx/无响应体）。
- * @param e        抛出的错误对象（axios 错误 / fetch 错误 / 任意异常）
- * @param fallback 无法识别类型时的兜底文案
- */
-function describeRequestError(e: any, fallback: string): string {
-  const respData = e?.response?.data ?? e?.data ?? {};
-  const httpStatus = e?.response?.status;
-  const bizCode = respData?.code;
-  // 1. 鉴权失效：HTTP 401/403 或业务 code 401/403（后端安全过滤器直接返回 JSON 时 HTTP 可能为 200）
-  if (bizCode === 401 || httpStatus === 401 || bizCode === 403 || httpStatus === 403) {
-    return '登录状态已失效，请重新登录后再试。';
-  }
-  const rawMsg = String(respData?.msg ?? e?.message ?? e?.msg ?? '').trim();
-  // 2. 网络层错误特征：axios/fetch 在无业务响应体时抛出的报错信息
-  if (
-    !rawMsg ||
-    /network\s*error|failed\s+to\s+fetch|load\s+failed|timeout|timed\s*out|econnaborted|econnrefused|econnreset|网络错误|网络异常|请求超时/i.test(
-      rawMsg,
-    )
-  ) {
-    return '网络异常，请检查网络连接后重试。';
-  }
-  // 3. 服务不可用：HTTP 5xx 或通用内部错误信息
-  //    含网关服务发现失败（如 "Unable to find instance for ai-server"）——AI 服务重启/维护窗口期出现
-  if (
-    (httpStatus && httpStatus >= 500) ||
-    /系统异常|服务不可用|internal server error|暂时无法服务|unable\s+to\s+find\s+instance|no\s+instances\s+available|loadbalancer/i.test(
-      rawMsg,
-    )
-  ) {
-    return 'AI 服务暂时不可用（可能正在维护或重启），请稍后重试。';
-  }
-  // 4. [SSE 修复] 流式接口的 Content-Type 校验失败：
-  //    fetch-event-source 在收到 application/json 时会抛英文
-  //    "Expected content-type to be text/event-stream, Actual: ..."，
-  //    本质是后端流链路异常被 JSON 化，按约定话术转中文，不展示原始英文。
-  if (/expected\s+content-type|text\/event-stream|event-stream/i.test(rawMsg)) {
-    return '数据查询接口异常，请稍后重试。';
-  }
-  // 5. 后端业务错误（如“聊天角色不存在”“找不到默认模型”）：透出后端真实原因
-  return rawMsg || fallback;
-}
 
 /**
  * 解析当前租户下的 AI 角色编号。
@@ -734,7 +477,8 @@ async function initConversation() {
   conversationReady.value = false;
   if (oldId) {
     try {
-      await deleteChatConversationMy(Number(oldId));
+      // 旧会话 id 同样是 19 位雪花号：原样透传，避免 Number() 丢精度导致删不掉
+      await deleteChatConversationMy(oldId);
     } catch {
       // 旧会话可能已不存在或已被删除，忽略
     }
@@ -744,12 +488,8 @@ async function initConversation() {
     const conv = await createChatConversationMy({ roleId } as any);
     conversationId.value = String(conv ?? '');
     conversationReady.value = true;
-    // 会话初始化成功：仅输出一次欢迎引导语（后续对话不会再自我重复介绍）
-    messages.value.push({
-      role: 'assistant',
-      content: `您好，我是${props.roleName}，可为您解答生产工单、任务、报工、质检、设备、库存等业务问题（权限不足的问题会被拒绝回答）。`,
-      time: formatTime(),
-    });
+    // 会话初始化成功：不再推文字欢迎语，改由消息区的「空态能力卡」承载引导
+    // （能力卡含角色介绍 + 可点击的示例问题，比一句纯文本更好用；有消息后自动消失）
   } catch (e: any) {
     // 初始化失败：按错误类型分类提示，避免笼统的“未知错误”
     conversationReady.value = false;
@@ -773,26 +513,63 @@ const historyOpen = ref(false); // 历史列表展开状态（覆盖消息区显
 const historyLoading = ref(false);
 const historyList = ref<any[]>([]);
 
-/** 打开/关闭历史会话列表（打开时拉取本角色全部历史会话） */
-async function toggleHistory() {
-  historyOpen.value = !historyOpen.value;
-  if (!historyOpen.value) return;
+/** 时间值 → 毫秒：兼容「毫秒时间戳（数字/数字字符串）」与「已格式化时间字符串」两种返回 */
+function toMillis(v: any): number {
+  if (v === null || v === undefined || v === '') return 0;
+  const n =
+    typeof v === 'number'
+      ? v
+      : /^\d{10,13}$/.test(String(v))
+        ? Number(v)
+        : Number.NaN;
+  if (Number.isFinite(n)) return n < 1e12 ? n * 1000 : n;
+  // 兼容 iOS Safari：需把 "2026-09-22 10:32:14" 的 - 换成 /
+  const t = new Date(String(v).replace(/-/g, '/')).getTime();
+  return Number.isNaN(t) ? 0 : t;
+}
+
+/** 历史会话时间展示：今天只显示 HH:mm，今年显示 MM-DD HH:mm，跨年带年份 */
+function formatHistoryTime(v: any): string {
+  const t = toMillis(v);
+  if (!t) return '';
+  const d = new Date(t);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const now = new Date();
+  const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  if (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  ) {
+    return hm;
+  }
+  const md = `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${hm}`;
+  return d.getFullYear() === now.getFullYear() ? md : `${d.getFullYear()}-${md}`;
+}
+
+/** 拉取本助手角色的历史会话（仅本角色，按时间倒序） */
+async function loadHistoryList() {
   historyLoading.value = true;
   try {
     const list = await getChatConversationMyList();
-    // 仅展示本助手角色的会话，按更新时间倒序
     historyList.value = (list || [])
       .filter((c: any) => c.roleId && c.id)
       .sort(
         (a: any, b: any) =>
-          new Date(b.updateTime || b.createTime).getTime() -
-          new Date(a.updateTime || a.createTime).getTime(),
+          toMillis(b.updateTime || b.createTime) -
+          toMillis(a.updateTime || a.createTime),
       );
   } catch {
     message.error('历史会话加载失败，请稍后重试');
   } finally {
     historyLoading.value = false;
   }
+}
+
+/** 打开/关闭历史会话列表（打开时拉取本角色全部历史会话） */
+async function toggleHistory() {
+  historyOpen.value = !historyOpen.value;
+  if (historyOpen.value) await loadHistoryList();
 }
 
 /** 切换到历史会话：中断旧流 → 加载该会话全部消息 → 回显 */
@@ -825,15 +602,24 @@ async function switchConversation(item: any) {
 /** 删除历史会话；若删除的是当前会话则重新初始化 */
 async function removeHistory(item: any) {
   try {
-    await deleteChatConversationMy(Number(item.id));
+    // 注意：对话 id 是 19 位雪花号，必须原样透传；Number() 会丢末位精度，
+    // 后端按错误 id 查不到记录，会返回「对话不存在!」（这正是之前删除失败的根因）
+    await deleteChatConversationMy(item.id);
     historyList.value = historyList.value.filter((c) => c.id !== item.id);
     if (String(item.id) === conversationId.value) {
       await initConversation();
       historyOpen.value = false;
     }
     message.success('会话已删除');
-  } catch {
-    message.error('删除失败，请稍后重试');
+  } catch (e: any) {
+    // 该会话可能已被删除（例如另开页面删过）：提示具体原因并刷新列表，避免残留脏项
+    const hint = describeRequestError(e, '删除失败，请稍后重试');
+    if (hint.includes('对话不存在')) {
+      message.warning('该对话已不存在，已刷新列表');
+      await loadHistoryList();
+    } else {
+      message.error(hint);
+    }
   }
 }
 
@@ -943,12 +729,6 @@ async function handleSend(attachmentUrls?: string[]) {
     return;
   }
 
-  // 【新增：任务包 D3】出入库操作引导（不影响纯数据查询）
-  if (!hasAttachments && !guideQuestion && matchWmsGuide(content)) {
-    handleWmsGuide();
-    return;
-  }
-
   // 【新增：任务包 B】报工智能填单：命中"报工/填单/预填 + 任务编号" → 预填确认流程
   const prefillCode = matchFeedbackPrefill(content);
   if (!hasAttachments && !guideQuestion && prefillCode) {
@@ -984,6 +764,8 @@ async function handleSend(attachmentUrls?: string[]) {
     // 【识别场景标记】带附件且意图是识别/提取时，回答按纯文本展示，
     // 不渲染成业务查询卡片（识别不是查询，要求是识别不是添加）
     isRecognize: hasAttachments && /(识别|提取)/.test(content),
+    /** 思考过程（折叠展示用，可能为空） */
+    think: undefined as string | undefined,
   };
   messages.value.push(aiMsg); // AI 占位气泡（显示"正在思考"动画）
   streaming.value = true;
@@ -991,6 +773,8 @@ async function handleSend(attachmentUrls?: string[]) {
   scrollToBottom();
 
   let full = '';
+  /** 模型单独返回的思考内容（reasoningContent） */
+  let reasoning = '';
   // 流式结束互斥标记：onmessage 业务错误 / onerror / onclose / catch 可能先后触发，
   // 保证最终文案只被写入一次，避免后续回调把前面的提示覆盖掉
   let ended = false;
@@ -1004,7 +788,7 @@ async function handleSend(attachmentUrls?: string[]) {
   };
   try {
     await sendChatMessageStream(
-      conversationId.value as unknown as number,
+      conversationId.value,
       content,
       abortController.value,
       true, // 携带上下文
@@ -1025,6 +809,10 @@ async function handleSend(attachmentUrls?: string[]) {
         }
         if (!data.receive?.content && !data.receive?.reasoningContent) return;
         full += data.receive.content || '';
+        // 【思考折叠】思考过程优先取正文里的 <think> 段，其次取模型单独的 reasoningContent；
+        // 只用于气泡内折叠展示，正式回答仍走 stripThink 清洗后的正文
+        reasoning += data.receive.reasoningContent || '';
+        aiMsg.think = (extractThink(full) || reasoning).trim() || undefined;
         aiMsg.content = stripThink(full);
       },
       (err: any) => {
@@ -1068,6 +856,268 @@ function handleKeydown(e: KeyboardEvent) {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     handleSend();
+  }
+}
+
+/** ==================== 常用指令快捷条 ====================
+ * 只收录「后端已授权的 MES 业务域」（生产工单 / 任务 / 报工 / 待检 / 质检 / 工艺 / 物料 / 车间 / 设备 / 安灯 / 客户供应商），
+ * 未授权的 WMS 域（库存余额、仓库、出入库单等）不收录，避免点击后被权限守门员拒绝。 */
+interface QuickCommand {
+  icon: string;
+  label: string;
+  prompt: string;
+}
+
+const QUICK_COMMANDS: QuickCommand[] = [
+  {
+    icon: 'lucide:clipboard-list',
+    label: '查生产工单',
+    prompt: '查询最近的生产工单',
+  },
+  { icon: 'lucide:list-checks', label: '今日任务', prompt: '查询我今天的生产任务' },
+  { icon: 'lucide:hammer', label: '去报工', prompt: '我要报工' },
+  { icon: 'lucide:chart-column', label: '本周报工', prompt: '查询本周的报工记录' },
+  { icon: 'lucide:search-check', label: '待检任务', prompt: '查询待检任务' },
+  {
+    icon: 'lucide:flask-conical',
+    label: '过程检验',
+    prompt: '查询最近的过程检验单',
+  },
+  { icon: 'lucide:box', label: '物料信息', prompt: '查询物料信息' },
+  { icon: 'lucide:workflow', label: '工艺工序', prompt: '查询工艺工序' },
+  { icon: 'lucide:factory', label: '车间产线', prompt: '查询车间产线信息' },
+  { icon: 'lucide:cog', label: '设备台账', prompt: '查询设备台账' },
+  {
+    icon: 'lucide:alert-triangle',
+    label: '上报安灯',
+    prompt: '我要上报安灯异常',
+  },
+  { icon: 'lucide:users', label: '客户供应商', prompt: '查询客户信息' },
+];
+
+/** 「最近使用」记忆：最多 3 条，用过的会被置顶 */
+const RECENT_COMMAND_KEY = 'mes-ai-quick-recent';
+
+function loadRecentCommands(): string[] {
+  try {
+    const raw = localStorage.getItem(RECENT_COMMAND_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr)
+      ? arr.filter((x): x is string => typeof x === 'string').slice(0, 3)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+const recentCommandLabels = ref<string[]>(loadRecentCommands());
+
+function saveRecentCommands(labels: string[]) {
+  try {
+    localStorage.setItem(RECENT_COMMAND_KEY, JSON.stringify(labels));
+  } catch {
+    /* 存储不可用时忽略 */
+  }
+}
+
+/** 快捷指令列表：最近用过的排前面（recent 标记用于 UI 上区分） */
+const quickCommands = computed(() => {
+  const recentLabels = recentCommandLabels.value;
+  const recent = recentLabels
+    .map((label) => QUICK_COMMANDS.find((c) => c.label === label))
+    .filter((c): c is QuickCommand => !!c)
+    .map((c) => ({ ...c, recent: true }));
+  const rest = QUICK_COMMANDS.filter(
+    (c) => !recentLabels.includes(c.label),
+  ).map((c) => ({ ...c, recent: false }));
+  return [...recent, ...rest];
+});
+
+/** 点击快捷指令：填入输入框（可修改后发送）并记录「最近使用」 */
+function applyQuickCommand(cmd: QuickCommand) {
+  applyQuickIntent(cmd.prompt);
+  recentCommandLabels.value = [
+    cmd.label,
+    ...recentCommandLabels.value.filter((l) => l !== cmd.label),
+  ].slice(0, 3);
+  saveRecentCommands(recentCommandLabels.value);
+}
+
+/** ==================== 首屏快捷分析入口（MES 场景，均在已授权业务域内） ==================== */
+const WELCOME_ACTIONS = [
+  {
+    icon: 'lucide:trending-up',
+    label: '生产数据分析',
+    prompt: '查询今天生产情况',
+  },
+  {
+    icon: 'lucide:cpu',
+    label: '设备状态分析',
+    prompt: '分析当前设备异常',
+  },
+  {
+    icon: 'lucide:shield-check',
+    label: '质量异常分析',
+    prompt: '查看今日质量数据',
+  },
+  {
+    icon: 'lucide:file-text',
+    label: '生产报表生成',
+    prompt: '生成今日生产报表',
+  },
+];
+
+/** ==================== 语音输入（浏览器原生 Web Speech） ==================== */
+const voiceSupported =
+  typeof window !== 'undefined' &&
+  !!(
+    (window as any).SpeechRecognition ||
+    (window as any).webkitSpeechRecognition
+  );
+const voiceListening = ref(false);
+let recognition: any = null;
+/** 浏览器麦克风 / 语音识别仅在安全上下文（https 或 localhost）下可用 */
+const voiceSecureContext =
+  typeof window !== 'undefined' && window.isSecureContext;
+/** 本次识别是否已拿到过文字、是否已报错（用于结束时的兜底提示，避免重复打扰） */
+let voiceGotResult = false;
+let voiceErrored = false;
+
+/** 开始 / 结束语音输入：识别结果实时写入输入框，可再手动修改后发送 */
+function toggleVoice() {
+  if (!voiceSupported) {
+    message.warning('当前浏览器不支持语音输入，请使用 Chrome 或 Edge');
+    return;
+  }
+  if (!voiceSecureContext) {
+    message.warning('语音输入需要 https 或 localhost 环境，请换用 https 地址访问后重试');
+    return;
+  }
+  if (voiceListening.value) {
+    recognition?.stop();
+    return;
+  }
+  const Ctor =
+    (window as any).SpeechRecognition ||
+    (window as any).webkitSpeechRecognition;
+  recognition = new Ctor();
+  recognition.lang = 'zh-CN';
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.maxAlternatives = 1;
+  voiceGotResult = false;
+  voiceErrored = false;
+  recognition.onstart = () => {
+    voiceListening.value = true;
+  };
+  recognition.onresult = (e: any) => {
+    let text = '';
+    let finalText = '';
+    for (let i = 0; i < e.results.length; i += 1) {
+      text += e.results[i][0].transcript;
+      if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
+    }
+    if (text) {
+      voiceGotResult = true;
+      inputText.value = finalText || text;
+    }
+  };
+  recognition.onerror = (e: any) => {
+    voiceListening.value = false;
+    const err = e?.error;
+    // aborted：用户主动停止 / 面板收起，属正常中断，不提示
+    if (!err || err === 'aborted') {
+      voiceErrored = true;
+      return;
+    }
+    voiceErrored = true;
+    // 按浏览器返回的错误码给出可操作的提示（而不是笼统的"识别失败"）
+    const tips: Record<string, string> = {
+      'audio-capture': '未检测到麦克风设备，请检查设备已连接并被系统识别',
+      'bad-grammar': '语音识别失败，请重试或直接输入文字',
+      language: '当前浏览器不支持中文识别，请改用 Chrome / Edge',
+      network:
+        '浏览器语音识别服务不可达（Chrome 的语音识别依赖境外服务，国内网络常被拦截），建议改用 Edge，或直接输入文字',
+      'no-speech': '没有听到声音，请靠近麦克风再说一次',
+      'not-allowed': '麦克风权限被拒绝：请点地址栏的锁图标允许麦克风后重试',
+      'service-not-allowed': '浏览器禁用了语音识别服务，请检查浏览器设置',
+    };
+    message.warning(
+      tips[err] || `语音识别失败（${err}），请重试或直接输入文字`,
+    );
+  };
+  recognition.onend = () => {
+    voiceListening.value = false;
+    // 既没报错、也没识别到任何文字：多为没说话或麦克风没拾到声音
+    if (!voiceErrored && !voiceGotResult) {
+      message.warning('未识别到语音内容，请确认麦克风可用、音量正常后重试');
+    }
+  };
+  voiceListening.value = true;
+  try {
+    recognition.start();
+  } catch {
+    voiceListening.value = false;
+    message.warning('语音识别启动失败，请重试或直接输入文字');
+  }
+}
+
+/** 释放语音识别（组件卸载时调用） */
+function stopVoice() {
+  try {
+    recognition?.abort?.();
+  } catch {
+    /* 忽略 */
+  }
+  recognition = null;
+  voiceListening.value = false;
+}
+
+/** ==================== 思考过程提取 & 复制 ==================== */
+/** 提取原始文本中的 <think> 段（可能多段），供气泡内折叠展示 */
+function extractThink(raw: string): string {
+  if (!raw) return '';
+  const re = /<think>([\s\S]*?)<\/think>/gi;
+  const parts: string[] = [];
+  let m = re.exec(raw);
+  while (m) {
+    const seg = (m[1] || '').trim();
+    if (seg) parts.push(seg);
+    m = re.exec(raw);
+  }
+  return parts.join('\n\n');
+}
+
+/** 已复制过的消息下标（用于按钮态反馈） */
+const copiedIndex = ref(-1);
+let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** 复制 AI 回答正文 */
+async function copyMessage(msg: { content: string }, index: number) {
+  const text = msg.content;
+  if (!text) return;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      // 兜底：非安全上下文（http）下 clipboard API 不可用
+      const el = document.createElement('textarea');
+      el.value = text;
+      el.style.position = 'fixed';
+      el.style.opacity = '0';
+      document.body.append(el);
+      el.select();
+      document.execCommand('copy');
+      el.remove();
+    }
+    copiedIndex.value = index;
+    message.success('已复制回答');
+    clearTimeout(copiedTimer);
+    copiedTimer = setTimeout(() => {
+      copiedIndex.value = -1;
+    }, 1500);
+  } catch {
+    message.error('复制失败，请手动选中文本复制');
   }
 }
 
@@ -1303,73 +1353,56 @@ function handleWindowResize() {
   scrollToBottom();
 }
 
-watch(
-  () => [expanded.value],
-  () => {
-    syncBodyAvoid(expanded.value);
-    if (expanded.value) scrollToBottom();
-  },
-);
+/** Esc 收起面板（与顶栏关闭按钮一致，仅收起、不中断生成本身） */
+function handleGlobalKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && expanded.value) setExpanded(false);
+}
 
 onMounted(() => {
-  syncBodyAvoid(expanded.value);
   initConversation();
+  // 窗口尺寸变化时保持消息区滚动在底部
   window.addEventListener('resize', handleWindowResize);
-  // 视口尺寸变化时把悬浮球/面板拉回可视范围
-  window.addEventListener('resize', clampAllToViewport);
+  window.addEventListener('keydown', handleGlobalKeydown);
 });
 
 onBeforeUnmount(() => {
   abortController.value?.abort();
-  document.body.classList.remove('mes-ai-panel-open');
+  stopVoice();
+  clearTimeout(copiedTimer);
   window.removeEventListener('resize', handleWindowResize);
-  window.removeEventListener('resize', clampAllToViewport);
+  window.removeEventListener('keydown', handleGlobalKeydown);
 });
 </script>
 
 <template>
-  <!-- 收起状态：圆形悬浮按钮（可拖拽移动位置，点击展开） -->
-  <Tooltip v-if="!expanded" title="MES 智能助手" placement="left">
+  <!-- 收起状态：右下角 AI 助手悬浮球（固定 right24/bottom24，图标本身即视觉主体） -->
+  <Tooltip v-if="!expanded" title="AI 智能助手" placement="left">
     <div
       class="mes-ai-fab"
-      :style="fabStyle"
-      title="按住拖拽移动位置"
-      @mousedown="onDragStart($event, 'fab')"
-      @click="onFabClick"
+      :class="{ 'is-thinking': streaming }"
+      @click="setExpanded(true)"
     >
-      <IconifyIcon icon="lucide:bot" :size="26" />
+      <img :src="assistantIcon" alt="AI 智能助手" class="mes-ai-fab__img" />
     </div>
   </Tooltip>
 
-  <!-- 展开状态：完整对话面板（白底黑字，按住标题栏可拖拽移动） -->
+  <!-- 展开状态：右下角浮动对话面板（380×520，紧贴悬浮球上方，不挤压页面） -->
   <transition name="mes-ai-slide">
     <div
       v-show="expanded"
       class="mes-ai-panel"
-      :class="{ 'mes-ai-panel--max': maximized }"
-      :style="panelStyle"
+      role="dialog"
+      aria-label="AI 智能助手"
     >
-      <!-- 头部：标题（拖拽把手） + 最大化 / 新会话 / 最小化 -->
-      <div
-        class="mes-ai-header"
-        :class="{ 'mes-ai-header--draggable': !maximized }"
-        @mousedown="onDragStart($event, 'panel')"
-      >
+      <!-- 顶栏：机器人头像 + 标题/副标题 + 历史 / 重开 / 最小化 / 关闭 -->
+      <div class="mes-ai-header">
+        <img :src="assistantIcon" alt="" class="mes-ai-header__avatar" />
         <div class="mes-ai-header__title">
-          <IconifyIcon icon="lucide:bot" :size="18" class="mes-ai-primary" />
-          <span>MES 智能助手</span>
-          <span class="mes-ai-header__sub">{{ roleName }}</span>
+          <span class="mes-ai-header__name">AI 智能助手</span>
+          <span class="mes-ai-header__sub">MES 生产运营智能分析</span>
         </div>
-        <div class="mes-ai-header__actions" @mousedown.stop>
-          <Tooltip title="最大化/还原" placement="top">
-            <span class="mes-ai-icon-btn" @click="toggleMaximized">
-              <IconifyIcon
-                :icon="maximized ? 'lucide:minimize' : 'lucide:maximize'"
-                :size="14"
-              />
-            </span>
-          </Tooltip>
-          <Tooltip title="历史会话" placement="top">
+        <div class="mes-ai-header__actions">
+          <Tooltip title="历史会话" placement="bottom">
             <span
               class="mes-ai-icon-btn"
               :class="{ 'mes-ai-icon-btn--active': historyOpen }"
@@ -1378,14 +1411,19 @@ onBeforeUnmount(() => {
               <IconifyIcon icon="lucide:history" :size="14" />
             </span>
           </Tooltip>
-          <Tooltip title="重新开始会话" placement="top">
+          <Tooltip title="重新开始会话" placement="bottom">
             <span class="mes-ai-icon-btn" @click="initConversation">
               <IconifyIcon icon="lucide:rotate-ccw" :size="14" />
             </span>
           </Tooltip>
-          <Tooltip title="最小化" placement="top">
+          <Tooltip title="最小化" placement="bottom">
             <span class="mes-ai-icon-btn" @click="setExpanded(false)">
-              <IconifyIcon icon="lucide:minimize-2" :size="14" />
+              <IconifyIcon icon="lucide:minus" :size="14" />
+            </span>
+          </Tooltip>
+          <Tooltip title="关闭（停止本次生成）" placement="bottom">
+            <span class="mes-ai-icon-btn" @click="closePanel">
+              <IconifyIcon icon="lucide:x" :size="14" />
             </span>
           </Tooltip>
         </div>
@@ -1412,7 +1450,7 @@ onBeforeUnmount(() => {
               {{ item.title || '未命名会话' }}
             </div>
             <div class="mes-ai-history__time">
-              {{ item.updateTime || item.createTime || '' }}
+              {{ formatHistoryTime(item.updateTime || item.createTime) }}
             </div>
           </div>
           <span
@@ -1427,6 +1465,30 @@ onBeforeUnmount(() => {
 
       <!-- 消息区：占面板剩余高度，内部滚动，不带动整页滚动 -->
       <div v-show="!historyOpen" ref="messageListRef" class="mes-ai-messages">
+        <!-- 首次打开：欢迎内容 + 4 个 MES 快捷分析入口（点击即填入输入框） -->
+        <div v-if="messages.length === 0" class="mes-ai-welcome">
+          <img :src="assistantIcon" alt="" class="mes-ai-welcome__logo" />
+          <div class="mes-ai-welcome__title">您好，我是 MES 智能助手</div>
+          <div class="mes-ai-welcome__desc">
+            我可以帮助您快速查询和分析生产运营数据。
+          </div>
+          <div class="mes-ai-welcome__actions">
+            <button
+              v-for="action in WELCOME_ACTIONS"
+              :key="action.label"
+              type="button"
+              class="mes-ai-action"
+              @click="applyQuickIntent(action.prompt)"
+            >
+              <IconifyIcon :icon="action.icon" :size="14" />
+              <span>{{ action.label }}</span>
+            </button>
+          </div>
+          <div class="mes-ai-welcome__tip">
+            支持生产工单、任务、报工、质检、设备等业务数据的查询与分析
+          </div>
+        </div>
+
         <div
           v-for="(msg, index) in messages"
           :key="index"
@@ -1438,7 +1500,24 @@ onBeforeUnmount(() => {
             <IconifyIcon icon="lucide:bot" :size="16" />
           </div>
           <div class="mes-ai-bubble-wrap">
-            <div class="mes-ai-bubble">
+            <div
+              class="mes-ai-bubble"
+              :class="{
+                'is-streaming':
+                  streaming &&
+                  index === messages.length - 1 &&
+                  msg.role === 'assistant' &&
+                  !!msg.content,
+              }"
+            >
+              <!-- 【思考折叠】模型思考过程默认收起，点开可查看（正文已剔除思考内容） -->
+              <details v-if="msg.think" class="mes-ai-think">
+                <summary>
+                  <IconifyIcon icon="lucide:brain-circuit" :size="12" />
+                  <span>思考过程</span>
+                </summary>
+                <div class="mes-ai-think__body">{{ msg.think }}</div>
+              </details>
               <!-- AI 回复（关键格式化处理位置 3）：业务数据渲染成卡片，普通问答走清洗后的文本 -->
               <template v-if="msg.role === 'assistant' && msg.content">
                 <div
@@ -1549,8 +1628,23 @@ onBeforeUnmount(() => {
                 </span>
               </div>
             </div>
-            <!-- 消息时间戳轻量展示 -->
-            <div class="mes-ai-time">{{ msg.time }}</div>
+            <!-- 消息时间戳 + 复制（复制仅对 AI 回答提供） -->
+            <div class="mes-ai-meta">
+              <span class="mes-ai-time">{{ msg.time }}</span>
+              <Tooltip
+                v-if="msg.role === 'assistant' && msg.content"
+                title="复制回答"
+                placement="top"
+              >
+                <span class="mes-ai-copy" @click="copyMessage(msg, index)">
+                  <IconifyIcon
+                    :icon="copiedIndex === index ? 'lucide:check' : 'lucide:copy'"
+                    :size="12"
+                  />
+                  <em>{{ copiedIndex === index ? '已复制' : '复制' }}</em>
+                </span>
+              </Tooltip>
+            </div>
           </div>
         </div>
       </div>
@@ -1615,12 +1709,28 @@ onBeforeUnmount(() => {
             </template>
           </div>
         </div>
+        <!-- 常用指令快捷条：输入框为空时展示，点击即填（最近用过的排前面） -->
+        <div v-if="!inputText?.trim()" class="mes-ai-quick">
+          <span
+            v-for="cmd in quickCommands"
+            :key="cmd.label"
+            class="mes-ai-quick__chip"
+            :class="{ 'is-recent': cmd.recent }"
+            @click="applyQuickCommand(cmd)"
+          >
+            <IconifyIcon
+              :icon="cmd.recent ? 'lucide:history' : cmd.icon"
+              :size="12"
+            />
+            {{ cmd.label }}
+          </span>
+        </div>
         <TextArea
           ref="intentInputRef"
           v-model:value="inputText"
-          :auto-size="{ minRows: 2, maxRows: 6 }"
+          :auto-size="{ minRows: 2, maxRows: 4 }"
           class="mes-ai-textarea"
-          placeholder="发消息，Enter 发送，Shift+Enter 换行"
+          placeholder="输入您想查询的问题..."
           @keydown="handleKeydown"
         />
         <div class="mes-ai-input__bar">
@@ -1633,16 +1743,40 @@ onBeforeUnmount(() => {
             >
               <IconifyIcon icon="lucide:paperclip" :size="14" />
             </span>
+            <Tooltip
+              :title="
+                voiceSupported
+                  ? voiceListening
+                    ? '停止语音输入'
+                    : '语音输入（普通话）'
+                  : '当前浏览器不支持语音输入，请用 Chrome / Edge'
+              "
+              placement="top"
+            >
+              <span
+                class="mes-ai-icon-btn mes-ai-mic"
+                :class="{ 'is-listening': voiceListening }"
+                @click="toggleVoice"
+              >
+                <IconifyIcon icon="lucide:mic" :size="14" />
+              </span>
+            </Tooltip>
             <span class="mes-ai-input__hint">Enter 发送 · Shift+Enter 换行</span>
           </div>
-          <!-- [修改点1] 按钮文本与标签同级书写，不再产生首尾空白字符 -->
+          <!-- 发送：圆形图标按钮（克制、与工业后台控件尺寸一致） -->
           <Button
             type="primary"
+            shape="circle"
             class="mes-ai-send"
             :loading="streaming"
             :disabled="!inputText?.trim() || !conversationReady"
+            title="发送（Enter）"
             @click="handleSend()"
-          >发送</Button>
+          >
+            <template #icon>
+              <IconifyIcon icon="lucide:send" :size="15" />
+            </template>
+          </Button>
         </div>
         <!-- 【新增：导入解析】隐藏的文件选择框（Word/Excel/Txt + 图片：图片走视觉识别录入） -->
         <input
@@ -1674,102 +1808,92 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-/* ========== 面板：固定白底黑字（不随主题变化，保证清晰可读） ========== */
+/* ==========================================================================
+ * 主题变量层：颜色全部走变量，自动跟随 vben 深浅色主题
+ * （主题变量是 HSL 三元组，如 `--primary: 212 100% 45%`，因此必须用 hsl() 包裹）
+ * ========================================================================== */
+.mes-ai-panel,
+.mes-ai-fab {
+  --mes-primary-hsl: var(--primary, 212 100% 45%);
+  --mes-primary: hsl(var(--mes-primary-hsl));
+  --mes-primary-soft: hsl(var(--mes-primary-hsl) / 8%);
+  --mes-primary-border: hsl(var(--mes-primary-hsl) / 35%);
+  --mes-surface: hsl(var(--card, 0 0% 100%));
+  --mes-surface-2: hsl(var(--muted, 240 4.8% 95.9%));
+  --mes-fill: hsl(var(--accent, 240 5% 96%));
+  --mes-fg: hsl(var(--foreground, 210 6% 21%));
+  --mes-fg-strong: hsl(var(--card-foreground, 222.2 84% 4.9%));
+  --mes-fg-muted: hsl(var(--muted-foreground, 240 3.8% 46.1%));
+  --mes-fg-subtle: hsl(var(--muted-foreground, 240 3.8% 46.1%) / 70%);
+  --mes-border: hsl(var(--border, 240 5.9% 90%));
+  --mes-border-strong: hsl(var(--input, 240 5.9% 90%));
+  --mes-danger: hsl(var(--destructive, 359 100% 65%));
+  --mes-on-primary: hsl(var(--primary-foreground, 0 0% 98%));
+}
+
+/* ========== 面板：右下角浮动卡片（380×520，贴悬浮球上方，不挤压页面） ========== */
 .mes-ai-panel {
   position: fixed;
+  right: 24px;
+  bottom: 88px;
   z-index: 1200;
   display: flex;
   flex-direction: column;
+  width: 380px;
+  height: min(520px, calc(100vh - 112px));
   overflow: hidden;
-  color: #1f2937;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  box-shadow: 0 6px 24px rgb(0 0 0 / 22%);
-}
-
-/* ========== 最大化状态专属美化 ========== */
-/* 更深的悬浮阴影 + 更大圆角，与页面内容形成清晰层次 */
-.mes-ai-panel--max {
+  color: var(--mes-fg);
+  background: var(--mes-surface);
+  border: 1px solid var(--mes-border);
   border-radius: 14px;
+  /* 很轻的主阴影 + 一抹极淡蓝色边缘光：有层次但不喧宾夺主 */
   box-shadow:
-    0 24px 64px rgb(15 23 42 / 28%),
-    0 2px 8px rgb(15 23 42 / 10%);
+    0 10px 30px rgb(15 23 42 / 12%),
+    0 0 0 1px hsl(var(--mes-primary-hsl) / 6%);
 }
 
-/* 标题栏加高加重，拖拽把手更明显 */
-.mes-ai-panel--max .mes-ai-header {
-  padding: 14px 20px;
-}
-
-.mes-ai-panel--max .mes-ai-header__title {
-  font-size: 15px;
-  font-weight: 600;
-}
-
-/* 消息区：大空间下的呼吸感 */
-.mes-ai-panel--max .mes-ai-messages {
-  padding: 18px 22px;
-}
-
-/* 气泡放宽（大屏下长回答不挤） */
-.mes-ai-panel--max .mes-ai-bubble {
-  max-width: 86%;
-  padding: 10px 14px;
-}
-
-/* 正文与回答字号微增 */
-.mes-ai-panel--max .mes-ai-bubble,
-.mes-ai-panel--max .mes-ai-md {
-  font-size: 13.5px;
-}
-
-/* 输入区加宽内边距，与消息区对齐 */
-.mes-ai-panel--max .mes-ai-input {
-  padding: 14px 20px 10px;
-}
-
-.mes-ai-panel--max .mes-ai-textarea {
-  min-height: 52px;
-}
-
-/* 快捷选项 chips 稍大 */
-.mes-ai-panel--max .mes-ai-option {
-  padding: 5px 14px;
-  font-size: 13px;
-  border-radius: 14px;
-}
-
-/* ========== 头部 ========== */
+/* ========== 顶栏：机器人头像 + 标题/副标题 + 操作 ========== */
 .mes-ai-header {
   display: flex;
   flex-shrink: 0;
+  gap: 10px;
   align-items: center;
-  justify-content: space-between;
-  padding: 10px 12px;
-  background: #ffffff;
-  border-bottom: 1px solid #e5e7eb;
+  padding: 12px 14px;
+  background: var(--mes-surface);
+  border-bottom: 1px solid var(--mes-border);
 }
 
-/* 非最大化时标题栏作为拖拽把手 */
-.mes-ai-header--draggable {
-  cursor: move;
-  user-select: none;
+/* 顶部很小的机器人头像（与悬浮球同一视觉资源，不重复绘制） */
+.mes-ai-header__avatar {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
 }
 
 .mes-ai-header__title {
   display: flex;
-  gap: 6px;
-  align-items: center;
-  font-size: 14px;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+  text-align: left;
+}
+
+.mes-ai-header__name {
+  font-size: 13.5px;
   font-weight: 600;
-  color: #111827;
+  color: var(--mes-fg-strong);
 }
 
 .mes-ai-header__sub {
-  font-size: 12px;
+  margin-top: 2px;
+  overflow: hidden;
+  font-size: 11.5px;
   font-weight: 400;
-  color: #6b7280;
+  color: var(--mes-fg-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mes-ai-header__actions {
@@ -1783,20 +1907,20 @@ onBeforeUnmount(() => {
   justify-content: center;
   width: 24px;
   height: 24px;
-  color: #4b5563;
+  color: var(--mes-fg-muted);
   cursor: pointer;
-  background: #f3f4f6;
+  background: var(--mes-fill);
   border-radius: 6px;
   transition: all 0.2s;
 }
 
 .mes-ai-icon-btn:hover {
-  color: #1677ff;
-  background: #e6f0ff;
+  color: var(--mes-primary);
+  background: var(--mes-primary-soft);
 }
 
 .mes-ai-primary {
-  color: #1677ff;
+  color: var(--mes-primary);
 }
 
 /* ========== 消息区：占面板剩余高度，浅灰底衬托白色气泡，内部滚动 ========== */
@@ -1805,7 +1929,7 @@ onBeforeUnmount(() => {
   min-height: 0;
   padding: 12px;
   overflow-y: auto; /* 溢出只做内部滚动，不带动整页 */
-  background: #f9fafb;
+  background: var(--mes-surface-2);
 }
 
 .mes-ai-row {
@@ -1825,8 +1949,8 @@ onBeforeUnmount(() => {
   justify-content: center;
   width: 28px;
   height: 28px;
-  color: #ffffff;
-  background: #1677ff;
+  color: var(--mes-on-primary);
+  background: var(--mes-primary);
   border-radius: 50%;
 }
 
@@ -1850,15 +1974,15 @@ onBeforeUnmount(() => {
 }
 
 .is-assistant .mes-ai-bubble {
-  color: #1f2937;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  color: var(--mes-fg);
+  background: var(--mes-surface);
+  border: 1px solid var(--mes-border);
   border-top-left-radius: 2px;
 }
 
 .is-user .mes-ai-bubble {
-  color: #ffffff;
-  background: #1677ff;
+  color: var(--mes-on-primary);
+  background: var(--mes-primary);
   border-top-right-radius: 2px;
 }
 
@@ -1875,7 +1999,7 @@ onBeforeUnmount(() => {
 .mes-ai-doc {
   padding-top: 6px;
   margin-top: 6px;
-  border-top: 1px dashed #e5e7eb;
+  border-top: 1px dashed var(--mes-border);
 }
 
 /* 【新增】澄清选项：可点击的快捷选项 chips */
@@ -1885,24 +2009,24 @@ onBeforeUnmount(() => {
   gap: 6px;
   padding-top: 6px;
   margin-top: 6px;
-  border-top: 1px dashed #e5e7eb;
+  border-top: 1px dashed var(--mes-border);
 }
 
 .mes-ai-option {
   padding: 3px 10px;
   font-size: 12.5px;
-  color: #1677ff;
+  color: var(--mes-primary);
   cursor: pointer;
-  background: #f0f7ff;
-  border: 1px solid #91caff;
+  background: var(--mes-primary-soft);
+  border: 1px solid var(--mes-primary-border);
   border-radius: 12px;
   transition: all 0.15s;
 }
 
 .mes-ai-option:hover {
-  color: #fff;
-  background: #1677ff;
-  border-color: #1677ff;
+  color: var(--mes-on-primary);
+  background: var(--mes-primary);
+  border-color: var(--mes-primary);
 }
 
 /* 【新增：导入解析】输入区左侧（附件按钮 + 快捷键提示） */
@@ -1914,7 +2038,7 @@ onBeforeUnmount(() => {
 }
 
 .mes-ai-attach {
-  color: #4b5563;
+  color: var(--mes-fg-muted);
 }
 
 /* 隐藏原生文件选择框 */
@@ -1942,7 +2066,7 @@ onBeforeUnmount(() => {
 /* 段落：小间距，避免大面积留白 */
 .mes-ai-md :deep(p) {
   margin: 0 0 6px;
-  color: #1f2937;
+  color: var(--mes-fg);
 }
 
 .mes-ai-md :deep(p:last-child) {
@@ -1954,7 +2078,7 @@ onBeforeUnmount(() => {
 .mes-ai-md :deep(ol) {
   padding-left: 20px;
   margin: 2px 0 8px;
-  color: #1f2937;
+  color: var(--mes-fg);
 }
 
 .mes-ai-md :deep(li) {
@@ -1975,7 +2099,7 @@ onBeforeUnmount(() => {
 /* 加粗文字：深色加粗突出 */
 .mes-ai-md :deep(strong) {
   font-weight: 600;
-  color: #111827;
+  color: var(--mes-fg-strong);
 }
 
 /* 标题：小尺寸加粗 + 上下小间距（气泡内不需要大标题） */
@@ -1984,7 +2108,7 @@ onBeforeUnmount(() => {
 .mes-ai-md :deep(h3),
 .mes-ai-md :deep(h4) {
   font-weight: 600;
-  color: #111827;
+  color: var(--mes-fg-strong);
   margin: 8px 0 4px;
 }
 
@@ -1999,8 +2123,8 @@ onBeforeUnmount(() => {
 .mes-ai-md :deep(code) {
   padding: 1px 4px;
   font-size: 12px;
-  color: #1f2937;
-  background: #f3f4f6;
+  color: var(--mes-fg);
+  background: var(--mes-fill);
   border-radius: 4px;
 }
 
@@ -2011,8 +2135,8 @@ onBeforeUnmount(() => {
   overflow-x: auto;
   font-size: 12px;
   line-height: 1.5;
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
+  background: var(--mes-surface-2);
+  border: 1px solid var(--mes-border);
   border-radius: 8px;
 }
 
@@ -2025,9 +2149,9 @@ onBeforeUnmount(() => {
 .mes-ai-md :deep(blockquote) {
   padding: 4px 10px;
   margin: 4px 0 8px;
-  color: #4b5563;
-  background: #f8fafc;
-  border-left: 3px solid #1677ff;
+  color: var(--mes-fg-muted);
+  background: var(--mes-surface-2);
+  border-left: 3px solid var(--mes-primary);
   border-radius: 0 6px 6px 0;
 }
 
@@ -2047,29 +2171,29 @@ onBeforeUnmount(() => {
 .mes-ai-md :deep(td) {
   padding: 4px 8px;
   text-align: left;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--mes-border);
 }
 
 .mes-ai-md :deep(th) {
   font-weight: 600;
-  color: #374151;
-  background: #f3f4f6;
+  color: var(--mes-fg-strong);
+  background: var(--mes-fill);
 }
 
 .mes-ai-md :deep(tr:nth-child(2n) td) {
-  background: #fafafa;
+  background: var(--mes-surface-2);
 }
 
 /* 分隔线 */
 .mes-ai-md :deep(hr) {
   margin: 8px 0;
   border: none;
-  border-top: 1px dashed #e5e7eb;
+  border-top: 1px dashed var(--mes-border);
 }
 
 /* 链接 */
 .mes-ai-md :deep(a) {
-  color: #1677ff;
+  color: var(--mes-primary);
   text-decoration: none;
 }
 
@@ -2088,7 +2212,7 @@ onBeforeUnmount(() => {
 .mes-ai-typing i {
   width: 6px;
   height: 6px;
-  background: #9ca3af;
+  background: var(--mes-fg-subtle);
   border-radius: 50%;
   animation: mes-ai-blink 1.2s infinite ease-in-out;
 }
@@ -2105,7 +2229,7 @@ onBeforeUnmount(() => {
   margin-left: 4px;
   font-size: 12px;
   font-style: normal;
-  color: #6b7280;
+  color: var(--mes-fg-muted);
 }
 
 @keyframes mes-ai-blink {
@@ -2125,23 +2249,23 @@ onBeforeUnmount(() => {
 .mes-ai-time {
   margin-top: 4px;
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--mes-fg-subtle);
 }
 
 /* ========== 输入区：白色圆角输入卡片 + 底部操作行（固定高度不挤压消息区） ========== */
 .mes-ai-input {
   flex-shrink: 0;
   padding: 10px 12px 8px;
-  background: #ffffff;
-  border-top: 1px solid #e5e7eb;
+  background: var(--mes-surface);
+  border-top: 1px solid var(--mes-border);
 }
 
 /* ========== 待发送附件区：chip + 快捷意图（挂在输入框上方） ========== */
 .mes-ai-pending {
   margin-bottom: 8px;
   padding: 8px;
-  background: #f9fafb;
-  border: 1px dashed #d1d5db;
+  background: var(--mes-surface-2);
+  border: 1px dashed var(--mes-border-strong);
   border-radius: 10px;
 }
 
@@ -2157,9 +2281,9 @@ onBeforeUnmount(() => {
   max-width: 100%;
   padding: 2px 6px;
   font-size: 12px;
-  color: #1f2937;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  color: var(--mes-fg);
+  background: var(--mes-surface);
+  border: 1px solid var(--mes-border);
   border-radius: 8px;
 }
 
@@ -2174,7 +2298,7 @@ onBeforeUnmount(() => {
 .mes-ai-pending__icon {
   flex-shrink: 0;
   margin-right: 4px;
-  color: #6b7280;
+  color: var(--mes-fg-muted);
 }
 
 .mes-ai-pending__name {
@@ -2189,12 +2313,12 @@ onBeforeUnmount(() => {
   margin-left: 2px;
   font-size: 14px;
   line-height: 1;
-  color: #9ca3af;
+  color: var(--mes-fg-subtle);
   cursor: pointer;
 }
 
 .mes-ai-pending__remove:hover {
-  color: #ef4444;
+  color: var(--mes-danger);
 }
 
 .mes-ai-pending__intents {
@@ -2206,25 +2330,25 @@ onBeforeUnmount(() => {
 
 .mes-ai-pending__intent {
   font-size: 12px;
-  color: #1677ff;
-  background: #ffffff;
-  border-color: #bfdbfe;
+  color: var(--mes-primary);
+  background: var(--mes-surface);
+  border-color: var(--mes-primary-border);
   border-radius: 8px;
 }
 
 /* 输入卡片：白底圆角，文字黑色，聚焦高亮蓝边 */
 .mes-ai-textarea {
   font-size: 13px;
-  color: #1f2937;
-  background: #ffffff;
-  border: 1px solid #d1d5db;
+  color: var(--mes-fg);
+  background: var(--mes-surface);
+  border: 1px solid var(--mes-border-strong);
   border-radius: 10px;
   transition: border-color 0.2s;
 }
 
 .mes-ai-textarea:focus,
 .mes-ai-textarea:focus-within {
-  border-color: #1677ff;
+  border-color: var(--mes-primary);
 }
 
 /* 底部操作行：左侧快捷键提示 + 右侧发送按钮 */
@@ -2237,74 +2361,116 @@ onBeforeUnmount(() => {
 
 .mes-ai-input__hint {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--mes-fg-subtle);
 }
 
-/* [修改点2] 发送按钮：去除写死宽度与多余留白，尺寸贴合文字、内容严格居中 */
+/* 发送：圆形图标按钮（30px，与顶栏图标按钮同一尺寸体系，克制不抢眼） */
 .mes-ai-send {
   display: inline-flex;
-  flex: none; /* 不被底部操作行拉伸 */
+  flex: none;
   align-items: center;
   justify-content: center;
-  width: auto; /* 宽度由文字 + 内边距决定 */
-  min-width: 56px; /* 仅保留最小可点击宽度，不再是固定的 84px */
-  height: 28px;
-  padding: 0 12px; /* 收紧左右内边距 */
-  font-size: 13px;
-  line-height: 1; /* 去掉行高造成的上下留白 */
-  white-space: nowrap; /* 文字不换行 */
-  border-radius: 6px;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 50%;
 }
 
-/* [修改点3] 按钮内部文本节点：清掉首尾空白、字间距归零，保证视觉居中 */
+/* 图标严格居中（antd 圆形按钮默认行高会带来约 1px 偏移） */
+.mes-ai-send :deep(.anticon),
 .mes-ai-send :deep(span) {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   margin: 0;
+  line-height: 1;
   letter-spacing: normal;
-  white-space: nowrap;
 }
 
-/* loading 态：图标与文字共用同一套内边距，不因空格产生偏移 */
 .mes-ai-send.ant-btn-loading {
-  padding-inline: 12px;
+  padding-inline: 0;
 }
 
-/* ========== 收起状态：右下角圆形悬浮按钮 ========== */
+/* ========== 收起状态：右下角 AI 助手悬浮球 ==========
+ * 图标本身即视觉主体（图片自带蓝色玻璃底盘），容器透明，不额外套大面积纯色圆底；
+ * 阴影与光晕来自容器圆形 border-box —— hover 仅轻微放大 + 上浮，不加旋转/弹跳等花哨动画。 */
 .mes-ai-fab {
   position: fixed;
+  right: 24px;
+  bottom: 24px;
   z-index: 1200;
-  user-select: none;
-  touch-action: none;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 52px;
   height: 52px;
-  color: #ffffff;
   cursor: pointer;
-  background: #1677ff;
+  user-select: none;
+  background: transparent;
   border-radius: 50%;
-  box-shadow: 0 4px 12px rgb(22 119 255 / 40%);
-  transition: transform 0.2s;
+  /* 光晕取青蓝调，与图标自带的青色边缘光衔接（克制的轻微发光，非霓虹） */
+  box-shadow: 0 6px 20px rgb(37 99 235 / 22%);
+  transition:
+    transform 0.22s ease,
+    box-shadow 0.22s ease;
+}
+
+.mes-ai-fab__img {
+  display: block;
+  width: 52px;
+  height: 52px;
+  pointer-events: none;
+  user-select: none;
+  object-fit: contain;
 }
 
 .mes-ai-fab:hover {
-  transform: scale(1.08);
+  transform: scale(1.06) translateY(-2px);
+  box-shadow:
+    0 10px 26px rgb(37 99 235 / 30%),
+    0 0 0 4px rgb(56 189 248 / 12%);
 }
 
-/* ========== 展开/收起过渡 ========== */
+.mes-ai-fab:active {
+  transform: scale(1.02) translateY(-1px);
+}
+
+/* 思考中：外圈缓慢呼吸光晕（不旋转图标的「AI 正在工作」提示，极其克制） */
+.mes-ai-fab.is-thinking::after {
+  position: absolute;
+  inset: -5px;
+  content: '';
+  border: 2px solid rgb(56 189 248 / 38%);
+  border-radius: 50%;
+  animation: mes-ai-breath 2.4s ease-in-out infinite;
+}
+
+@keyframes mes-ai-breath {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.96);
+  }
+
+  50% {
+    opacity: 0.9;
+    transform: scale(1.06);
+  }
+}
+
+/* ========== 展开/收起过渡：右下角向上滑入 + 淡入 ========== */
 .mes-ai-slide-enter-active,
 .mes-ai-slide-leave-active {
   transition:
-    opacity 0.25s ease,
-    transform 0.25s ease;
+    opacity 0.24s ease,
+    transform 0.24s ease;
 }
 
 .mes-ai-slide-enter-from,
 .mes-ai-slide-leave-to {
   opacity: 0;
-  transform: translateY(16px);
+  transform: translateY(10px);
 }
 
 /* ========== 业务数据卡片（气泡内轻量卡片，白底面板下浅灰蓝底，深浅主题均清晰） ========== */
@@ -2313,8 +2479,8 @@ onBeforeUnmount(() => {
   max-height: 40vh; /* 长内容卡片内部滚动 */
   padding: 10px 12px;
   overflow-y: auto;
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
+  background: var(--mes-surface-2);
+  border: 1px solid var(--mes-border);
   border-radius: 8px; /* 细微圆角 */
 }
 
@@ -2323,13 +2489,13 @@ onBeforeUnmount(() => {
   margin-bottom: 2px;
   font-size: 13px;
   font-weight: 600;
-  color: #111827;
-  border-bottom: 1px solid #e5e7eb;
+  color: var(--mes-fg-strong);
+  border-bottom: 1px solid var(--mes-border);
 }
 
 .mes-ai-card__item {
   padding: 7px 0;
-  border-bottom: 1px dashed #e5e7eb; /* 柔和分隔线 */
+  border-bottom: 1px dashed var(--mes-border); /* 柔和分隔线 */
 }
 
 .mes-ai-card__item:last-child {
@@ -2346,11 +2512,11 @@ onBeforeUnmount(() => {
 .mes-ai-card__label {
   flex-shrink: 0;
   font-weight: 600; /* 标签加粗区分 */
-  color: #374151;
+  color: var(--mes-fg-strong);
 }
 
 .mes-ai-card__value {
-  color: #1f2937;
+  color: var(--mes-fg);
   word-break: break-all; /* 长编号/名称自动换行不溢出 */
 }
 
@@ -2360,7 +2526,7 @@ onBeforeUnmount(() => {
 }
 
 .mes-ai-card::-webkit-scrollbar-thumb {
-  background: #d1d5db;
+  background: var(--mes-border-strong);
   border-radius: 3px;
 }
 
@@ -2368,16 +2534,15 @@ onBeforeUnmount(() => {
   background: transparent;
 }
 
-/* ========== 历史会话列表 ========== */
+/* ========== 历史会话列表（占满头部以下的剩余空间，自动适应头部高度） ========== */
 .mes-ai-history {
-  position: absolute;
-  inset: 48px 0 0; /* 覆盖消息区（头部以下） */
-  z-index: 5;
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
-  overflow-y: auto;
+  min-height: 0;
   padding: 10px;
-  background: #f8fafc;
+  overflow-y: auto;
+  background: var(--mes-surface-2);
 }
 
 .mes-ai-history__item {
@@ -2387,26 +2552,26 @@ onBeforeUnmount(() => {
   padding: 9px 11px;
   margin-bottom: 6px;
   cursor: pointer;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: var(--mes-surface);
+  border: 1px solid var(--mes-border);
   border-radius: 8px;
   transition: border-color 0.2s;
 }
 
 .mes-ai-history__item:hover {
-  border-color: #1677ff;
+  border-color: var(--mes-primary);
 }
 
 .mes-ai-history__item.is-current {
-  background: #eff6ff;
-  border-color: #93c5fd;
+  background: var(--mes-primary-soft);
+  border-color: var(--mes-primary-border);
 }
 
 .mes-ai-history__title {
   max-width: 240px;
   overflow: hidden;
   font-size: 13px;
-  color: #1f2937;
+  color: var(--mes-fg);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2414,75 +2579,316 @@ onBeforeUnmount(() => {
 .mes-ai-history__time {
   margin-top: 3px;
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--mes-fg-subtle);
 }
 
 .mes-ai-history__del {
   flex-shrink: 0;
   padding: 4px;
-  color: #9ca3af;
+  color: var(--mes-fg-subtle);
   cursor: pointer;
 }
 
 .mes-ai-history__del:hover {
-  color: #ef4444;
+  color: var(--mes-danger);
 }
 
 .mes-ai-history__loading,
 .mes-ai-history__empty {
   padding: 24px 0;
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--mes-fg-subtle);
   text-align: center;
 }
 
 .mes-ai-icon-btn--active {
-  color: #1677ff;
+  color: var(--mes-primary);
 }
 
-/* ========== 小屏适配 ========== */
-@media (max-width: 1100px) {
+/* ========== 响应式 ==========
+ * ≥1440：380×520 固定右下；≤1024：面板 360、悬浮球 48；≤768：贴近边缘、面板占满可用宽度 */
+@media (max-width: 1024px) {
   .mes-ai-panel {
-    width: min(380px, calc(100vw - 32px));
+    width: 360px;
   }
+
+  .mes-ai-fab,
+  .mes-ai-fab__img {
+    width: 48px;
+    height: 48px;
+  }
+}
+
+@media (max-width: 768px) {
+  .mes-ai-panel {
+    right: 12px;
+    bottom: 74px;
+    width: calc(100vw - 24px);
+    height: min(520px, calc(100vh - 96px));
+  }
+
+  .mes-ai-fab {
+    right: 16px;
+    bottom: 16px;
+  }
+
+  .mes-ai-fab,
+  .mes-ai-fab__img {
+    width: 46px;
+    height: 46px;
+  }
+}
+
+/* ========== 首屏欢迎区 + 4 个 MES 快捷分析入口 ========== */
+.mes-ai-welcome {
+  padding: 10px 2px 4px;
+  text-align: center;
+}
+
+.mes-ai-welcome__logo {
+  display: block;
+  width: 52px;
+  height: 52px;
+  margin: 4px auto 12px;
+  object-fit: contain;
+}
+
+.mes-ai-welcome__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--mes-fg-strong);
+}
+
+.mes-ai-welcome__desc {
+  margin-top: 6px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--mes-fg-muted);
+}
+
+/* 快捷入口：浅蓝/白风格（描边 + 悬停淡蓝底），不使用大面积实心蓝 */
+.mes-ai-welcome__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 16px;
+  text-align: left;
+}
+
+.mes-ai-action {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 9px 10px;
+  font-family: inherit;
+  font-size: 12.5px;
+  color: var(--mes-fg);
+  cursor: pointer;
+  background: var(--mes-surface);
+  border: 1px solid var(--mes-border);
+  border-radius: 10px;
+  transition: all 0.2s ease;
+}
+
+.mes-ai-action:hover {
+  color: var(--mes-primary);
+  background: var(--mes-primary-soft);
+  border-color: var(--mes-primary-border);
+}
+
+.mes-ai-welcome__tip {
+  padding-top: 12px;
+  margin-top: 14px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--mes-fg-subtle);
+  border-top: 1px dashed var(--mes-border);
+}
+
+/* ========== 常用指令快捷条（输入框为空时展示，最近用过的排前面） ==========
+ * 与欢迎区的快捷入口同风格：白底 + 细描边 + 悬停淡蓝，避免出现大量实心蓝块 */
+.mes-ai-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 62px;
+  margin-bottom: 8px;
+  overflow-y: auto;
+}
+
+.mes-ai-quick__chip {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  padding: 3px 9px;
+  font-size: 12px;
+  color: var(--mes-fg-muted);
+  cursor: pointer;
+  background: var(--mes-surface);
+  border: 1px solid var(--mes-border);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.mes-ai-quick__chip:hover {
+  color: var(--mes-primary);
+  background: var(--mes-primary-soft);
+  border-color: var(--mes-primary-border);
+}
+
+.mes-ai-quick__chip.is-recent {
+  color: var(--mes-primary);
+  background: var(--mes-primary-soft);
+  border-color: var(--mes-primary-border);
+}
+
+/* ========== 语音输入：录音中红色脉冲提示 ========== */
+.mes-ai-mic.is-listening {
+  color: var(--mes-danger);
+  background: hsl(var(--destructive, 359 100% 65%) / 12%);
+  animation: mes-ai-pulse 1.4s infinite;
+}
+
+@keyframes mes-ai-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 hsl(var(--destructive, 359 100% 65%) / 35%);
+  }
+
+  50% {
+    box-shadow: 0 0 0 6px hsl(var(--destructive, 359 100% 65%) / 0%);
+  }
+}
+
+/* ========== 思考过程折叠 ========== */
+.mes-ai-think {
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--mes-fg-muted);
+}
+
+.mes-ai-think > summary {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  padding: 2px 8px;
+  cursor: pointer;
+  list-style: none;
+  background: var(--mes-surface-2);
+  border-radius: 10px;
+}
+
+.mes-ai-think > summary::-webkit-details-marker {
+  display: none;
+}
+
+.mes-ai-think[open] > summary {
+  color: var(--mes-primary);
+}
+
+.mes-ai-think__body {
+  max-height: 220px;
+  padding: 8px 10px;
+  margin-top: 6px;
+  overflow-y: auto;
+  line-height: 1.6;
+  word-break: break-word;
+  white-space: pre-wrap;
+  background: var(--mes-surface-2);
+  border-left: 2px solid var(--mes-border-strong);
+  border-radius: 0 8px 8px 0;
+}
+
+/* ========== 消息底部：时间 + 复制（悬停显示） ========== */
+.mes-ai-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.mes-ai-meta .mes-ai-time {
+  margin-top: 0;
+}
+
+.mes-ai-copy {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+  font-size: 11px;
+  color: var(--mes-fg-subtle);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.mes-ai-copy em {
+  font-style: normal;
+}
+
+.mes-ai-row:hover .mes-ai-copy {
+  opacity: 1;
+}
+
+/* ========== 流式输出光标（正在逐字输出时显示） ========== */
+.mes-ai-bubble.is-streaming::after {
+  display: inline-block;
+  width: 6px;
+  height: 14px;
+  margin-left: 2px;
+  vertical-align: -2px;
+  content: '';
+  background: var(--mes-primary);
+  border-radius: 2px;
+  animation: mes-ai-caret 1s steps(2, start) infinite;
+}
+
+@keyframes mes-ai-caret {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0;
+  }
+}
+
+/* ========== 消息区滚动条：细、低干扰 ========== */
+.mes-ai-messages::-webkit-scrollbar,
+.mes-ai-quick::-webkit-scrollbar {
+  width: 8px;
+}
+
+.mes-ai-messages::-webkit-scrollbar-thumb,
+.mes-ai-quick::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground, 240 3.8% 46.1%) / 25%);
+  border-radius: 4px;
+}
+
+.mes-ai-messages::-webkit-scrollbar-thumb:hover,
+.mes-ai-quick::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground, 240 3.8% 46.1%) / 40%);
+}
+
+.mes-ai-messages::-webkit-scrollbar-track,
+.mes-ai-quick::-webkit-scrollbar-track {
+  background: transparent;
 }
 </style>
 
 <style>
-/* ========== 非 scoped：全局避让样式（作用于 body 与页面主体容器） ========== */
+/* ========== 非 scoped：面板是右下角浮动卡片，不改写任何页面布局（无 body 让位样式） ========== */
 
-/* 面板展开时：整个页面主体右移留出面板空间，不遮挡任何板块内容 */
-body.mes-ai-panel-open {
-  padding-right: 388px; /* 380 面板宽 + 8 缓冲 */
-  transition: padding-right 0.3s ease;
-}
-
-/* MES 首页 Page 容器沿用原有避让（配合 body 右移的叠加微调） */
-body.mes-ai-panel-open .mes-ai-avoid {
-  padding-right: 16px;
-  transition: padding-right 0.3s ease;
-}
-
-/* 小屏不避让，面板悬浮覆盖 */
-@media (max-width: 1100px) {
-  body.mes-ai-panel-open {
-    padding-right: 0;
-  }
-
-  body.mes-ai-panel-open .mes-ai-avoid {
-    padding-right: 16px;
-  }
-}
-
-/* antd 多行输入框内部样式（白底黑字、聚焦蓝边） */
+/* antd 多行输入框内部样式（跟随主题，聚焦高亮主色） */
 .mes-ai-textarea.ant-input {
-  color: #1f2937;
-  background: #ffffff;
-  border-color: #d1d5db;
+  color: var(--mes-fg);
+  background: var(--mes-surface);
+  border-color: var(--mes-border-strong);
 }
 
 .mes-ai-textarea.ant-input:focus,
 .mes-ai-textarea.ant-input:hover {
-  border-color: #1677ff;
+  border-color: var(--mes-primary);
 }
 </style>

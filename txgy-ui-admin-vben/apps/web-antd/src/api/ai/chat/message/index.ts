@@ -45,9 +45,9 @@ export namespace AiChatMessageApi {
   }
 }
 
-/** 消息列表 */
+/** 消息列表（conversationId 为 19 位雪花号，按字符串原样透传，避免精度丢失） */
 export function getChatMessageListByConversationId(
-  conversationId: null | number,
+  conversationId: null | number | string,
 ) {
   return requestClient.get<AiChatMessageApi.ChatMessage[]>(
     `/ai/chat/message/list-by-conversation-id?conversationId=${conversationId}`,
@@ -151,9 +151,9 @@ async function postSseStream(
   }
 }
 
-/** 发送 Stream 消息 */
+/** 发送 Stream 消息（conversationId 为 19 位雪花号，按字符串原样透传，避免精度丢失） */
 export function sendChatMessageStream(
-  conversationId: number,
+  conversationId: number | string,
   content: string,
   ctrl: any,
   enableContext: boolean,
@@ -197,8 +197,8 @@ export function deleteChatMessage(id: number) {
   return requestClient.delete(`/ai/chat/message/delete?id=${id}`);
 }
 
-/** 删除指定对话的消息 */
-export function deleteByConversationId(conversationId: number) {
+/** 删除指定对话的消息（conversationId 为 19 位雪花号，按字符串原样透传） */
+export function deleteByConversationId(conversationId: number | string) {
   return requestClient.delete(
     `/ai/chat/message/delete-by-conversation-id?conversationId=${conversationId}`,
   );

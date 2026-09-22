@@ -6,6 +6,9 @@ import { CommonStatusEnum, DICT_TYPE } from '@vben/constants';
 
 import { z } from '#/adapter/form';
 
+/** 业务分组的预置候选项（用户可在页面上继续输入新分组） */
+export const DEFAULT_BIZ_GROUPS = ['生产', '品质', '设备', '库存', '自定义'];
+
 /** 新增/修改数据集的表单 */
 export function useFormSchema(): VbenFormSchema[] {
   return [
@@ -22,6 +25,9 @@ export function useFormSchema(): VbenFormSchema[] {
       label: '数据集编码',
       component: 'Input',
       componentProps: {
+        disabled: true,
+        placeholder: '系统自动生成',
+      },
         placeholder: '如 mes_feedback_detail，租户内唯一',
       },
       rules: 'required',
@@ -44,6 +50,17 @@ export function useFormSchema(): VbenFormSchema[] {
       },
     },
     {
+      fieldName: 'bizGroups',
+      label: '业务分组',
+      component: 'Select',
+      componentProps: {
+        mode: 'tags',
+        placeholder: '可多选；输入新分组名回车即新建',
+        options: DEFAULT_BIZ_GROUPS.map((group) => ({
+          label: group,
+          value: group,
+        })),
+      },
       fieldName: 'sqlText',
       label: 'SQL 语句',
       component: 'Textarea',
@@ -185,6 +202,11 @@ export function useGridColumns(): VxeTableGridOptions<ReportDatasetApi.Dataset>[
       width: 100,
     },
     {
+      field: 'bizGroups',
+      title: '分组',
+      minWidth: 150,
+      formatter: ({ cellValue }) =>
+        Array.isArray(cellValue) ? cellValue.join(' / ') : '',
       field: 'tenantColumn',
       title: '租户过滤列',
       width: 130,

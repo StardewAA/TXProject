@@ -9,6 +9,13 @@ import { message } from 'ant-design-vue';
 
 import {
   createSimpleDataset,
+  getEnabledDatasetList,
+  getSimpleCatalog,
+} from '#/api/report/dataset';
+
+import { CATEGORY_OPTIONS, buildDatasetCode } from '../code';
+import { DEFAULT_BIZ_GROUPS } from '../data';
+
   getSimpleCatalog,
 } from '#/api/report/dataset';
 
@@ -19,12 +26,32 @@ const catalog = ref<ReportDatasetApi.CatalogTable[]>([]);
 const catalogLoading = ref(false);
 /** 表单状态 */
 const saving = ref(false);
+/** 分类（域），用于生成数据集编码 */
+const category = ref('MES');
 const name = ref('');
 const tableName = ref('');
 const fields = ref<string[]>([]);
 const dateField = ref<string | undefined>(undefined);
 const owner = ref('');
 const remark = ref('');
+/** 业务分组（可多选、可新建） */
+const bizGroups = ref<string[]>([]);
+/** 分组候选项：预置分组 + 已有数据集用过的分组 */
+const groupOptions = ref<string[]>([...DEFAULT_BIZ_GROUPS]);
+
+/** 加载分组候选项（下拉里可直接输入新分组名） */
+async function loadGroupOptions() {
+  try {
+    const list = await getEnabledDatasetList();
+    const merged = new Set<string>(DEFAULT_BIZ_GROUPS);
+    list.forEach((item) => {
+      (item.bizGroups ?? []).forEach((group) => merged.add(group));
+    });
+    groupOptions.value = [...merged];
+  } catch {
+    // 拉取失败时退回预置候选项，不阻塞表单
+  }
+}
 
 /** 当前选中表的列定义 */
 const currentColumns = computed(() => {
@@ -54,6 +81,7 @@ async function loadCatalog() {
 }
 
 const [Modal, modalApi] = useVbenModal({
+  title: '新建报表数据集',
   title: '简单模式新建数据集（无需写 SQL）',
   class: 'w-[720px]',
   async onConfirm() {
@@ -72,11 +100,18 @@ const [Modal, modalApi] = useVbenModal({
     saving.value = true;
     modalApi.lock();
     try {
+      // 自动生成数据集编码：RPT-[域]-[主题]-[序号]，不再让用户手填
+      const existing = await getEnabledDatasetList();
+      const code = buildDatasetCode(category.value, bizGroups.value, existing);
+      await createSimpleDataset({
+        code,
+        category: category.value,
       await createSimpleDataset({
         name: name.value.trim(),
         tableName: tableName.value,
         fields: fields.value,
         dateField: dateField.value,
+        bizGroups: bizGroups.value,
         owner: owner.value.trim(),
         remark: remark.value.trim(),
       });
@@ -90,10 +125,12 @@ const [Modal, modalApi] = useVbenModal({
   },
   async onOpenChange(isOpen: boolean) {
     if (!isOpen) {
+      category.value = 'MES';
       name.value = '';
       tableName.value = '';
       fields.value = [];
       dateField.value = undefined;
+      bizGroups.value = [];
       owner.value = '';
       remark.value = '';
       return;
@@ -101,6 +138,7 @@ const [Modal, modalApi] = useVbenModal({
     if (catalog.value.length === 0) {
       await loadCatalog();
     }
+    void loadGroupOptions();
   },
 });
 </script>
@@ -118,6 +156,14 @@ const [Modal, modalApi] = useVbenModal({
           />
         </a-form-item>
 
+        <a-form-item required label="分类（域）">
+          <a-select
+            v-model:value="category"
+            :options="CATEGORY_OPTIONS.map((item) => ({ label: item, value: item }))"
+            placeholder="请选择业务域"
+          />
+        </a-form-item>
+
         <a-form-item required label="数据表（白名单）">
           <a-select
             v-model:value="tableName"
@@ -131,6 +177,17 @@ const [Modal, modalApi] = useVbenModal({
           <div class="mt-1 text-xs text-gray-400">
             仅开放业务上安全、结构稳定的表；不在目录里的表不能建报表
           </div>
+        </a-form-item>
+
+        <a-form-item label="所属分组（可多选、可输入新分组）">
+          <a-select
+            v-model:value="bizGroups"
+            :options="
+              groupOptions.map((group) => ({ label: group, value: group }))
+            "
+            mode="tags"
+            placeholder="留空则归入「自定义」"
+          />
         </a-form-item>
 
         <a-form-item v-if="tableName" required label="勾选字段（表头自动使用中文名）">
@@ -178,6 +235,7 @@ const [Modal, modalApi] = useVbenModal({
 
         <a-alert
           class="mb-2"
+          message="提交后将自动创建报表数据集，可在「报表中心」查看"
           message="提交后由服务端自动生成 SQL，并自动带上租户隔离、行数上限与只读校验"
           show-icon
           type="info"

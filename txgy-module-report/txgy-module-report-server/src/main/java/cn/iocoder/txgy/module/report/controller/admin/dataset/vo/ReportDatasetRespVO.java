@@ -27,6 +27,9 @@ public class ReportDatasetRespVO {
     @Schema(description = "分类（域）", example = "MES")
     private String category;
 
+    @Schema(description = "业务分组（支持多归属）", example = "[\"生产\",\"库存\"]")
+    private List<String> bizGroups;
+
     @Schema(description = "SQL 语句")
     private String sqlText;
 

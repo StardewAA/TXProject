@@ -23,8 +23,13 @@ export namespace AiChatConversationApi {
   }
 }
 
-/** 获得【我的】聊天对话 */
-export function getChatConversationMy(id: number) {
+/**
+ * 获得【我的】聊天对话
+ *
+ * 注意：对话 id 是 19 位雪花号，后端按字符串下发，**必须原样透传**。
+ * 一旦用 Number() 转换会因 JS 双精度丢末位（…938 → …900），后端即查不到该对话。
+ */
+export function getChatConversationMy(id: number | string) {
   return requestClient.get<AiChatConversationApi.ChatConversation>(
     `/ai/chat/conversation/get-my?id=${id}`,
   );
@@ -44,8 +49,8 @@ export function updateChatConversationMy(
   return requestClient.put(`/ai/chat/conversation/update-my`, data);
 }
 
-/** 删除【我的】聊天对话 */
-export function deleteChatConversationMy(id: number) {
+/** 删除【我的】聊天对话（id 是 19 位雪花号，务必原样透传，切勿 Number() 转换） */
+export function deleteChatConversationMy(id: number | string) {
   return requestClient.delete(`/ai/chat/conversation/delete-my?id=${id}`);
 }
 
@@ -68,7 +73,7 @@ export function getChatConversationPage(params: any) {
   >(`/ai/chat/conversation/page`, { params });
 }
 
-/** 管理员删除消息 */
-export function deleteChatConversationByAdmin(id: number) {
+/** 管理员删除消息（id 是 19 位雪花号，同样需要原样透传） */
+export function deleteChatConversationByAdmin(id: number | string) {
   return requestClient.delete(`/ai/chat/conversation/delete-by-admin?id=${id}`);
 }

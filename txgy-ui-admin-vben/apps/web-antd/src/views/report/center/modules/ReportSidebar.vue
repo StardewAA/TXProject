@@ -3,6 +3,16 @@ import type { ReportCenterApi } from '#/api/report/center';
 
 import { computed, ref } from 'vue';
 
+import { ReloadOutlined } from '@ant-design/icons-vue';
+
+/** 系统分组：按查询次数排序，永远排最前，默认收起 */
+const FREQUENT_GROUP = '常用';
+
+/** 兜底分组：永远排最后 */
+const FALLBACK_GROUP = '自定义';
+
+/** 内置分组顺序；用户新建的分组按名称排在其后 */
+const FIXED_GROUP_ORDER = ['生产', '品质', '设备', '库存'];
 /** 分组展示顺序（未列出的分组追加在末尾） */
 const GROUP_ORDER = ['常用', '生产', '品质', '设备', '库存', '自定义'];
 
@@ -15,10 +25,13 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
+  (e: 'refresh'): void;
   (e: 'select', code: string): void;
 }>();
 
 const keyword = ref('');
+/** 折叠状态：默认展开，「常用」默认收起（其内容与其他分组重复，展开易显得繁杂） */
+const collapsed = ref<Record<string, boolean>>({ [FREQUENT_GROUP]: true });
 /** 折叠状态，默认全部展开 */
 const collapsed = ref<Record<string, boolean>>({});
 
@@ -101,6 +114,7 @@ const groupTree = computed<GroupNode[]>(() => {
     .filter((item) => (item.report.queryCount ?? 0) > 0)
     .sort((a, b) => (b.report.queryCount ?? 0) - (a.report.queryCount ?? 0))
     .slice(0, FREQUENT_LIMIT)
+    .forEach((item) => push(FREQUENT_GROUP, item));
     .forEach((item) => push('常用', item));
 
   // 2. 业务分组
@@ -110,6 +124,11 @@ const groupTree = computed<GroupNode[]>(() => {
     }
   }
 
+  // 3. 排序：常用最前 → 内置分组 → 其余按名称 → 自定义最后
+  const names = [...buckets.keys()].sort((a, b) => {
+    const rankA = groupRank(a);
+    const rankB = groupRank(b);
+    return rankA === rankB ? a.localeCompare(b, 'zh-CN') : rankA - rankB;
   // 3. 按预定义顺序输出，未列出的分组排末尾
   const names = [...buckets.keys()].sort((a, b) => {
     const indexA = GROUP_ORDER.indexOf(a);
@@ -121,6 +140,18 @@ const groupTree = computed<GroupNode[]>(() => {
   });
   return names.map((name) => ({ name, reports: buckets.get(name)! }));
 });
+
+/** 分组排序权重：常用最前、自定义最后、内置分组居中、其余按名称 */
+function groupRank(name: string) {
+  if (name === FREQUENT_GROUP) {
+    return -1;
+  }
+  if (name === FALLBACK_GROUP) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+  const index = FIXED_GROUP_ORDER.indexOf(name);
+  return index === -1 ? FIXED_GROUP_ORDER.length : index;
+}
 
 /** 命中张数（去重后的报表数） */
 const matchedCount = computed(() => matchedReports.value.length);
@@ -137,6 +168,18 @@ function handleSelect(code: string) {
 <template>
   <aside class="rc-sidebar">
     <div class="rc-sidebar-search">
+      <div class="rc-sidebar-search-row">
+        <a-input-search
+          v-model:value="keyword"
+          allow-clear
+          placeholder="搜索报表名称或用途"
+        />
+        <a-tooltip title="重新加载报表清单">
+          <a-button class="rc-refresh-btn" @click="emit('refresh')">
+            <template #icon><ReloadOutlined /></template>
+          </a-button>
+        </a-tooltip>
+      </div>
       <a-input-search
         v-model:value="keyword"
         allow-clear
@@ -202,6 +245,16 @@ function handleSelect(code: string) {
 .rc-sidebar-search {
   padding: 12px;
   border-bottom: 1px solid #eef1f5;
+}
+
+.rc-sidebar-search-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.rc-refresh-btn {
+  flex: 0 0 auto;
 }
 
 .rc-sidebar-tip {

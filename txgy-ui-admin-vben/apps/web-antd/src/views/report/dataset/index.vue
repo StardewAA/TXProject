@@ -2,6 +2,10 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { ReportDatasetApi } from '#/api/report/dataset';
 
+import { useRouter } from 'vue-router';
+
+import { Page, useVbenModal } from '@vben/common-ui';
+import { IconifyIcon } from '@vben/icons';
 import { computed, reactive, ref } from 'vue';
 
 import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
@@ -9,6 +13,7 @@ import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
 import { message } from 'ant-design-vue';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
+import { deleteDataset, getDatasetPage } from '#/api/report/dataset';
 import {
   deleteDataset,
   executeDataset,
@@ -19,6 +24,8 @@ import { $t } from '#/locales';
 import { useGridColumns, useGridFormSchema } from './data';
 import Form from './modules/form.vue';
 import SimpleForm from './modules/simple-form.vue';
+
+const router = useRouter();
 
 const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
@@ -35,6 +42,7 @@ function handleRefresh() {
   gridApi.query();
 }
 
+/** 创建数据集（简单模式） */
 /** 创建数据集（SQL 模式） */
 function handleCreate() {
   formModalApi.setData(null).open();
@@ -65,6 +73,17 @@ async function handleDelete(row: ReportDatasetApi.Dataset) {
   }
 }
 
+/** 退出配置中心：通过现有路由返回报表中心页面 */
+function handleExitCenter() {
+  router.push('/mes/report-center');
+}
+
+/** 打开预览：跳转到独立预览页面（当前页跳转，浏览器返回可回到列表） */
+function handlePreview(row: ReportDatasetApi.Dataset) {
+  if (!row.code) {
+    return;
+  }
+  router.push(`/mes/report-dataset/preview/${row.code}`);
 // ========== 预览执行 ==========
 
 const previewOpen = ref(false);
@@ -158,6 +177,15 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
+    <FormModal @success="handleRefresh" />
+    <SimpleFormModal @success="handleRefresh" />
+
+    <Grid table-title="报表配置中心">
+      <template #toolbar-tools>
+        <a-button class="mr-2" @click="handleExitCenter">
+          <IconifyIcon class="size-5" icon="lucide:log-out" />
+          退出配置中心
+        </a-button>
     <template #doc>
       <DocAlert
         title="报表数据集"
