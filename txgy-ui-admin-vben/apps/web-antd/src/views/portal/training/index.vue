@@ -9,9 +9,11 @@ defineOptions({ name: 'PortalTraining' });
 const router = useRouter();
 const route = useRoute();
 
-/** 学习工作台（极客时间风首页）为默认页面，其余二级页面显示返回条 */
+/** 学习工作台（极客时间风首页）为默认页面，其余二级页面显示返回条；
+ * 考试页改为使用页内横幅右上角的「返回课程中心」按钮，避免顶部出现重复返回入口 */
 const onHomePage = computed(() => route.path.startsWith('/portal/training/workbench'));
-const showBackBar = computed(() => !onHomePage.value);
+const onExamPage = computed(() => route.path.startsWith('/portal/training/exam'));
+const showBackBar = computed(() => !onHomePage.value && !onExamPage.value);
 
 function backToHome() {
   router.push('/portal/training/workbench');

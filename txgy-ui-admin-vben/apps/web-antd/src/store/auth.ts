@@ -107,7 +107,19 @@ export const useAuthStore = defineStore('auth', () => {
           (type === 'register' && params.registerType === 'personal') ||
           (type === 'username' && params.loginType === 'personal');
         if (isPersonalAuthentication) {
-          accessStore.setTenantId(personalEffectiveTenantId ?? 0);
+          // 个人登录由后端固定在「账号实际所属租户」内认证（新个人账号为保留租户 0），
+          // 前端发起认证时携带的默认租户只是一次尝试值，不能作为会话租户。
+          // 必须以后端返回的 tenantId 为准，否则请求头 tenant-id 与账号租户不一致，
+          // 会被 TenantSecurityWebFilter 判定越权（403），表现为登录成功却进不去系统。
+          // 后端对个人登录强制在保留租户 0 内认证（AdminAuthServiceImpl#login），登录成功即说明
+          // 账号属于租户 0；personalEffectiveTenantId 只是认证时试探用的请求租户，不能当会话租户。
+          // 必须回落到 0，否则请求头 tenant-id 与账号租户不一致时，
+          // TenantSecurityWebFilter 会返回 403「您无权访问该租户的数据」，表现为登录成功却进不去。
+          const personalTenantId =
+            loginResult.tenantId !== null && loginResult.tenantId !== undefined
+              ? Number(loginResult.tenantId)
+              : 0;
+          accessStore.setTenantId(personalTenantId);
           accessStore.clearVisitTenantId();
         } else {
           // 企业登录：把「访问租户」初始化为本次登录租户，
