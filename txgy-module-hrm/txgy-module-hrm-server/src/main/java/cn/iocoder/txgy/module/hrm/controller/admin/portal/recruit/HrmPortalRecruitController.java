@@ -1,5 +1,6 @@
 package cn.iocoder.txgy.module.hrm.controller.admin.portal.recruit;
 
+import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.NumberUtil;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
@@ -38,12 +39,20 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
 import static cn.iocoder.txgy.module.hrm.enums.recruit.post.HrmRecruitPostStatusEnum.PUBLISHED;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertList;
+import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertMap;
+import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertSet;
 
 @Tag(name = "员工端 - HRM 招聘应聘")
 @RestController
@@ -69,7 +78,8 @@ public class HrmPortalRecruitController {
     public CommonResult<PageResult<HrmPortalRecruitPostRespVO>> postPage(HrmRecruitPostPageReqVO reqVO) {
         reqVO.setStatus(PUBLISHED.getStatus());
         PageResult<HrmRecruitPostDO> page = postService.getPortalRecruitPostPage(reqVO);
-        return success(new PageResult<>(convertList(page.getList(), this::buildPost), page.getTotal()));
+        // 批量装配：职位类型与联系人一次性批量查询，避免按职位逐条查询（原实现为 N+1）
+        return success(new PageResult<>(buildPosts(page.getList()), page.getTotal()));
     }
 
     @GetMapping("/post-type/list")
@@ -123,6 +133,124 @@ public class HrmPortalRecruitController {
     public CommonResult<Boolean> applicationWithdraw(@Valid @RequestBody HrmPortalRecruitWithdrawReqVO reqVO) {
         applicationService.withdrawPortalApplication(getLoginUserId(), reqVO.getId(), reqVO.getReason());
         return success(true);
+    }
+
+    /**
+     * 批量装配招聘职位列表。
+     *
+     * <p>门户职位列表一次可能返回上百条职位，若按条查询职位类型与岗位联系人会产生 N+1 查询。
+     * 这里统一改为批量查询，输出字段与单条 {@link #buildPost(HrmRecruitPostDO)} 完全一致。</p>
+     */
+    private List<HrmPortalRecruitPostRespVO> buildPosts(List<HrmRecruitPostDO> posts) {
+        if (CollUtil.isEmpty(posts)) {
+            return Collections.emptyList();
+        }
+        // 1. 批量查询职位类型（与单条实现一致，忽略租户）
+        Set<Long> postTypeIds = convertSet(posts, HrmRecruitPostDO::getPostTypeId);
+        Map<Long, HrmRecruitPostTypeDO> postTypeMap = CollUtil.isEmpty(postTypeIds)
+                ? Collections.emptyMap()
+                : TenantUtils.executeIgnore(() -> postTypeService.getRecruitPostTypeMap(postTypeIds));
+        // 2. 批量查询岗位联系人
+        Map<Long, AdminUserRespDTO> ownerUserMap = getPostOwnerUserMap(posts);
+        // 3. 装配，字段与单条 buildPost 保持一致
+        return convertList(posts, post -> {
+            if (post == null) {
+                return null;
+            }
+            HrmPortalRecruitPostRespVO vo = BeanUtils.toBean(post, HrmPortalRecruitPostRespVO.class);
+            vo.setAreaName(AreaUtils.format(post.getAreaId()));
+            HrmRecruitPostTypeDO type = post.getPostTypeId() == null ? null : postTypeMap.get(post.getPostTypeId());
+            vo.setPostTypeName(type == null ? null : type.getName());
+            fillOwnerUser(vo, ownerUserMap.get(post.getId()));
+            return vo;
+        });
+    }
+
+    /**
+     * 批量查询职位列表对应的岗位联系人（postId -&gt; 用户）。
+     *
+     * <p>取值优先级与 {@link #getPostOwnerUser(HrmRecruitPostDO)} 一致：优先取岗位发布 HR
+     * （creator 为数字时），查不到再回退到招聘负责人员工绑定的系统用户。
+     * 两条路径均改为批量查询，且任一职位查询失败都不影响整页浏览。</p>
+     */
+    private Map<Long, AdminUserRespDTO> getPostOwnerUserMap(List<HrmRecruitPostDO> posts) {
+        Map<Long, Long> creatorUserIdByPost = new HashMap<>();
+        Map<Long, Long> fallbackEmployeeIdByPost = new HashMap<>();
+        Set<Long> userIds = new HashSet<>();
+        for (HrmRecruitPostDO post : posts) {
+            if (post == null || post.getTenantId() == null) {
+                continue;
+            }
+            Long creatorUserId = NumberUtil.isNumber(post.getCreator())
+                    ? NumberUtil.parseLong(post.getCreator()) : null;
+            if (creatorUserId != null) {
+                creatorUserIdByPost.put(post.getId(), creatorUserId);
+                userIds.add(creatorUserId);
+            } else if (post.getOwnerEmployeeId() != null) {
+                fallbackEmployeeIdByPost.put(post.getId(), post.getOwnerEmployeeId());
+            }
+        }
+        // 回退路径：按租户分组批量查询员工，再取员工绑定的系统用户
+        Map<Long, Long> fallbackUserIdByPost = new HashMap<>();
+        if (!fallbackEmployeeIdByPost.isEmpty()) {
+            Map<Long, Set<Long>> employeeIdsByTenant = new HashMap<>();
+            for (HrmRecruitPostDO post : posts) {
+                Long employeeId = fallbackEmployeeIdByPost.get(post.getId());
+                if (employeeId != null) {
+                    employeeIdsByTenant.computeIfAbsent(post.getTenantId(), key -> new HashSet<>()).add(employeeId);
+                }
+            }
+            employeeIdsByTenant.forEach((tenantId, employeeIds) -> {
+                try {
+                    Map<Long, HrmEmployeeDO> employeeMap = TenantUtils.execute(tenantId,
+                            () -> employeeService.getEmployeeMap(employeeIds));
+                    fallbackEmployeeIdByPost.forEach((postId, employeeId) -> {
+                        HrmEmployeeDO employee = employeeMap.get(employeeId);
+                        if (employee != null && employee.getUserId() != null) {
+                            fallbackUserIdByPost.put(postId, employee.getUserId());
+                            userIds.add(employee.getUserId());
+                        }
+                    });
+                } catch (RuntimeException ex) {
+                    log.warn("[getPostOwnerUserMap][tenantId({}) employeeIds({}) 查询招聘负责人失败，"
+                            + "跳过 IM 联系人信息]", tenantId, employeeIds, ex);
+                }
+            });
+        }
+        if (userIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        // 批量查询系统用户：用户表不含租户字段，跨租户批量查询不会串数据
+        Map<Long, AdminUserRespDTO> userMap;
+        try {
+            userMap = convertMap(adminUserApi.getUserListIgnoreTenant(userIds).getCheckedData(),
+                    AdminUserRespDTO::getId);
+        } catch (RuntimeException ex) {
+            log.warn("[getPostOwnerUserMap][userIds({}) 批量查询岗位联系人失败，跳过 IM 联系人信息]",
+                    userIds, ex);
+            return Collections.emptyMap();
+        }
+        Map<Long, AdminUserRespDTO> result = new HashMap<>();
+        for (HrmRecruitPostDO post : posts) {
+            if (post == null) {
+                continue;
+            }
+            AdminUserRespDTO ownerUser = null;
+            Long creatorUserId = creatorUserIdByPost.get(post.getId());
+            if (creatorUserId != null) {
+                ownerUser = userMap.get(creatorUserId);
+            }
+            if (ownerUser == null) {
+                Long fallbackUserId = fallbackUserIdByPost.get(post.getId());
+                if (fallbackUserId != null) {
+                    ownerUser = userMap.get(fallbackUserId);
+                }
+            }
+            if (ownerUser != null) {
+                result.put(post.getId(), ownerUser);
+            }
+        }
+        return result;
     }
 
     private HrmPortalRecruitPostRespVO buildPost(HrmRecruitPostDO post) {
