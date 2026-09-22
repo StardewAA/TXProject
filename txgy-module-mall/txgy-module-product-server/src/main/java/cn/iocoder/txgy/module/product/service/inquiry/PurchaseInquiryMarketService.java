@@ -60,7 +60,6 @@ public class PurchaseInquiryMarketService {
             "四川省", "贵州省", "云南省", "陕西省", "甘肃省", "青海省", "台湾省",
             "内蒙古自治区", "广西壮族自治区", "西藏自治区", "宁夏回族自治区", "新疆维吾尔自治区",
             "香港特别行政区", "澳门特别行政区");
-    private static final int PUBLIC_SEARCH_CANDIDATE_LIMIT = 1_000;
     private static final Pattern EMAIL_PATTERN = Pattern.compile(
             "(?i)(?<![\\w.+-])[\\w.+-]+@[\\w.-]+\\.[a-z]{2,}(?![\\w.-])");
     private static final Pattern OBFUSCATED_EMAIL_PATTERN = Pattern.compile(
@@ -144,24 +143,14 @@ public class PurchaseInquiryMarketService {
         String publicKeyword = normalizePublicKeyword(keyword);
         long now = System.currentTimeMillis();
         long offset = Math.multiplyExact((long) page.getPageNo() - 1L, page.getPageSize());
-        int limit = publicKeyword == null ? page.getPageSize() : PUBLIC_SEARCH_CANDIDATE_LIMIT;
         List<InquiryCrossTenantMapper.OpportunityRef> refs = crossTenantMapper.selectPlatformPublicInquiries(
-                normalizedState, now, publicKeyword == null ? offset : 0L, limit);
+                normalizedState, now, publicKeyword, offset, page.getPageSize());
         if (refs == null || refs.isEmpty()) {
-            return PageResult.empty();
+            return PageResult.empty(crossTenantMapper.countPlatformPublicInquiries(
+                    normalizedState, now, publicKeyword));
         }
         List<InquiryPublicSummaryRespVO> summaries = crossTenantSummaries(refs);
-        if (publicKeyword != null) {
-            List<InquiryPublicSummaryRespVO> filtered = summaries.stream()
-                    .filter(summary -> matchesPublicKeyword(summary, publicKeyword)).toList();
-            if (offset >= filtered.size()) {
-                return PageResult.empty((long) filtered.size());
-            }
-            int start = Math.toIntExact(offset);
-            int end = Math.min(start + page.getPageSize(), filtered.size());
-            return new PageResult<>(filtered.subList(start, end), (long) filtered.size());
-        }
-        long total = crossTenantMapper.countPlatformPublicInquiries(normalizedState, now);
+        long total = crossTenantMapper.countPlatformPublicInquiries(normalizedState, now, publicKeyword);
         return new PageResult<>(summaries, total);
     }
 
@@ -180,22 +169,14 @@ public class PurchaseInquiryMarketService {
         String publicKeyword = normalizePublicKeyword(keyword);
         long now = System.currentTimeMillis();
         long offset = Math.multiplyExact((long) page.getPageNo() - 1L, page.getPageSize());
-        int limit = publicKeyword == null ? page.getPageSize() : PUBLIC_SEARCH_CANDIDATE_LIMIT;
         List<InquiryCrossTenantMapper.OpportunityRef> refs = crossTenantMapper.selectVisibleOpportunities(
                 viewerTenantId, viewerEnterpriseId, viewerShopId, normalizedState, now,
-                publicKeyword == null ? offset : 0L, limit);
-        if (refs == null || refs.isEmpty()) return PageResult.empty();
+                publicKeyword, offset, page.getPageSize());
+        if (refs == null || refs.isEmpty()) return PageResult.empty(crossTenantMapper.countVisibleOpportunities(
+                viewerTenantId, viewerEnterpriseId, viewerShopId, normalizedState, now, publicKeyword));
         List<InquiryPublicSummaryRespVO> summaries = crossTenantSummaries(refs);
-        if (publicKeyword != null) {
-            List<InquiryPublicSummaryRespVO> filtered = summaries.stream()
-                    .filter(summary -> matchesPublicKeyword(summary, publicKeyword)).toList();
-            if (offset >= filtered.size()) return PageResult.empty((long) filtered.size());
-            int start = Math.toIntExact(offset);
-            int end = Math.min(start + page.getPageSize(), filtered.size());
-            return new PageResult<>(filtered.subList(start, end), (long) filtered.size());
-        }
         long total = crossTenantMapper.countVisibleOpportunities(viewerTenantId, viewerEnterpriseId,
-                viewerShopId, normalizedState, now);
+                viewerShopId, normalizedState, now, publicKeyword);
         return new PageResult<>(summaries, total);
     }
 
@@ -263,21 +244,24 @@ public class PurchaseInquiryMarketService {
         } else {
             throw invalid("询价市场状态仅支持 open 或 ended");
         }
-        query.orderByDesc(InquiryDO::getId);
         if (publicKeyword != null) {
-            // 不在原始用户输入上做 LIKE，避免通过邮箱/电话片段反向探测已脱敏内容。
-            // 首版仅在固定候选窗口内搜索，避免匿名关键词请求触发无上限全表加载。
-            query.last("LIMIT " + PUBLIC_SEARCH_CANDIDATE_LIMIT);
-            List<InquiryDO> candidates = inquiryMapper.selectList(query);
-            if (candidates.isEmpty()) return PageResult.empty();
-            List<InquiryPublicSummaryRespVO> filtered = publicSummaries(candidates).stream()
-                    .filter(summary -> matchesPublicKeyword(summary, publicKeyword)).toList();
-            long from = (long) (page.getPageNo() - 1) * page.getPageSize();
-            if (from >= filtered.size()) return PageResult.empty((long) filtered.size());
-            int start = Math.toIntExact(from);
-            int end = Math.min(start + page.getPageSize(), filtered.size());
-            return new PageResult<>(filtered.subList(start, end), (long) filtered.size());
+            // Bound parameters only; search excludes contact and detailed delivery address fields.
+            query.and(term -> term.like(InquiryDO::getNo, publicKeyword)
+                    .or().like(InquiryDO::getTitle, publicKeyword)
+                    .or().apply("EXISTS (SELECT 1 FROM product_enterprise keyword_enterprise"
+                                    + " WHERE keyword_enterprise.id=product_purchase_inquiry.enterprise_id"
+                                    + " AND keyword_enterprise.tenant_id=product_purchase_inquiry.tenant_id"
+                                    + " AND keyword_enterprise.deleted=b'0' AND keyword_enterprise.audit_status=1"
+                                    + " AND LOWER(keyword_enterprise.name) LIKE CONCAT('%',{0},'%'))",
+                            publicKeyword)
+                    .or().apply("EXISTS (SELECT 1 FROM product_purchase_inquiry_item keyword_item"
+                                    + " WHERE keyword_item.inquiry_id=product_purchase_inquiry.id"
+                                    + " AND keyword_item.tenant_id=product_purchase_inquiry.tenant_id"
+                                    + " AND keyword_item.deleted=b'0' AND (LOWER(keyword_item.name)"
+                                    + " LIKE CONCAT('%',{0},'%') OR LOWER(keyword_item.category)"
+                                    + " LIKE CONCAT('%',{0},'%')))", publicKeyword));
         }
+        query.orderByDesc(InquiryDO::getId);
         PageResult<InquiryDO> rows = inquiryMapper.selectPage(page, query);
         if (rows.getList().isEmpty()) {
             return PageResult.empty(rows.getTotal());
@@ -486,13 +470,6 @@ public class PurchaseInquiryMarketService {
             throw invalid("不能使用联系方式搜索公开询价");
         }
         return normalized.toLowerCase(Locale.ROOT);
-    }
-
-    private static boolean matchesPublicKeyword(InquiryPublicSummaryRespVO summary, String keyword) {
-        String searchable = String.join(" ", Objects.toString(summary.getNo(), ""),
-                Objects.toString(summary.getTitle(), ""), Objects.toString(summary.getEnterpriseName(), ""),
-                Objects.toString(summary.getDeliveryArea(), ""), Objects.toString(summary.getItemSummary(), ""));
-        return searchable.toLowerCase(Locale.ROOT).contains(keyword);
     }
 
     @Transactional(rollbackFor = Exception.class)

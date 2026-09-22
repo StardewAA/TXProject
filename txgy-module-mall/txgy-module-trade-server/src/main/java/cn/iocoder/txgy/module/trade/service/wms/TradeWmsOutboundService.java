@@ -67,8 +67,12 @@ public class TradeWmsOutboundService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void createForPaidOrder(TradeOrderDO order, List<TradeOrderItemDO> orderItems) {
-        if (order == null || order.getId() == null || order.getNo() == null || orderItems == null || orderItems.isEmpty()) {
-            log.error("[createForPaidOrder][订单或明细不完整，无法创建 WMS 出库申请，order={}]", order);
+        if (order == null || order.getId() == null) {
+            throw new IllegalArgumentException("创建 WMS 出库申请必须提供有效商城订单编号");
+        }
+        if (!text(order.getNo()) || orderItems == null || orderItems.isEmpty()
+                || orderItems.stream().anyMatch(Objects::isNull)) {
+            recordManualReview(order, safe(orderItems), Map.of(), "ORDER_INCOMPLETE：商城订单或明细不完整");
             return;
         }
         Map<Long, ProductSkuRespDTO> skuMap;
@@ -77,7 +81,8 @@ public class TradeWmsOutboundService {
                     productSkuApi.getSkuMap(orderItems.stream().map(TradeOrderItemDO::getSkuId).collect(Collectors.toSet())),
                     Map.of());
         } catch (RuntimeException ex) {
-            log.error("[createForPaidOrder][订单({})读取商品 WMS 映射失败]", order.getId(), ex);
+            recordManualReview(order, orderItems, Map.of(),
+                    "PRODUCT_MAPPING_UNAVAILABLE：读取商品 WMS 映射失败");
             return;
         }
         Map<GroupKey, List<TradeOrderItemDO>> groups = new LinkedHashMap<>();
@@ -91,7 +96,8 @@ public class TradeWmsOutboundService {
             }
         }
         if (invalidMapping) {
-            log.error("[createForPaidOrder][订单({})存在未映射 SKU，为避免部分出库未提交任何 WMS 申请]", order.getId());
+            recordManualReview(order, orderItems, skuMap,
+                    "PRODUCT_MAPPING_INCOMPLETE：订单存在未配置 WMS 映射的 SKU");
             return;
         }
         String ownershipError = shopOwnershipError(order, orderItems);
@@ -342,18 +348,24 @@ public class TradeWmsOutboundService {
     private void recordManualReview(TradeOrderDO order, List<TradeOrderItemDO> items,
                                     Map<Long, ProductSkuRespDTO> skuMap, String reason) {
         long tenantId = TenantContextHolder.getRequiredTenantId();
-        List<Long> itemShopIds = items.stream().map(TradeOrderItemDO::getShopId)
+        List<Long> itemShopIds = safe(items).stream().filter(Objects::nonNull).map(TradeOrderItemDO::getShopId)
                 .filter(TradeWmsOutboundService::positive).distinct().toList();
         Long auditShopId = positive(order.getShopId()) ? order.getShopId()
                 : itemShopIds.size() == 1 ? itemShopIds.getFirst() : null;
-        List<Long> warehouseIds = items.stream().map(TradeOrderItemDO::getSkuId).map(skuMap::get)
+        List<Long> warehouseIds = safe(items).stream().filter(Objects::nonNull)
+                .map(TradeOrderItemDO::getSkuId).map(skuMap::get)
                 .filter(Objects::nonNull).map(ProductSkuRespDTO::getWmsWarehouseId)
                 .filter(Objects::nonNull).distinct().toList();
+        if (warehouseIds.isEmpty()) {
+            // Warehouse 0 is an explicit audit-only sentinel. MANUAL_REVIEW rows are never retried automatically.
+            warehouseIds = List.of(0L);
+        }
         for (Long warehouseId : warehouseIds) {
             String sourceOrderNo = "M" + compact(order.getId()) + "-SHOP-ERR-W" + compact(warehouseId);
             TradeWmsShipmentDO record = shipmentMapper.selectBySourceOrderNo(sourceOrderNo);
             if (record == null) {
-                record = new TradeWmsShipmentDO().setOrderId(order.getId()).setOrderNo(order.getNo())
+                record = new TradeWmsShipmentDO().setOrderId(order.getId())
+                        .setOrderNo(text(order.getNo()) ? order.getNo() : "UNKNOWN-" + compact(order.getId()))
                         .setShopId(auditShopId).setWarehouseId(warehouseId).setSourceOrderNo(sourceOrderNo)
                         .setRequestId(requestId(tenantId, sourceOrderNo)).setStatus(MANUAL_REVIEW)
                         .setEventVersion(1L).setRetryCount(0).setLastError(reason)
@@ -364,7 +376,7 @@ public class TradeWmsOutboundService {
                 shipmentMapper.updateById(record);
             }
         }
-        log.error("[createForPaidOrder][订单({})店铺归属不完整，已阻断正式出库并转人工：{}]", order.getId(), reason);
+        log.error("[createForPaidOrder][订单({})无法自动创建正式出库，已落人工复核记录：{}]", order.getId(), reason);
     }
 
     private static String shopOwnershipError(TradeOrderDO order, List<TradeOrderItemDO> items) {
@@ -443,7 +455,7 @@ public class TradeWmsOutboundService {
     }
 
     private static <T> List<T> safe(Collection<T> values) {
-        return values == null ? List.of() : List.copyOf(values);
+        return values == null ? List.of() : values.stream().filter(Objects::nonNull).toList();
     }
 
     private static boolean text(String value) {

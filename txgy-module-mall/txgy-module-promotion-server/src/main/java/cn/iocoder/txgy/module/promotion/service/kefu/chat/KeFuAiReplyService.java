@@ -29,7 +29,8 @@ public class KeFuAiReplyService {
 
     public record Answer(String text, List<Long> productIds) {}
 
-    public Answer reply(String scope, long shopId, String question, String context) {
+    public Answer reply(String scope, long shopId, long requesterId, String conversationId,
+                        String question, String context) {
         if (!enabled || StrUtil.isBlank(question)) {
             return null;
         }
@@ -40,6 +41,8 @@ public class KeFuAiReplyService {
             AiCustomerServiceReplyReqDTO request = new AiCustomerServiceReplyReqDTO();
             request.setScope(scope);
             request.setShopId(shopId);
+            request.setRequesterId(requesterId);
+            request.setConversationId(conversationId);
             request.setQuestion(question.strip());
             request.setContext(promptContext(candidates, context));
             var response = customerServiceApi.reply(request).getCheckedData();

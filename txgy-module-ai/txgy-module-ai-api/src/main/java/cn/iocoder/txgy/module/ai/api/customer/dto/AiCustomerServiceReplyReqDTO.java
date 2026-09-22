@@ -19,6 +19,16 @@ public class AiCustomerServiceReplyReqDTO {
     @Min(0)
     private Long shopId;
 
+    /** Internal member identity used only for provider quota isolation and audit correlation. */
+    @NotNull
+    @Min(1)
+    private Long requesterId;
+
+    /** Server-issued customer-service conversation identifier; never accept a free-form prompt value here. */
+    @NotBlank
+    @Pattern(regexp = "[A-Za-z0-9_-]{8,64}")
+    private String conversationId;
+
     @NotBlank
     @Size(max = 1000)
     private String question;

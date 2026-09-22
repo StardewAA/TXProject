@@ -131,7 +131,8 @@ public class KeFuChatService {
             // Bound provider spend per conversation even when a client stays below the general message limit.
             boolean aiRateLimited=match==null&&repository.recentRoleCount(session,"AI",clock.millis()-60_000)>=10;
             KeFuAiReplyService.Answer aiReply=match==null&&!aiRateLimited?inTenant(session.tenantId(),
-                    ()->aiReplies.reply(session.scope(),session.shopId(),text,aiContext(session))):null;
+                    ()->aiReplies.reply(session.scope(),session.shopId(),session.memberId(),session.id(),
+                            text,aiContext(session))):null;
             String role=match!=null?"FAQ":aiReply!=null?"AI":"SYSTEM";
             String answer=match!=null?match.entry().answer():aiReply!=null?aiReply.text()
                     :"暂未找到匹配的常见问题。您可以转人工；无人值守时可留言，处理状态以本会话为准。";

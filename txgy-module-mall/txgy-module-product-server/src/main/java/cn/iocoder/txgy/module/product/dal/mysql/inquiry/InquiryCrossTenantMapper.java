@@ -296,23 +296,40 @@ public interface InquiryCrossTenantMapper {
             + " AND " + ACTIVE_BUYER_ENTERPRISE
             + " AND " + OPEN_BUYER_PORTAL;
 
+    /** Search only fields that are already visible in the public summary; never search contact/address detail. */
+    String PUBLIC_KEYWORD_FILTER = " AND (LOWER(i.no) LIKE CONCAT('%',#{keyword},'%')"
+            + " OR LOWER(i.title) LIKE CONCAT('%',#{keyword},'%')"
+            + " OR EXISTS (SELECT 1 FROM product_enterprise keyword_enterprise"
+            + " WHERE keyword_enterprise.id=i.enterprise_id"
+            + " AND keyword_enterprise.tenant_id=i.tenant_id"
+            + " AND keyword_enterprise.deleted=b'0' AND keyword_enterprise.audit_status=1"
+            + " AND LOWER(keyword_enterprise.name) LIKE CONCAT('%',#{keyword},'%'))"
+            + " OR EXISTS (SELECT 1 FROM product_purchase_inquiry_item keyword_item"
+            + " WHERE keyword_item.inquiry_id=i.id AND keyword_item.tenant_id=i.tenant_id"
+            + " AND keyword_item.deleted=b'0' AND (LOWER(keyword_item.name) LIKE CONCAT('%',#{keyword},'%')"
+            + " OR LOWER(keyword_item.category) LIKE CONCAT('%',#{keyword},'%'))))";
+
     @Select({"<script>",
             "SELECT i.id AS inquiryId,i.tenant_id AS inquiryTenantId,i.visibility AS visibility",
             PLATFORM_PUBLIC_FROM,
             "<if test=\"state == 'open'\"> AND i.status=1 AND i.deadline&gt;#{now}</if>",
             "<if test=\"state == 'ended'\"> AND (i.status IN (3,4) OR (i.status=1 AND i.deadline&lt;=#{now}))</if>",
+            "<if test=\"keyword != null\">" + PUBLIC_KEYWORD_FILTER + "</if>",
             " ORDER BY i.id DESC LIMIT #{limit} OFFSET #{offset}",
             "</script>"})
     List<OpportunityRef> selectPlatformPublicInquiries(@Param("state") String state,
                                                         @Param("now") Long now,
+                                                        @Param("keyword") String keyword,
                                                         @Param("offset") long offset,
                                                         @Param("limit") int limit);
 
     @Select({"<script>", "SELECT COUNT(1)", PLATFORM_PUBLIC_FROM,
             "<if test=\"state == 'open'\"> AND i.status=1 AND i.deadline&gt;#{now}</if>",
             "<if test=\"state == 'ended'\"> AND (i.status IN (3,4) OR (i.status=1 AND i.deadline&lt;=#{now}))</if>",
+            "<if test=\"keyword != null\">" + PUBLIC_KEYWORD_FILTER + "</if>",
             "</script>"})
-    long countPlatformPublicInquiries(@Param("state") String state, @Param("now") Long now);
+    long countPlatformPublicInquiries(@Param("state") String state, @Param("now") Long now,
+                                      @Param("keyword") String keyword);
 
     @Select({"SELECT i.id AS inquiryId,i.tenant_id AS inquiryTenantId,i.visibility AS visibility",
             PLATFORM_PUBLIC_FROM, " AND i.id=#{inquiryId} LIMIT 1"})
@@ -323,6 +340,7 @@ public interface InquiryCrossTenantMapper {
             OPPORTUNITY_FROM,
             "<if test=\"state == 'open'\"> AND i.status=1 AND i.deadline&gt;#{now}</if>",
             "<if test=\"state == 'ended'\"> AND (i.status IN (3,4) OR (i.status=1 AND i.deadline&lt;=#{now}))</if>",
+            "<if test=\"keyword != null\">" + PUBLIC_KEYWORD_FILTER + "</if>",
             " ORDER BY i.id DESC LIMIT #{limit} OFFSET #{offset}",
             "</script>"})
     List<OpportunityRef> selectVisibleOpportunities(@Param("viewerTenantId") Long viewerTenantId,
@@ -330,18 +348,21 @@ public interface InquiryCrossTenantMapper {
                                                      @Param("shopId") Long shopId,
                                                      @Param("state") String state,
                                                      @Param("now") Long now,
+                                                     @Param("keyword") String keyword,
                                                      @Param("offset") long offset,
                                                      @Param("limit") int limit);
 
     @Select({"<script>", "SELECT COUNT(1)", OPPORTUNITY_FROM,
             "<if test=\"state == 'open'\"> AND i.status=1 AND i.deadline&gt;#{now}</if>",
             "<if test=\"state == 'ended'\"> AND (i.status IN (3,4) OR (i.status=1 AND i.deadline&lt;=#{now}))</if>",
+            "<if test=\"keyword != null\">" + PUBLIC_KEYWORD_FILTER + "</if>",
             "</script>"})
     long countVisibleOpportunities(@Param("viewerTenantId") Long viewerTenantId,
                                    @Param("viewerEnterpriseId") Long viewerEnterpriseId,
                                    @Param("shopId") Long shopId,
                                    @Param("state") String state,
-                                   @Param("now") Long now);
+                                   @Param("now") Long now,
+                                   @Param("keyword") String keyword);
 
     @Select({"<script>", "SELECT i.id AS inquiryId,i.tenant_id AS inquiryTenantId,i.visibility AS visibility",
             OPPORTUNITY_FROM, " AND i.id=#{inquiryId} LIMIT 1", "</script>"})

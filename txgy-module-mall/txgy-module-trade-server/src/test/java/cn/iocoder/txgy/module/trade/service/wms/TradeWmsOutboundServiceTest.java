@@ -152,7 +152,30 @@ class TradeWmsOutboundServiceTest {
     }
 
     @Test
-    void productRpcFailureIsRecoveredByTenantScopedPaidOrderScan() {
+    void incompletePaidOrderCreatesManualReviewRecord() {
+        TradeOrderDO order = new TradeOrderDO().setId(500L).setShopId(10L)
+                .setStatus(10).setPayStatus(true);
+
+        service.createForPaidOrder(order, List.of());
+
+        ArgumentCaptor<TradeWmsShipmentDO> captor = ArgumentCaptor.forClass(TradeWmsShipmentDO.class);
+        verify(shipmentMapper).insert(captor.capture());
+        assertEquals(TradeWmsOutboundService.MANUAL_REVIEW, captor.getValue().getStatus());
+        assertEquals("UNKNOWN-DW", captor.getValue().getOrderNo());
+        assertTrue(captor.getValue().getLastError().contains("ORDER_INCOMPLETE"));
+        verifyNoInteractions(integrationApi);
+    }
+
+    @Test
+    void missingOrderIdentityIsRejectedBecauseNoAuditRecordCanBeLinked() {
+        assertThrows(IllegalArgumentException.class, () -> service.createForPaidOrder(null, List.of()));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.createForPaidOrder(new TradeOrderDO(), List.of()));
+        verifyNoInteractions(shipmentMapper, integrationApi);
+    }
+
+    @Test
+    void productRpcFailureCreatesManualReviewRecordInsteadOfLosingTheOrder() {
         TradeOrderDO order = new TradeOrderDO().setId(500L).setNo("o500").setShopId(10L)
                 .setStatus(10).setPayStatus(true);
         List<TradeOrderItemDO> items = List.of(item(11L, 1L, 10L, 1, 1200));
@@ -161,24 +184,15 @@ class TradeWmsOutboundServiceTest {
         service.createForPaidOrder(order, items);
 
         verifyNoInteractions(integrationApi);
-        verify(shipmentMapper, never()).insert(any(TradeWmsShipmentDO.class));
-
-        when(recoveryMapper.selectPaidOrdersWithoutShipment(2009L, 100)).thenReturn(List.of(order));
-        when(orderItemMapper.selectListByOrderId(500L)).thenReturn(items);
-        ProductSkuRespDTO sku = productSku(1L, 101L, 201L, "平方米");
-        doReturn(Map.of(1L, sku)).when(productSkuApi).getSkuMap(any());
-        when(stockReadApi.getSkuOptions()).thenReturn(success(List.of(wmsSku(101L, "MAT-1", "SKU-1", "m²"))));
-        when(stockReadApi.getWarehouses()).thenReturn(success(List.of(warehouse(201L, "FG-A"))));
-
-        assertEquals(1, service.recoverPaidOrdersWithoutShipment(100));
-
-        verify(recoveryMapper).selectPaidOrdersWithoutShipment(2009L, 100);
-        verify(shipmentMapper).insert(any(TradeWmsShipmentDO.class));
-        verify(integrationApi).createMallShipment(any(WmsOrderRequestDTO.class));
+        ArgumentCaptor<TradeWmsShipmentDO> captor = ArgumentCaptor.forClass(TradeWmsShipmentDO.class);
+        verify(shipmentMapper).insert(captor.capture());
+        assertEquals(TradeWmsOutboundService.MANUAL_REVIEW, captor.getValue().getStatus());
+        assertEquals(0L, captor.getValue().getWarehouseId());
+        assertTrue(captor.getValue().getLastError().contains("PRODUCT_MAPPING_UNAVAILABLE"));
     }
 
     @Test
-    void missingProductWmsMappingIsRecoveredAfterMappingIsCompleted() {
+    void missingProductWmsMappingCreatesManualReviewRecord() {
         TradeOrderDO order = new TradeOrderDO().setId(500L).setNo("o500").setShopId(10L)
                 .setStatus(10).setPayStatus(true);
         List<TradeOrderItemDO> items = List.of(item(11L, 1L, 10L, 1, 1200));
@@ -187,20 +201,12 @@ class TradeWmsOutboundServiceTest {
 
         service.createForPaidOrder(order, items);
 
-        verify(shipmentMapper, never()).insert(any(TradeWmsShipmentDO.class));
         verifyNoInteractions(integrationApi);
-
-        when(recoveryMapper.selectPaidOrdersWithoutShipment(2009L, 200)).thenReturn(List.of(order));
-        when(orderItemMapper.selectListByOrderId(500L)).thenReturn(items);
-        ProductSkuRespDTO mapped = productSku(1L, 101L, 201L, "平方米");
-        when(productSkuApi.getSkuMap(any())).thenReturn(Map.of(1L, mapped));
-        when(stockReadApi.getSkuOptions()).thenReturn(success(List.of(wmsSku(101L, "MAT-1", "SKU-1", "平方米"))));
-        when(stockReadApi.getWarehouses()).thenReturn(success(List.of(warehouse(201L, "FG-A"))));
-
-        assertEquals(1, service.recoverPaidOrdersWithoutShipment(999));
-
-        verify(recoveryMapper).selectPaidOrdersWithoutShipment(2009L, 200);
-        verify(integrationApi).createMallShipment(any(WmsOrderRequestDTO.class));
+        ArgumentCaptor<TradeWmsShipmentDO> captor = ArgumentCaptor.forClass(TradeWmsShipmentDO.class);
+        verify(shipmentMapper).insert(captor.capture());
+        assertEquals(TradeWmsOutboundService.MANUAL_REVIEW, captor.getValue().getStatus());
+        assertEquals(0L, captor.getValue().getWarehouseId());
+        assertTrue(captor.getValue().getLastError().contains("PRODUCT_MAPPING_INCOMPLETE"));
     }
 
     @Test

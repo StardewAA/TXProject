@@ -16,7 +16,7 @@ import java.util.List;
 public interface TradeWmsRecoveryMapper {
 
     @Select("""
-            SELECT o.*
+            SELECT o.id, o.no, o.shop_id, o.pay_time
             FROM trade_order o
             WHERE o.tenant_id = #{tenantId}
               AND o.deleted = 0

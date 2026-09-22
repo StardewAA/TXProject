@@ -368,7 +368,9 @@ services:
     environment:
       <<: *backend-env
       # Key is supplied by the host environment or an untracked deploy/.env; never bake it into an image.
-      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-sk-xxxx}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:?DEEPSEEK_API_KEY must be set before starting the AI service}
+      AI_PROVIDER_CONNECT_TIMEOUT_MS: ${AI_PROVIDER_CONNECT_TIMEOUT_MS:-3000}
+      AI_PROVIDER_READ_TIMEOUT_MS: ${AI_PROVIDER_READ_TIMEOUT_MS:-15000}
       JAVA_OPTS: -Xms96m -Xmx512m -XX:MaxMetaspaceSize=384m -XX:+UseG1GC -XX:MaxRAMPercentage=51
 
   hrm:

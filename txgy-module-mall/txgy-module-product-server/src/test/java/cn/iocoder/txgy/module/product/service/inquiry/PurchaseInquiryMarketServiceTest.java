@@ -278,8 +278,12 @@ class PurchaseInquiryMarketServiceTest {
         InquiryItemDO item = new InquiryItemDO(); item.setId(11L); item.setInquiryId(10L);
         item.setName("螺纹钢 13800138000");
         ProductEnterpriseDO enterprise = approvedEnterprise(100L); enterprise.setName("采购企业");
-        when(crossTenantMapper.selectPlatformPublicInquiries(eq("open"), anyLong(), eq(0L), eq(1000)))
+        when(crossTenantMapper.selectPlatformPublicInquiries(eq("open"), anyLong(), eq("sales"), eq(0L), eq(10)))
+                .thenReturn(List.of());
+        when(crossTenantMapper.countPlatformPublicInquiries(eq("open"), anyLong(), eq("sales"))).thenReturn(0L);
+        when(crossTenantMapper.selectPlatformPublicInquiries(eq("open"), anyLong(), eq("钢材"), eq(0L), eq(10)))
                 .thenReturn(List.of(opportunityRef(10L, 1L, "PLATFORM_PUBLIC")));
+        when(crossTenantMapper.countPlatformPublicInquiries(eq("open"), anyLong(), eq("钢材"))).thenReturn(1L);
         when(inquiryMapper.selectList(any(Wrapper.class))).thenReturn(List.of(inquiry));
         when(inquiryItemMapper.selectList(any(Wrapper.class))).thenReturn(List.of(item));
         when(quoteMapper.selectList(any(Wrapper.class))).thenReturn(List.of());
@@ -291,7 +295,7 @@ class PurchaseInquiryMarketServiceTest {
         assertThrows(ServiceException.class, () -> service.publicPage(page, "open", "13800138000"));
         assertThrows(ServiceException.class, () -> service.publicPage(page, "open", "%钢材_"));
         verify(crossTenantMapper, times(2))
-                .selectPlatformPublicInquiries(eq("open"), anyLong(), eq(0L), eq(1000));
+                .selectPlatformPublicInquiries(eq("open"), anyLong(), anyString(), eq(0L), eq(10));
     }
 
     @Test
@@ -302,10 +306,10 @@ class PurchaseInquiryMarketServiceTest {
         first.setTenantId(1L);
         InquiryDO second = publishedInquiry(20L, 200L, "PLATFORM_PUBLIC");
         second.setTenantId(2009L);
-        when(crossTenantMapper.selectPlatformPublicInquiries(eq("open"), anyLong(), eq(0L), eq(10)))
+        when(crossTenantMapper.selectPlatformPublicInquiries(eq("open"), anyLong(), isNull(), eq(0L), eq(10)))
                 .thenReturn(List.of(opportunityRef(10L, 1L, "PLATFORM_PUBLIC"),
                         opportunityRef(20L, 2009L, "PLATFORM_PUBLIC")));
-        when(crossTenantMapper.countPlatformPublicInquiries(eq("open"), anyLong())).thenReturn(2L);
+        when(crossTenantMapper.countPlatformPublicInquiries(eq("open"), anyLong(), isNull())).thenReturn(2L);
         when(inquiryMapper.selectList(any(Wrapper.class))).thenAnswer(invocation ->
                 Objects.equals(TenantContextHolder.getRequiredTenantId(), 1L) ? List.of(first) : List.of(second));
         when(inquiryItemMapper.selectList(any(Wrapper.class))).thenReturn(List.of());
