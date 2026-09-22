@@ -335,30 +335,32 @@ function buildActions(row: TrainingResourceApi.VideoResource) {
       onClick: () => handleOpenCredit(row),
     },
   ];
-  actions.push({
-    label: '转码详情',
-    type: 'link',
-    onClick: () => handleOpenTasks(row),
-  });
-  if (row.transcodeStatus !== 3) {
+  if (capability.value?.enabled) {
     actions.push({
-      label: '重新转码',
+      label: '转码详情',
       type: 'link',
-      popConfirm: {
-        title: '重新生成 360P / 480P / 720P 转码任务？',
-        confirm: () => handleRetryTranscode(row),
-      },
+      onClick: () => handleOpenTasks(row),
     });
-  }
-  if (row.transcodeStatus === 0 || row.transcodeStatus === 4) {
-    actions.push({
-      label: '标记转码',
-      type: 'link',
-      popConfirm: {
-        title: '转码引擎不可用时，手动标记转码成功（仅占位）？',
-        confirm: () => handleMarkTranscode(row),
-      },
-    });
+    if (row.transcodeStatus !== 3) {
+      actions.push({
+        label: '重新转码',
+        type: 'link',
+        popConfirm: {
+          title: '重新生成 360P / 480P / 720P 转码任务？',
+          confirm: () => handleRetryTranscode(row),
+        },
+      });
+    }
+    if (row.transcodeStatus === 0 || row.transcodeStatus === 4) {
+      actions.push({
+        label: '标记转码',
+        type: 'link',
+        popConfirm: {
+          title: '转码引擎不可用时，手动标记转码成功（仅占位）？',
+          confirm: () => handleMarkTranscode(row),
+        },
+      });
+    }
   }
   const status = row.status;
   if (status !== 4) {
@@ -428,7 +430,7 @@ loadCategories();
     </div>
 
     <Grid
-      :table-title="`视频资源库（MP4/MOV ≤4GB，异步上传 + 自动转码 360P/480P/720P${capability?.ffmpegAvailable ? '' : '（当前环境未检测到 ffmpeg）'}）`"
+      :table-title="capability?.enabled === false ? '视频资源库（MP4/MOV ≤4GB）' : `视频资源库（MP4/MOV ≤4GB，异步上传 + 自动转码 360P/480P/720P${capability?.ffmpegAvailable ? '' : '（当前环境未检测到 ffmpeg）'}）`"
     >
       <template #toolbar-tools>
         <TableAction
@@ -481,7 +483,10 @@ loadCategories();
       :footer="null"
       destroy-on-close
     >
-      <div v-if="definitionOptions.length" class="mb-3 flex flex-wrap items-center gap-2">
+      <div
+        v-if="definitionOptions.length && capability?.enabled"
+        class="mb-3 flex flex-wrap items-center gap-2"
+      >
         <span class="text-sm text-gray-500">清晰度</span>
         <Button
           v-for="item in definitionOptions"
