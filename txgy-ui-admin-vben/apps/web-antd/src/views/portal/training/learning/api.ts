@@ -225,6 +225,11 @@ export namespace TrainingLearnerApi {
     title?: string;
     subtitle?: string;
     summary?: string;
+    /** 授课目标（training_course.objectives） */
+    objectives?: string;
+    /** 适用岗位/工种（JSON 数组字符串，作为"适合学习人员"） */
+    applicablePosts?: string;
+    lecturerBrief?: string;
     coverUrl?: string;
     credit?: number;
     courseLevel?: string;
@@ -438,6 +443,13 @@ export function getPortalCoursePage(
 export function getPortalCourseCategoryTree() {
   return requestClient.get<TrainingLearnerApi.PortalCourseCategory[]>(
     '/training/portal/course/category-tree',
+  );
+}
+
+/** 学员端课程详情（仅已上架；课程信息 + 简介/授课目标/适用岗位） */
+export function getPortalCourse(id: number) {
+  return requestClient.get<TrainingLearnerApi.PortalCourse>(
+    `/training/portal/course/get?id=${id}`,
   );
 }
 

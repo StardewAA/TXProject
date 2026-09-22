@@ -309,7 +309,8 @@ def platform_put(path, token, tenant_id, body: dict | None = None):
 def current_user(authorization: str = Header(""), tenant_id: int = Header(...)):
     if not authorization.startswith("Bearer ") or len(authorization)<10:
         raise HTTPException(401, "请先登录平台")
-    if tenant_id <= 0: raise HTTPException(403, "企业信息无效")
+    # 平台中存在 tenant_id=0 的超级管理员/系统账号，不再强制 tenant_id>0
+    if tenant_id < 0: raise HTTPException(403, "企业信息无效")
     info = platform_get("/system/auth/get-permission-info", authorization, tenant_id)
     user = info.get("user") or {}
     if not user.get("id"): raise HTTPException(401, "无法确认用户身份")
