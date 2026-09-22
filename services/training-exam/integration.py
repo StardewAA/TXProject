@@ -214,6 +214,7 @@ def install(ctx):
     def update_paper(pid:int,body:PaperIn,db:Session=Depends(db_session),actor:Actor=Depends(require("admin","teacher"))):
         p=db.get(Paper,pid)
         if not p or p.status!="draft":raise HTTPException(409,"仅草稿试卷可修改参数")
+        if body.exam_type=="course_exam" and not body.course_id:raise HTTPException(422,"结课考试必须关联系统中的课程——请在「关联课程」中选择一门课程")
         for key,value in body.model_dump().items():setattr(p,key,value)
         db.commit();return ok()
 
