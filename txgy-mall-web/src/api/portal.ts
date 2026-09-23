@@ -24,6 +24,8 @@ export interface PortalProduct {
   description?: string
   picUrl?: string
   categoryId?: Identifier
+  categoryName?: string
+  categoryGroupName?: string
   price: number
   salesCount?: number
   saleable: boolean

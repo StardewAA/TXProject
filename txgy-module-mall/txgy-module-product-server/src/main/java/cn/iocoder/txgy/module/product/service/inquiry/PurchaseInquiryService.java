@@ -16,6 +16,7 @@ import cn.iocoder.txgy.module.product.dal.dataobject.enterprise.ProductEnterpris
 import cn.iocoder.txgy.module.product.dal.dataobject.inquiry.*;
 import cn.iocoder.txgy.module.product.dal.dataobject.shop.ProductShopDO;
 import cn.iocoder.txgy.module.product.dal.mysql.inquiry.*;
+import cn.iocoder.txgy.module.product.dal.mysql.portal.MallPortalCatalogMapper;
 import cn.iocoder.txgy.module.product.dal.mysql.sku.ProductSkuMapper;
 import cn.iocoder.txgy.module.product.dal.mysql.spu.ProductSpuMapper;
 import cn.iocoder.txgy.module.product.dal.mysql.shop.ProductShopMapper;
@@ -40,6 +41,7 @@ public class PurchaseInquiryService {
  @Resource private EnterpriseMembershipService membership;
  @Resource private ProductSkuMapper skuMapper;
  @Resource private ProductSpuMapper spuMapper;
+ @Resource private MallPortalCatalogMapper portalCatalogMapper;
  @Resource private ProductShopMapper shopMapper;
  @Resource private ProductEnterpriseMapper enterpriseMapper;
  public static final String VISIBILITY_TENANT_PUBLIC="TENANT_PUBLIC";
@@ -143,8 +145,15 @@ public class PurchaseInquiryService {
    if(input.getSkuId()!=null) {
     var sku=skuMapper.selectById(input.getSkuId());
     var spu=sku==null?null:spuMapper.selectById(sku.getSpuId());
-    if(spu==null || !Integer.valueOf(1).equals(spu.getStatus())) throw invalid("所选商品已失效，请重新选取");
-    item.setName(spu.getName()); item.setCode(sku.getBarCode());
+    if(spu!=null && Integer.valueOf(1).equals(spu.getStatus())) {
+     item.setName(spu.getName()); item.setCode(sku.getBarCode());
+    } else {
+     // 平台询价商品可来自其他正式租户；仅通过跨租户公开目录 Mapper
+     // 接受仍开放、审核通过、公开且有库存/售价的 SKU，绝不信任前端商品快照。
+     var publicSku=portalCatalogMapper.selectPublicSkuById(input.getSkuId());
+     if(publicSku==null) throw invalid("所选商品已失效，请重新选取");
+     item.setName(publicSku.getSpuName()); item.setCode(publicSku.getBarCode());
+    }
    }
    item.setInquiryId(row.getId()); itemMapper.insert(item);
   }

@@ -223,6 +223,18 @@ public interface MallPortalCatalogMapper {
     @Results(@Result(column = "properties", property = "properties", typeHandler = Jackson3TypeHandler.class))
     List<PortalSkuRow> selectPublicSkus(@Param("spuIds") List<Long> spuIds);
 
+    @Select({"<script>",
+            "SELECT sku.spu_id AS spuId, sku.id AS skuId, spu.name AS spuName,",
+            " sku.bar_code AS barCode, sku.properties AS properties,",
+            " COALESCE(NULLIF(sku.pic_url, ''), spu.pic_url) AS picUrl, sku.price AS price",
+            PUBLIC_PRODUCT_FROM,
+            " JOIN product_sku sku ON sku.spu_id = spu.id AND sku.tenant_id = spu.tenant_id",
+            PUBLIC_PRODUCT_WHERE,
+            " AND sku.id = #{skuId} AND sku.deleted = 0 AND sku.stock &gt; 0 AND sku.price &gt; 0",
+            " LIMIT 1", "</script>"})
+    @Results(@Result(column = "properties", property = "properties", typeHandler = Jackson3TypeHandler.class))
+    PortalSkuRow selectPublicSkuById(@Param("skuId") Long skuId);
+
     @Data
     class PortalProductRow {
         private Long tenantId;
@@ -250,6 +262,7 @@ public interface MallPortalCatalogMapper {
         private Long spuId;
         private Long skuId;
         private String spuName;
+        private String barCode;
         private List<ProductSkuDO.Property> properties;
         private String picUrl;
         private Integer price;
