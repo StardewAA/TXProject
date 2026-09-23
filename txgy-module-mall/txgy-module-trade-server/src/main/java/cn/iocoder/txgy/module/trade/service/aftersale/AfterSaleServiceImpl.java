@@ -8,6 +8,9 @@ import cn.iocoder.txgy.framework.common.enums.UserTypeEnum;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.ObjectUtils;
+import cn.iocoder.txgy.framework.tenant.core.util.TenantUtils;
+import cn.iocoder.txgy.module.pay.api.order.PayOrderApi;
+import cn.iocoder.txgy.module.pay.api.order.dto.PayOrderRespDTO;
 import cn.iocoder.txgy.module.pay.api.refund.PayRefundApi;
 import cn.iocoder.txgy.module.pay.api.refund.dto.PayRefundCreateReqDTO;
 import cn.iocoder.txgy.module.pay.api.refund.dto.PayRefundRespDTO;
@@ -56,6 +59,8 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.framework.common.util.json.JsonUtils.toJsonString;
@@ -78,9 +83,6 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         if (workbenchJournal != null) workbenchJournal.changed(orderId);
     }
     @Resource
-    private cn.iocoder.txgy.module.trade.service.erp.TradeErpInventoryService erpInventory;
-
-    @Resource
     private cn.iocoder.txgy.module.trade.dal.mysql.order.TradeOrderMapper settlementOrderLock;
 
     @Resource
@@ -98,6 +100,8 @@ public class AfterSaleServiceImpl implements AfterSaleService {
 
     @Resource
     private PayRefundApi payRefundApi;
+    @Resource
+    private PayOrderApi payOrderApi;
     @Resource
     private CombinationRecordApi combinationRecordApi;
 
@@ -391,13 +395,10 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         // 校验售后单存在，并状态为已退货
         AfterSaleDO afterSale = validateAfterSaleReceivable(id);
 
-        var erpOrder = tradeOrderQueryService.getOrder(afterSale.getOrderId());
-        var erpItem = new cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderItemDO()
-                .setSkuId(afterSale.getSkuId()).setCount(afterSale.getCount());
-        var erpRequest = erpInventory.request(erpOrder,
-                cn.iocoder.txgy.module.trade.service.erp.ErpInventoryModels.Operation.RETURN,
-                String.valueOf(id), java.util.List.of(erpItem), null, null);
-        if (!erpRequest.confirmed()) return;
+        // 退货入库也属于 WMS 执行能力；接口未开放前不能把后台确认冒充为已入库。
+        throw new cn.iocoder.txgy.framework.common.exception.ServiceException(400,
+                "WMS 退货入库接口尚未开放，暂不能确认收货");
+        /* WMS 退货入库接口开放并返回执行结果后，再推进售后状态。
 
         // 更新售后单的状态
         updateAfterSaleStatus(afterSale.getId(), AfterSaleStatusEnum.BUYER_DELIVERY.getStatus(), new AfterSaleDO()
@@ -406,6 +407,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         // 记录售后日志
         AfterSaleLogUtils.setAfterSaleInfo(afterSale.getId(), afterSale.getStatus(),
                 AfterSaleStatusEnum.WAIT_REFUND.getStatus());
+        */
     }
 
     @Override
@@ -486,11 +488,14 @@ public class AfterSaleServiceImpl implements AfterSaleService {
     }
 
     private Long createPayRefund(String userIp, AfterSaleDO afterSale) {
+        PaymentOrderContext payment = resolvePaymentOrder(afterSale);
         // 创建退款单
         PayRefundCreateReqDTO createReqDTO = AfterSaleConvert.INSTANCE.convert(userIp, afterSale, tradeOrderProperties)
+                .setMerchantOrderId(payment.order().getMerchantOrderId())
                 .setUserId(afterSale.getUserId()).setUserType(UserTypeEnum.MEMBER.getValue())
                 .setReason(StrUtil.format("退款【{}】", afterSale.getSpuName()));
-        Long payRefundId = payRefundApi.createRefund(createReqDTO).getCheckedData();
+        Long payRefundId = executeInTenant(payment.tenantId(),
+                () -> payRefundApi.createRefund(createReqDTO).getCheckedData());
 
         // 更新售后单的退款单号
         tradeAfterSaleMapper.updateById(new AfterSaleDO().setId(afterSale.getId()).setPayRefundId(payRefundId));
@@ -508,9 +513,16 @@ public class AfterSaleServiceImpl implements AfterSaleService {
             throw exception(AFTER_SALE_NOT_FOUND);
         }
         // 支付平台可能重复通知。已经完成且退款单一致时直接返回，保证回调幂等。
-        if (ObjectUtil.equal(afterSale.getStatus(), AfterSaleStatusEnum.COMPLETE.getStatus())
-                && ObjectUtil.equal(afterSale.getPayRefundId(), payRefundId)) {
-            return;
+        if (ObjectUtil.equal(afterSale.getStatus(), AfterSaleStatusEnum.COMPLETE.getStatus())) {
+            if (ObjectUtil.equal(afterSale.getPayRefundId(), payRefundId)) {
+                return;
+            }
+            // 支付成功后业务事务可能回滚：允许用已校验的退款单补齐关联编号，但不重复退款。
+            if (afterSale.getPayRefundId() == null) {
+                validatePayRefund(afterSale, payRefundId);
+                bindPayRefund(afterSale, payRefundId);
+                return;
+            }
         }
         if (ObjectUtil.notEqual(afterSale.getStatus(), AfterSaleStatusEnum.WAIT_REFUND.getStatus())) {
             throw exception(AFTER_SALE_REFUND_FAIL_STATUS_NOT_WAIT_REFUND);
@@ -518,6 +530,11 @@ public class AfterSaleServiceImpl implements AfterSaleService {
 
         // 2. 校验退款单
         PayRefundRespDTO payRefund = validatePayRefund(afterSale, payRefundId);
+        if (afterSale.getPayRefundId() == null) {
+            bindPayRefund(afterSale, payRefundId);
+        } else if (!ObjectUtil.equal(afterSale.getPayRefundId(), payRefundId)) {
+            throw exception(AFTER_SALE_REFUND_FAIL_REFUND_ORDER_ID_ERROR);
+        }
 
         // 3. 处理退款结果
         if (PayRefundStatusEnum.isSuccess(payRefund.getStatus())) {
@@ -534,7 +551,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
      * 同步支付服务中的退款结果。用于同步完成的退款渠道，以及修复通知暂时不可达时的状态滞后。
      */
     private boolean syncAfterSaleRefundResult(AfterSaleDO afterSale, Long payRefundId) {
-        PayRefundRespDTO payRefund = payRefundApi.getRefund(payRefundId).getCheckedData();
+        PayRefundRespDTO payRefund = getPaymentRefund(afterSale, payRefundId);
         if (payRefund == null || (!PayRefundStatusEnum.isSuccess(payRefund.getStatus())
                 && !PayRefundStatusEnum.isFailure(payRefund.getStatus()))) {
             return false;
@@ -565,7 +582,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
      */
     private PayRefundRespDTO validatePayRefund(AfterSaleDO afterSale, Long payRefundId) {
         // 1. 校验退款单是否存在
-        PayRefundRespDTO payRefund = payRefundApi.getRefund(payRefundId).getCheckedData();
+        PayRefundRespDTO payRefund = getPaymentRefund(afterSale, payRefundId);
         if (payRefund == null) {
             log.error("[validatePayRefund][afterSale({}) payRefund({}) 不存在，请进行处理！]", afterSale.getId(), payRefundId);
             throw exception(AFTER_SALE_REFUND_FAIL_REFUND_NOT_FOUND);
@@ -590,6 +607,43 @@ public class AfterSaleServiceImpl implements AfterSaleService {
             throw exception(AFTER_SALE_REFUND_FAIL_REFUND_ORDER_ID_ERROR);
         }
         return payRefund;
+    }
+
+    private void bindPayRefund(AfterSaleDO afterSale, Long payRefundId) {
+        tradeAfterSaleMapper.updateById(new AfterSaleDO().setId(afterSale.getId()).setPayRefundId(payRefundId));
+        afterSale.setPayRefundId(payRefundId);
+    }
+
+    private PayRefundRespDTO getPaymentRefund(AfterSaleDO afterSale, Long payRefundId) {
+        PaymentOrderContext payment = resolvePaymentOrder(afterSale);
+        return executeInTenant(payment.tenantId(),
+                () -> payRefundApi.getRefund(payRefundId).getCheckedData());
+    }
+
+    private PaymentOrderContext resolvePaymentOrder(AfterSaleDO afterSale) {
+        TradeOrderDO tradeOrder = tradeOrderQueryService.getOrder(afterSale.getOrderId());
+        if (tradeOrder == null || tradeOrder.getPayOrderId() == null) {
+            throw exception(AFTER_SALE_REFUND_FAIL_REFUND_ORDER_ID_ERROR);
+        }
+        Long paymentTenantId = payOrderApi.getOrderTenantId(tradeOrder.getPayOrderId()).getCheckedData();
+        if (paymentTenantId == null) {
+            throw exception(AFTER_SALE_REFUND_FAIL_REFUND_ORDER_ID_ERROR);
+        }
+        PayOrderRespDTO paymentOrder = executeInTenant(paymentTenantId,
+                () -> payOrderApi.getOrder(tradeOrder.getPayOrderId()).getCheckedData());
+        if (paymentOrder == null || paymentOrder.getMerchantOrderId() == null) {
+            throw exception(AFTER_SALE_REFUND_FAIL_REFUND_ORDER_ID_ERROR);
+        }
+        return new PaymentOrderContext(paymentTenantId, paymentOrder);
+    }
+
+    private static <T> T executeInTenant(Long tenantId, Supplier<T> action) {
+        AtomicReference<T> result = new AtomicReference<>();
+        TenantUtils.execute(tenantId, () -> result.set(action.get()));
+        return result.get();
+    }
+
+    private record PaymentOrderContext(Long tenantId, PayOrderRespDTO order) {
     }
 
     @Override

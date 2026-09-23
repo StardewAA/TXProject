@@ -39,6 +39,7 @@ class MemberAuthTenantTest {
         service = new MemberAuthServiceImpl();
         ReflectionTestUtils.setField(service, "accountPolicy", mock(cn.iocoder.txgy.module.member.service.tenant.MallAccountPolicy.class));
         ReflectionTestUtils.setField(service, "customerAffiliations", mock(cn.iocoder.txgy.module.member.service.tenant.MallCustomerAffiliationService.class));
+        ReflectionTestUtils.setField(service, "platformAccounts", mock(cn.iocoder.txgy.module.member.service.platform.MemberPlatformAccountService.class));
         userService = mock(MemberUserService.class);
         tokenApi = mock(OAuth2TokenCommonApi.class);
         ReflectionTestUtils.setField(service, "userService", userService);

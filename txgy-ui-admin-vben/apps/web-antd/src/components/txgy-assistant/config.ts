@@ -34,15 +34,37 @@ export interface QuickChip {
 }
 
 export interface AssistantConfig {
-  /** 关键词 → 去向卡片 */
+  /**
+   * 关键词 → 去向卡片
+   *
+   * 接入大模型后，本项不再用来「编造回答」，而是：模型给出真实回答后，
+   * 若用户提问命中了某条规则，就在回答下方附一张「直达入口」卡片，
+   * 让用户从对话直接跳到对应模块（保留原有的导航价值）。
+   */
   dispatchRules: { pattern: RegExp; target: DispatchTarget }[];
-  /** 没命中关键词时给出的「猜你想找」入口 */
+  /** 没命中关键词、且模型未给出可跳转入口时展示的「猜你想找」入口 */
   fallbackTargets: DispatchTarget[];
   /** 历史会话缓存的 localStorage key */
   historyKey: string;
   /** 快捷入口按钮 */
   quickChips: QuickChip[];
+  /**
+   * 对话使用的 AI 聊天角色名称（后端 ai_chat_role.name）
+   *
+   * 角色是「模型 + 提示词 + 工具/知识库」的载体，由后端配置：优先匹配公开角色，
+   * 再匹配当前用户私有角色；都找不到时退回公开角色列表第一个。
+   * 默认使用各租户通用的「平台通用助手」，避免各环境角色 id 不同导致的硬编码问题。
+   */
+  roleName: string;
 }
+
+/**
+ * 平台通用助手角色名（后端 ai_chat_role.name）
+ *
+ * 前台首页与后台 AI首页共用同一个角色：不带业务工具与知识库，只做通用问答与导航；
+ * 各租户由 sql/ai-common-assistant-role.sql 初始化（幂等，按租户）。
+ */
+const PLATFORM_ASSISTANT_ROLE_NAME = '平台通用助手';
 
 /** 产品参数类问题的统一话术：完整产品库还没上线，先引导到 CMS 的资料与标准库 */
 const productAnswer =
@@ -196,6 +218,7 @@ export const portalAssistantConfig: AssistantConfig = {
   fallbackTargets: [portalContent, portalTraining, portalBidding, portalRecruit],
   historyKey: 'txgy-portal-home-chat-v1',
   quickChips: portalQuickChips,
+  roleName: PLATFORM_ASSISTANT_ROLE_NAME,
 };
 
 /** 后台「概览 → AI首页」（/dashboard/ai-home） */
@@ -240,4 +263,5 @@ export const adminAssistantConfig: AssistantConfig = {
   ],
   historyKey: 'txgy-admin-ai-home-chat-v1',
   quickChips: adminQuickChips,
+  roleName: PLATFORM_ASSISTANT_ROLE_NAME,
 };

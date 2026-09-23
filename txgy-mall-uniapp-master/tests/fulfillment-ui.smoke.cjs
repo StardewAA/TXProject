@@ -15,7 +15,10 @@ const server = createServer(async (request, response) => {
     let target = resolve(root, '.' + pathname);
     if ((target !== root && !target.startsWith(root + sep)) || pathname.includes('/app-api/')) return response.writeHead(503).end();
     if (!extname(target)) target = join(root, 'index.html');
-    response.writeHead(200, { 'Content-Type': types[extname(target)] || 'application/octet-stream' }).end(await readFile(target));
+    // Read the file before committing the 200 headers. Missing optional assets must
+    // return one clean 404 response instead of attempting to write headers twice.
+    const data = await readFile(target);
+    response.writeHead(200, { 'Content-Type': types[extname(target)] || 'application/octet-stream' }).end(data);
   } catch { response.writeHead(404).end(); }
 });
 const address = { id: 41, name: '隔离联系人', mobile: '13800000000', areaId: 110101, areaName: '北京市 东城区', detailAddress: '隔离测试收货点', defaultStatus: false };
@@ -67,11 +70,14 @@ async function fixture(name, options = {}) {
     else if (path === '/member/address/list') data = [state.address];
     else if (path === '/system/area/tree') data = [{ id: 110000, name: '北京市', children: [{ id: 110100, name: '北京市', children: [{ id: 110101, name: '东城区' }] }] }];
     else if (path === '/member/address/location-capability') {
-      assert.equal(headers.authorization?.replace(/^Bearer /, ''), 'isolated-access'); assert.equal(body, null);
+      assert.equal(headers.authorization, undefined); assert.equal(body, null);
       if (state.failCapability) return route.abort('failed');
       data = { status: 'NOT_CONFIGURED', provider: 'NONE', enabled: false, coordinateSystem: 'GCJ02', manualInputEnabled: true };
     } else if (path === '/member/address/update') {
       assert.equal(headers.authorization?.replace(/^Bearer /, ''), 'isolated-access'); state.address = { ...state.address, ...body }; data = true;
+    } else if (path === '/member/address/create') {
+      assert.equal(headers.authorization?.replace(/^Bearer /, ''), 'isolated-access');
+      state.address = { id: 42, ...body }; data = 42;
     } else if (request.method() !== 'GET') throw new Error('Unexpected write ' + path);
     await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ code, data, msg: code ? 'mock failure' : '' }) });
   });
@@ -113,7 +119,7 @@ async function fixture(name, options = {}) {
       });
       await test.page.waitForFunction(() => Array.from(document.querySelectorAll('input')).some(input => input.value === '隔离联系人'));
       await test.page.getByText('查看地图选点', { exact: true }).click(); await test.page.getByText('继续手工填写', { exact: true }).waitFor();
-      if (failCapability) await test.page.getByText('地图服务暂不可用', { exact: false }).first().waitFor();
+      if (failCapability) await test.page.getByText('地图加载失败', { exact: false }).first().waitFor();
       if (failCapability) {
         // uni-popup uses a delayed JS transition; wait for its own 300 ms animation before visual QA.
         await test.page.waitForTimeout(350);
@@ -128,6 +134,27 @@ async function fixture(name, options = {}) {
       await test.page.waitForURL(url => url.pathname === '/pages/user/address/list');
       await test.finish({ manualSaved: true });
     }
+    const created = await fixture('complete new address submits once');
+    await created.page.goto(origin + '/pages/user/address/list?tenantId=1', { waitUntil: 'networkidle' });
+    await created.page.waitForFunction(() => Boolean(localStorage.getItem('areaData')));
+    const importedAddress = encodeURIComponent(JSON.stringify({ consignee: '新增联系人', mobile: '13653530831',
+      province_name: '北京市', city_name: '北京市', district_name: '东城区', address: '新增地址保存测试' }));
+    await created.page.goto(origin + '/pages/user/address/edit?tenantId=1&data=' + importedAddress, { waitUntil: 'networkidle' });
+    await created.page.waitForFunction(() => Array.from(document.querySelectorAll('input')).some(input => input.value === '新增联系人'));
+    const createRequest = created.page.waitForRequest(request => request.url().includes('/member/address/create'));
+    await created.page.getByText('保存', { exact: true }).click();
+    await createRequest.catch(async error => {
+      console.log(JSON.stringify({ url: created.page.url(), text: await created.page.locator('body').innerText(), errors: created.errors,
+        values: await created.page.locator('input,textarea').evaluateAll(nodes => nodes.map(node => ({ value: node.value, disabled: node.disabled }))),
+        saveHtml: await created.page.getByText('保存', { exact: true }).evaluate(node => node.outerHTML),
+        buttons: await created.page.locator('button').evaluateAll(nodes => nodes.map(node => ({ text: node.innerText, disabled: node.disabled }))),
+        calls: created.calls.map(call => call.path) })); throw error;
+    });
+    const create = created.calls.find(call => call.path === '/member/address/create');
+    assert.equal(create.body.name, '新增联系人'); assert.equal(create.body.mobile, '13653530831');
+    assert.equal(create.body.areaId, 110101); assert.equal(create.body.detailAddress, '新增地址保存测试');
+    await created.page.waitForURL(url => url.pathname === '/pages/user/address/list');
+    await created.finish({ addressCreated: true });
     const moved = await fixture('text edit clears previous point before save', { located: true });
     await moved.page.goto(origin + '/pages/user/address/list?tenantId=1', { waitUntil: 'networkidle' });
     await moved.page.locator('.edit-btn').first().click();

@@ -6,6 +6,7 @@ import cn.iocoder.txgy.module.product.api.supplier.ProductSupplierApi;
 import cn.iocoder.txgy.module.trade.dal.dataobject.order.*;
 import cn.iocoder.txgy.module.trade.dal.mysql.order.*;
 import cn.iocoder.txgy.module.trade.dal.mysql.aftersale.AfterSaleMapper;
+import cn.iocoder.txgy.module.trade.dal.mysql.wms.TradeWmsShipmentMapper;
 import cn.iocoder.txgy.module.trade.service.order.TradeOrderUpdateService;
 import cn.iocoder.txgy.module.trade.service.delivery.DeliveryExpressService;
 import cn.iocoder.txgy.module.trade.service.aftersale.AfterSaleService;
@@ -21,28 +22,36 @@ import static org.mockito.ArgumentMatchers.*;
 class SupplierTradeServiceTest {
     SupplierTradeService service;
     ProductSupplierApi auth;
+    AdminShopScopeService adminScope;
     TradeOrderMapper orders;
     TradeOrderItemMapper items;
     TradeOrderUpdateService updates;
     TradeOrderDO order;
     AfterSaleMapper afterSales;
+    TradeWmsShipmentMapper wmsShipments;
     AfterSaleService afterUpdate;
     AfterSaleDO sale;
     @BeforeEach void setup() {
         service=new SupplierTradeService();auth=mock(ProductSupplierApi.class);orders=mock(TradeOrderMapper.class);
+        adminScope=mock(AdminShopScopeService.class);
         ReflectionTestUtils.setField(service,"erpInventory",
                 mock(cn.iocoder.txgy.module.trade.service.erp.TradeErpInventoryService.class));
         items=mock(TradeOrderItemMapper.class);updates=mock(TradeOrderUpdateService.class);
         ReflectionTestUtils.setField(service,"authorization",auth);ReflectionTestUtils.setField(service,"orders",orders);
+        ReflectionTestUtils.setField(service,"adminShopScope",adminScope);
         ReflectionTestUtils.setField(service,"items",items);ReflectionTestUtils.setField(service,"orderUpdate",updates);
         afterSales=mock(AfterSaleMapper.class);afterUpdate=mock(AfterSaleService.class);
         ReflectionTestUtils.setField(service,"afterSales",afterSales);
         ReflectionTestUtils.setField(service,"afterSaleUpdate",afterUpdate);
+        wmsShipments=mock(TradeWmsShipmentMapper.class);
+        ReflectionTestUtils.setField(service,"wmsShipments",wmsShipments);
+        when(wmsShipments.selectListByOrderId(anyLong())).thenReturn(List.of());
         sale=new AfterSaleDO().setId(40L).setShopId(10L).setOrderId(20L).setOrderItemId(30L).setStatus(10).setWay(10);
         when(afterSales.selectOne(any())).thenReturn(sale);
         when(items.selectById(30L)).thenReturn(new TradeOrderItemDO().setId(30L).setOrderId(20L).setShopId(10L).setAfterSaleId(40L).setAfterSaleStatus(10));
         ReflectionTestUtils.setField(service,"expressService",mock(DeliveryExpressService.class));
         when(auth.validateShop(1L,10L)).thenReturn(CommonResult.success(true));
+        when(adminScope.requireShop(10L)).thenReturn(new AdminShopScopeService.Scope(101L, false, java.util.Set.of(10L)));
         order=new TradeOrderDO().setId(20L).setShopId(10L).setStatus(10).setPayStatus(true).setDeliveryType(1).setRefundStatus(0);
         when(orders.selectOne(any())).thenReturn(order);
         when(items.selectListByOrderId(20L)).thenReturn(List.of(new TradeOrderItemDO().setId(30L).setShopId(10L).setAfterSaleStatus(0)));
@@ -83,6 +92,31 @@ class SupplierTradeServiceTest {
         service.deliver(1L,10L,20L,1L,"QA12345");
         verify(updates).deliveryOrder(argThat(r->r.getId().equals(20L)&&r.getLogisticsId().equals(1L)&&r.getLogisticsNo().equals("QA12345")));
     }
+    @Test void adminScopeFailureStopsOrderReadsAndWrites() {
+        when(adminScope.requireShop(10L)).thenThrow(new ServiceException(403, "未获得该店铺经营权限"));
+        assertThrows(ServiceException.class,()->service.adminDetail(10L,20L));
+        assertThrows(ServiceException.class,()->service.adminDeliver(10L,20L,1L,"QA12345"));
+        verifyNoInteractions(orders,updates);
+    }
+    @Test void authorizedAdminDeliveryUsesTheSameOrderStateMachine() {
+        service.adminDeliver(10L,20L,1L,"QA12345");
+        verify(adminScope).requireShop(10L);
+        verify(updates).deliveryOrder(argThat(r->r.getId().equals(20L)&&r.getLogisticsId().equals(1L)
+                &&r.getLogisticsNo().equals("QA12345")));
+    }
+    @Test void detailExposesRealWmsShipmentFailure() {
+        when(wmsShipments.selectListByOrderId(20L)).thenReturn(List.of(
+                new cn.iocoder.txgy.module.trade.dal.dataobject.wms.TradeWmsShipmentDO()
+                        .setId(50L).setOrderId(20L).setWarehouseId(60L).setWarehouseCode("FG-01")
+                        .setSourceOrderNo("M20-S10-W60").setStatus("WMS_OUTBOUND_REJECTED")
+                        .setLastError("WMS 库存不足")));
+        var detail = service.adminDetail(10L,20L);
+        assertEquals("WMS_OUTBOUND_REJECTED",detail.order().wmsStatus());
+        assertEquals("WMS 库存不足",detail.order().wmsFailureReason());
+        assertEquals(1,detail.order().wmsShipmentCount());
+        assertEquals("FG-01",detail.wmsShipments().getFirst().warehouseCode());
+        assertEquals("WMS 库存不足",detail.wmsShipments().getFirst().failureReason());
+    }
     @Test void identicalRetryIsIdempotentAndDifferentTrackingDenied() {
         order.setStatus(20).setLogisticsId(1L).setLogisticsNo("QA12345");
         service.deliver(1L,10L,20L,1L,"QA12345");
@@ -118,6 +152,22 @@ class SupplierTradeServiceTest {
         verify(afterUpdate).agreeAfterSale(null,40L);
         verifyNoMoreInteractions(afterUpdate);
     }
+    @Test void adminApprovalRecordsTheRealSystemUser() {
+        service.adminProcessAfterSale(10L,40L,AGREE,null);
+        verify(adminScope).requireShop(10L);
+        verify(afterUpdate).agreeAfterSale(101L,40L);
+        verifyNoMoreInteractions(afterUpdate);
+    }
+    @Test void adminReturnApprovalUsesTheAuthorizedShopAddress() {
+        sale.setWay(20);
+        when(adminScope.requireReturnAddress(101L,10L)).thenReturn(
+                new cn.iocoder.txgy.module.product.api.shop.ProductAdminShopScopeApi.ReturnAddress(
+                        "后台收件人","123456","后台退货地址"));
+        service.adminProcessAfterSale(10L,40L,AGREE,null);
+        verify(afterSales).updateById(argThat((AfterSaleDO a)->a.getId().equals(40L)
+                &&a.getReturnAddress().equals("后台退货地址")&&a.getReturnReceiverName().equals("后台收件人")));
+        verify(afterUpdate).agreeAfterSale(101L,40L);
+    }
     @Test void returnApprovalRequiresAddress() {
         sale.setWay(20);when(auth.returnAddress(1L,10L)).thenReturn(CommonResult.success(null));
         assertThrows(ServiceException.class,()->service.processAfterSale(1L,10L,40L,AGREE,null));
@@ -144,15 +194,16 @@ class SupplierTradeServiceTest {
         assertThrows(ServiceException.class,()->service.processAfterSale(1L,10L,40L,AGREE,null));
         verifyNoInteractions(afterUpdate);
     }
-    @Test void receiveAndRefuseOnlyReturnRefundAndNeverPay() {
+    @Test void returnReceiptAndRefusalStayClosedUntilWmsInboundIsAvailable() {
         sale.setStatus(30);
         assertThrows(ServiceException.class,()->service.processAfterSale(1L,10L,40L,RECEIVE,null));
         sale.setWay(20);
-        service.processAfterSale(1L,10L,40L,RECEIVE,null);
-        assertThrows(ServiceException.class,()->service.processAfterSale(1L,10L,40L,REFUSE," "));
-        service.processAfterSale(1L,10L,40L,REFUSE,"退货不符");
-        verify(afterUpdate).receiveAfterSale(1L,40L);
-        verify(afterUpdate).refuseAfterSale(eq(1L),argThat(r->r.getRefuseMemo().equals("退货不符")));
-        verifyNoMoreInteractions(afterUpdate);
+        ServiceException receive = assertThrows(ServiceException.class,
+                ()->service.processAfterSale(1L,10L,40L,RECEIVE,null));
+        ServiceException refuse = assertThrows(ServiceException.class,
+                ()->service.processAfterSale(1L,10L,40L,REFUSE,"退货不符"));
+        assertTrue(receive.getMessage().contains("WMS"));
+        assertTrue(refuse.getMessage().contains("WMS"));
+        verifyNoInteractions(afterUpdate);
     }
 }

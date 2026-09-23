@@ -18,6 +18,9 @@ public interface MemberAuthService {
 
     AppAuthLoginRespVO loginWithAccountPassword(String account, String password);
 
+    /** Internal: platform mapping already selected the canonical member and trusted source tenant. */
+    AppAuthLoginRespVO loginWithPlatformAccount(Long expectedMemberId, String account, String password);
+
     /**
      * 手机 + 密码登录
      *

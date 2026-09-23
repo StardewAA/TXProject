@@ -50,6 +50,10 @@ public class KeFuChatRepository {
         return jdbc.queryForObject("SELECT COUNT(*) FROM promotion_kefu_chat_message WHERE tenant_id=? AND session_id=? AND sender_type=? AND sender_id=? AND created_at>=?",
                 Long.class,session.tenantId(),session.id(),actor.type(),actor.id(),since);
     }
+    public long recentRoleCount(Session session,String role,long since) {
+        return jdbc.queryForObject("SELECT COUNT(*) FROM promotion_kefu_chat_message WHERE tenant_id=? AND session_id=? AND sender_role=? AND created_at>=?",
+                Long.class,session.tenantId(),session.id(),role,since);
+    }
     public Message insert(Session session,Actor actor,String role,String key,String text,String faqId,Long faqVersion,String faqScope,long now,KeFuChatCardService.Card card) {
         jdbc.update("INSERT INTO promotion_kefu_chat_message(tenant_id,session_id,sender_type,sender_id,sender_role,client_message_id,text_body,faq_id,faq_version,faq_scope,created_at,card_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
                 session.tenantId(),session.id(),actor.type(),actor.id(),role,key,text,faqId,faqVersion,faqScope,now,card==null?null:JsonUtils.toJsonString(card));
@@ -59,6 +63,13 @@ public class KeFuChatRepository {
     public List<Message> messages(Session session,long after,int limit) {
         return jdbc.query("SELECT * FROM promotion_kefu_chat_message WHERE tenant_id=? AND session_id=? AND id>? ORDER BY id LIMIT ?",
                 MESSAGE,session.tenantId(),session.id(),after,limit);
+    }
+    public KeFuChatCardService.Card latestCard(Session session) {
+        var rows = jdbc.query("SELECT card_json FROM promotion_kefu_chat_message WHERE tenant_id=? AND session_id=? "
+                        + "AND card_json IS NOT NULL ORDER BY id DESC LIMIT 1",
+                (rs,row)->JsonUtils.parseObjectQuietly(rs.getString(1), KeFuChatCardService.Card.class),
+                session.tenantId(),session.id());
+        return rows.isEmpty()?null:rows.getFirst();
     }
     public boolean hasMessage(Session session,long id) {
         return jdbc.queryForObject("SELECT COUNT(*) FROM promotion_kefu_chat_message WHERE tenant_id=? AND session_id=? AND id=?",Long.class,

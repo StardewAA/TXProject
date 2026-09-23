@@ -21,7 +21,7 @@ export interface ChatThread {
   faq: { id: string; question: string }[]; attachmentsEnabled: false;
 }
 export interface ChatMessage {
-  id: number; sessionId: string; senderRole: 'MEMBER' | 'AGENT' | 'FAQ' | 'SYSTEM';
+  id: number; sessionId: string; senderRole: 'MEMBER' | 'AGENT' | 'FAQ' | 'AI' | 'SYSTEM';
   text: string; createdAt: number; clientMessageId?: string; faqId?: string; faqVersion?: number;
   card?: ChatCard | null;
 }
@@ -42,6 +42,7 @@ const options = (signal?: AbortSignal) => ({ signal, headers: { 'X-Silent-Error'
 
 export const getChatCapability = (signal?: AbortSignal) => requestClient.get<ChatCapability>(`${chatBase}/capability`, options(signal));
 export const getScopedAgents = (params: ScopePage, signal?: AbortSignal) => requestClient.get<ScopedAgent[]>(`${scopeBase}/agents`, { ...options(signal), params });
+export const getMyScopedScopes = (signal?: AbortSignal) => requestClient.get<ScopedAgent[]>(`${scopeBase}/my-scopes`, options(signal));
 export const grantScopedAgent = (data: AgentGrant, signal?: AbortSignal) => requestClient.post<boolean>(`${scopeBase}/agent`, data, options(signal));
 export const getScopedWorkbench = (params: ScopePage & { state: KefuState }, signal?: AbortSignal) => requestClient.get<ChatThread[]>(`${chatBase}/agent/workbench`, { ...options(signal), params });
 export const claimScopedSession = (data: { sessionId: string; version: number }, signal?: AbortSignal) => requestClient.post<ScopedSession>(`${scopeBase}/claim`, data, options(signal));

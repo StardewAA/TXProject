@@ -2,6 +2,8 @@ package cn.iocoder.txgy.module.product.service.comparison;
 
 import cn.iocoder.txgy.framework.common.exception.ServiceException;
 import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
+import cn.iocoder.txgy.module.product.api.sku.ProductPublicSkuApi;
+import cn.iocoder.txgy.module.product.api.sku.dto.ProductPublicSkuRespDTO;
 import cn.iocoder.txgy.module.product.controller.app.comparison.*;
 import cn.iocoder.txgy.module.product.dal.dataobject.sku.ProductSkuDO;
 import cn.iocoder.txgy.module.product.dal.dataobject.spu.ProductSpuDO;
@@ -20,6 +22,7 @@ public class ProductComparisonService {
     @Resource private ProductSpuMapper spuMapper;
     @Resource private ProductSpuReviewService reviewService;
     @Resource private ProductShopService shopService;
+    @Resource private ProductPublicSkuApi publicSkuApi;
     @Resource private ComparisonListRepository repository;
 
     public ComparisonListRepository.Selection getList(Long memberId) {
@@ -92,14 +95,14 @@ public class ProductComparisonService {
         item.setUnavailableReason("商品暂不可比较");
         // ProductSkuDO/ProductSpuDO predate TenantBaseDO: the explicit SQL column is intentional.
         ProductSkuDO sku = skuMapper.selectOne(new QueryWrapper<ProductSkuDO>().eq("id", id).eq("tenant_id", tenant));
-        if (sku == null) return item;
+        if (sku == null) return publicDetail(id, item);
         ProductSpuDO spu = spuMapper.selectOne(new QueryWrapper<ProductSpuDO>().eq("id", sku.getSpuId()).eq("tenant_id", tenant));
-        if (spu == null || !reviewService.saleable(spu) || sku.getPrice() == null || sku.getPrice() < 0) return item;
+        if (spu == null || !reviewService.saleable(spu) || sku.getPrice() == null || sku.getPrice() < 0) return publicDetail(id, item);
         Long shopId = Objects.requireNonNullElse(spu.getShopId(), 0L);
         String shopName = "平台自营";
         if (shopId != 0L) {
             var shop = shopService.getShop(shopId);
-            if (shop == null || !Objects.equals(shop.getTenantId(), tenant) || !Objects.equals(shop.getStatus(), 0)) return item;
+            if (shop == null || !Objects.equals(shop.getTenantId(), tenant) || !Objects.equals(shop.getStatus(), 0)) return publicDetail(id, item);
             shopName = shop.getName();
         }
         item.setAvailable(true); item.setUnavailableReason(null); item.setSpuId(spu.getId());
@@ -108,7 +111,26 @@ public class ProductComparisonService {
         if (sku.getProperties() != null) item.setProperties(sku.getProperties().stream().filter(Objects::nonNull)
                 .map(p -> new ComparisonResponse.Property(Objects.toString(p.getPropertyName(), "待补充"),
                         Objects.toString(p.getValueName(), "待补充"))).toList());
-        item.setUnknowns(List.of("核验过的标准商品及硬性规格", "计量单位、包装换算与起订量", "配送费用及优惠", "ERP可履约库存与交期"));
+        item.setUnknowns(List.of("核验过的标准商品及硬性规格", "计量单位、包装换算与起订量", "配送费用及优惠", "WMS实时库存与交期"));
+        return item;
+    }
+
+    /** Resolve cross-tenant public SKUs only through the controlled portal ownership boundary. */
+    private ComparisonResponse.Item publicDetail(Long id, ComparisonResponse.Item redacted) {
+        List<ProductPublicSkuRespDTO> rows = publicSkuApi.getOwnershipList(List.of(id));
+        if (rows == null || rows.size() != 1 || !Objects.equals(rows.getFirst().getSkuId(), id)) return redacted;
+        ProductPublicSkuRespDTO sku = rows.getFirst();
+        if (!Boolean.TRUE.equals(sku.getSaleable())) {
+            redacted.setUnavailableReason(Objects.requireNonNullElse(sku.getInvalidReason(), "商品暂不可比较"));
+            return redacted;
+        }
+        var item = new ComparisonResponse.Item();
+        item.setSkuId(id); item.setAvailable(true); item.setSpuId(sku.getSpuId()); item.setSpuName(sku.getSpuName());
+        item.setPicUrl(sku.getPicUrl()); item.setShopId(sku.getShopId()); item.setShopName(sku.getShopName()); item.setPrice(sku.getPrice());
+        if (sku.getProperties() != null) item.setProperties(sku.getProperties().stream().filter(Objects::nonNull)
+                .map(p -> new ComparisonResponse.Property(Objects.toString(p.getPropertyName(), "待补充"),
+                        Objects.toString(p.getValueName(), "待补充"))).toList());
+        item.setUnknowns(List.of("核验过的标准商品及硬性规格", "计量单位、包装换算与起订量", "配送费用及优惠", "WMS实时库存与交期"));
         return item;
     }
 

@@ -78,6 +78,11 @@ MySQL 首次启动时执行 `deploy/mysql/init.d` 中的脚本（67 个模块脚
 初始化完成后数据保存在命名卷 `mysql-data` 中，重启容器不会重复初始化。
 > 注意：原始 `deploy/mysql/init` 中的 `0068/0069`（全库 dump，含 mysql 系统库）与
 > `0070`（旧版 Flowable 修复脚本）未纳入 `init.d`，避免污染/破坏初始化。
+>
+> 文件存储：内置的示例配置里，只有「数据库」这一条（`infra_file_config.id = 4`）在本
+> 环境可用，其余云存储示例都是占位密钥、连不通。基础库已把它设为 master，否则
+> `/admin-api/infra/file/upload` 会直接返回 500，头像、GoView 大屏缩略图等所有上传
+> 功能都会失败。切换 master 后需重启 infra 模块（客户端有本地缓存）。
 
 ## 说明
 

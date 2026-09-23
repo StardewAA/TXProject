@@ -2,6 +2,8 @@ package cn.iocoder.txgy.module.trade.service.cart;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.iocoder.txgy.module.product.api.sku.ProductSkuApi;
+import cn.iocoder.txgy.module.product.api.tenant.MallTenantWriteGuard;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.txgy.module.product.api.sku.dto.ProductSkuRespDTO;
 import cn.iocoder.txgy.module.product.api.spu.ProductSpuApi;
 import cn.iocoder.txgy.module.product.api.spu.dto.ProductSpuRespDTO;
@@ -45,6 +47,7 @@ public class CartServiceImpl implements CartService {
 
     @Override
     public Long addCart(Long userId, AppCartAddReqVO addReqVO) {
+        requireWritableTenant();
         // 查询 TradeCartDO
         CartDO cart = cartMapper.selectByUserIdAndSkuId(userId, addReqVO.getSkuId());
         // 校验 SKU
@@ -67,6 +70,7 @@ public class CartServiceImpl implements CartService {
 
     @Override
     public void updateCartCount(Long userId, AppCartUpdateCountReqVO updateReqVO) {
+        requireWritableTenant();
         // 校验 TradeCartDO 存在
         CartDO cart = cartMapper.selectById(updateReqVO.getId(), userId);
         if (cart == null) {
@@ -82,6 +86,7 @@ public class CartServiceImpl implements CartService {
 
     @Override
     public void updateCartSelected(Long userId, AppCartUpdateSelectedReqVO updateSelectedReqVO) {
+        requireWritableTenant();
         cartMapper.updateByIds(updateSelectedReqVO.getIds(), userId,
                 new CartDO().setSelected(updateSelectedReqVO.getSelected()));
     }
@@ -89,6 +94,7 @@ public class CartServiceImpl implements CartService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void resetCart(Long userId, AppCartResetReqVO resetReqVO) {
+        requireWritableTenant();
         // 第一步：删除原本的购物项
         CartDO oldCart = cartMapper.selectById(resetReqVO.getId(), userId);
         if (oldCart == null) {
@@ -115,6 +121,7 @@ public class CartServiceImpl implements CartService {
      */
     @Override
     public void deleteCart(Long userId, Collection<Long> ids) {
+        requireWritableTenant();
         // 查询 TradeCartDO 列表
         List<CartDO> carts = cartMapper.selectListByIds(ids, userId);
         if (CollUtil.isEmpty(carts)) {
@@ -166,7 +173,10 @@ public class CartServiceImpl implements CartService {
         // 如果 SPU 被删除，则删除购物车对应的商品。延迟删除
         carts.removeIf(cart -> {
             if (spus.stream().noneMatch(spu -> spu.getId().equals(cart.getSpuId()))) {
-                cartMapper.deleteById(cart.getId());
+                // 退役租户只允许历史读取，读取购物车不能借“延迟清理”产生数据库写入。
+                if (!MallTenantWriteGuard.isRetired(TenantContextHolder.getRequiredTenantId())) {
+                    cartMapper.deleteById(cart.getId());
+                }
                 return true;
             }
             return false;
@@ -198,6 +208,10 @@ public class CartServiceImpl implements CartService {
             throw exception(SKU_STOCK_NOT_ENOUGH);
         }
         return sku;
+    }
+
+    private static void requireWritableTenant() {
+        MallTenantWriteGuard.requireWritable(TenantContextHolder.getRequiredTenantId());
     }
 
 }

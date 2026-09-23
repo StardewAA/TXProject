@@ -38,7 +38,7 @@ Spring Cloud Gateway (gateway-server :48080)
 | 网关 | `txgy-gateway` | Spring Cloud Gateway 路由、鉴权过滤、灰度/负载均衡、跨域和 API 文档转发 |
 | 启动聚合 | `txgy-server` | 将后端公共启动依赖和配置聚合，供各服务复用 |
 | 业务模块 | `txgy-module-*/` | 每个模块按 `*-api` 和 `*-server` 分层；API 放 RPC 契约/枚举/DTO，server 放 Controller、Service、Mapper、DO 和配置 |
-| 客户端 | `txgy-ui-admin-vben`、`txgy-ui-admin-uniapp-master`、`txgy-mall-uniapp-master`、`txgy-ui-go-view-master` | 管理后台、移动端/商城端和数据大屏 |
+| 客户端 | `txgy-ui-admin-vben`、`txgy-ui-admin-uniapp-master`、`txgy-mall-uniapp-master`、`txgy-ui-go-view` | 管理后台、移动端/商城端和数据大屏 |
 
 业务 server 的典型调用链为：
 
@@ -93,7 +93,7 @@ src/store/                       -> 用户、权限、字典、租户等状态
 src/                               -> Vben/Vue 入口、布局、通用组件和配置
 ```
 
-当前仓库同时保留 `web-antd`、`web-antdv-next`、`web-ele`、`web-naive`、`web-tdesign` 多套 Vben 应用，以及 `txgy-ui-admin-uniapp-master`、`txgy-mall-uniapp-master` 移动端和 `txgy-ui-go-view-master` 大屏。后续 HRM 管理端修改优先落在 `web-antd` 对应的 `src/api/hrm`、`src/views/hrm` 和 `src/router/routes/modules/hrm.ts`。
+当前仓库同时保留 `web-antd`、`web-antdv-next`、`web-ele`、`web-naive`、`web-tdesign` 多套 Vben 应用，以及 `txgy-ui-admin-uniapp-master`、`txgy-mall-uniapp-master` 移动端和 `txgy-ui-go-view` 大屏。后续 HRM 管理端修改优先落在 `web-antd` 对应的 `src/api/hrm`、`src/views/hrm` 和 `src/router/routes/modules/hrm.ts`。
 
 网关路由集中在 `txgy-gateway/src/main/resources/application.yaml`，例如：
 

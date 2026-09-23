@@ -2,6 +2,7 @@ package cn.iocoder.txgy.module.wms.api.stock.dto;
 import lombok.Data;
 @Data
 public class WmsWarehouseReadRespDTO {
+    private Long id;
     private String code;
     private String name;
     private String warehouseType;

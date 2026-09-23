@@ -12,6 +12,11 @@ const props = defineProps<{
   card: CardState | null;
   /** 该报表是否正在导出 */
   exporting: boolean;
+  /**
+   * 是否嵌入抽屉等外部容器
+   * 为 true 时去掉自身外框与内边距，避免与外层容器重复描边
+   */
+  embedded?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -58,7 +63,7 @@ function handleDateChange(field: 'endDate' | 'startDate', dateString: string) {
 </script>
 
 <template>
-  <section class="rc-panel">
+  <section class="rc-panel" :class="{ 'rc-panel-embedded': embedded }">
     <template v-if="report">
       <div class="rc-panel-head">
         <div class="rc-panel-title-wrap">
@@ -188,6 +193,13 @@ function handleDateChange(field: 'endDate' | 'startDate', dateString: string) {
   background: #fff;
   border: 1px solid #e3e9f0;
   border-radius: 8px;
+}
+
+/* 嵌入抽屉等容器时：去掉自身外框与内边距，避免重复描边 */
+.rc-panel-embedded {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
 }
 
 .rc-panel-head {

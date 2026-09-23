@@ -7,8 +7,10 @@ import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderItemDO;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.annotation.InterceptorIgnore;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 
 import java.util.Collection;
 import java.util.List;
@@ -38,6 +40,13 @@ public interface TradeOrderItemMapper extends BaseMapperX<TradeOrderItemDO> {
     default List<TradeOrderItemDO> selectListByOrderId(Collection<Long> orderIds) {
         return selectList(TradeOrderItemDO::getOrderId, orderIds);
     }
+
+    /** IDs are produced by the authenticated cross-tenant buyer-order query. */
+    @InterceptorIgnore(tenantLine = "true")
+    @Select("<script>SELECT * FROM trade_order_item WHERE deleted=0 AND order_id IN "
+            + "<foreach collection='orderIds' item='id' open='(' separator=',' close=')'>#{id}</foreach>"
+            + " ORDER BY id</script>")
+    List<TradeOrderItemDO> selectListByAuthorizedOrderIds(@Param("orderIds") Collection<Long> orderIds);
 
     default TradeOrderItemDO selectByIdAndUserId(Long orderItemId, Long loginUserId) {
         return selectOne(new LambdaQueryWrapperX<TradeOrderItemDO>()

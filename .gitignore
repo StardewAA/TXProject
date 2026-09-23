@@ -86,6 +86,8 @@ sql/mysql/
 deploy/mysql/init/*mysql-all-databases*.sql*
 # 运维操作前的本地表备份（含数据，不入库）
 deploy/backup_*.sql
+# 整库导出快照目录（12 位时间戳命名，如 sql/202609201700/；单个 dump 常超 Gitee 单文件上限，仅本地运维用）
+sql/20??????????/
 
 ######################################################################
 # 环境变量
@@ -136,6 +138,15 @@ deploy/backend/erp-app.jar
 deploy/backend/bpm-app.jar
 deploy/backend/wms-app.jar
 /deploy/jars/**/app.jar
+
+# 报表后端构建产物（仅本地部署用，禁止入库）
+deploy/backend/report-app.jar
+
+# 前端 Playwright CLI 本地缓存（工具生成，不入库）
+.playwright-cli/
+
+# 误生成的空文件
+/$null
 
 # 本地构建与运行时产物（独立编排的 jar / 前端产物 / 补丁 / 备份，不入库）
 .docker-local/

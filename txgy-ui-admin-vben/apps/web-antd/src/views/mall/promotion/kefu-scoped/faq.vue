@@ -2,7 +2,7 @@
 import type { FaqDocument, FaqEntry } from '#/api/mall/promotion/kefu-scoped';
 import { computed, ref, watch } from 'vue';
 import { Page } from '@vben/common-ui';
-import { Alert, Button, Input, InputNumber, Popconfirm, Select, Switch, Tag } from 'ant-design-vue';
+import { Alert, Button, Input, Popconfirm, Select, Switch, Tag } from 'ant-design-vue';
 import { getScopedFaq, publishScopedFaq, saveScopedFaq } from '#/api/mall/promotion/kefu-scoped';
 import { FAQ_PERMISSION, kefuError, sameScope, validateFaq, validVersion } from './model';
 import { useScopedView } from './use-scoped-view';
@@ -12,7 +12,7 @@ type EditableFaq = FaqEntry & { keywordText: string };
 const document = ref<FaqDocument>(), entries = ref<EditableFaq[]>([]), baseline = ref('');
 const loading = ref(false), busy = ref(false), loaded = ref(false), error = ref(''), notice = ref(''), reason = ref('');
 function clear() { document.value = undefined; entries.value = []; baseline.value = ''; loading.value = false; busy.value = false; loaded.value = false; error.value = ''; notice.value = ''; reason.value = ''; }
-const context = useScopedView(FAQ_PERMISSION, clear);
+const context = useScopedView(FAQ_PERMISSION, clear, true);
 const listFence = context.fence(), writeFence = context.fence();
 const scopeOptions = [{ label: '平台客服（仅本租户）', value: 'PLATFORM' }, { label: '店铺客服', value: 'SHOP' }];
 const normalized = computed<FaqEntry[]>(() => entries.value.map((entry) => ({
@@ -62,15 +62,17 @@ watch(context.ready, (ready) => { if (ready) void load(); });
 </script>
 
 <template>
-  <Page title="店铺范围客服 · 固定 FAQ" description="草稿保存与对外发布分开；首版仅使用人工维护的固定问答，不生成 AI 回答。">
+  <Page title="店铺范围客服 · 固定 FAQ" description="草稿保存与对外发布分开；已发布 FAQ 优先回答，未命中时由 AI 客服补充回答。">
     <section class="scoped-panel bg-card">
       <Alert type="info" show-icon message="只对所选平台/店铺范围发布。不要在问答中放入账号、订单隐私、密钥或未经核实的价格与配送承诺。" />
       <div class="scoped-toolbar">
         <strong>{{ context.label.value }}</strong>
-        <Select v-model:value="context.scope.value" :options="scopeOptions" :disabled="busy" style="width: 220px" aria-label="客服范围" />
-        <InputNumber v-if="context.scope.value === 'SHOP'" v-model:value="context.shopId.value" :min="1" :precision="0" :disabled="busy" placeholder="店铺编号" aria-label="店铺编号" />
+        <Select :value="context.scope.value" :options="scopeOptions" :disabled="busy" style="width: 220px" aria-label="客服范围" @update:value="context.selectScope" />
+        <Select v-if="context.scope.value === 'SHOP'" v-model:value="context.shopId.value" :options="context.shops.value" :loading="context.shopsLoading.value" :disabled="busy || context.shopsLoading.value || context.shops.value.length <= 1" style="width: 260px" placeholder="选择店铺" aria-label="店铺选择" />
+        <Button v-if="context.scope.value === 'SHOP'" :loading="context.shopsLoading.value" :disabled="busy" @click="context.refreshShops">刷新店铺</Button>
         <Button :loading="context.capabilityLoading.value" @click="context.refreshCapability">核实开通状态</Button>
       </div>
+      <Alert v-if="context.shopsError.value" type="warning" show-icon :message="context.shopsError.value" />
       <Alert v-if="context.blocked.value" type="warning" show-icon :message="context.blocked.value" />
       <template v-if="context.ready.value">
         <div class="scoped-toolbar">

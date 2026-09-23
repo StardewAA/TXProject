@@ -38,7 +38,7 @@ public interface WmsStockReadMapper {
 
     @Select("""
         <script>
-        SELECT v.id, i.code AS material_code, i.name AS material_name,
+        SELECT v.id, i.id AS item_id, v.sku_id, v.warehouse_id, i.code AS material_code, i.name AS material_name,
                s.code AS sku_code, s.name AS sku_name, i.unit AS unit_name,
                w.code AS warehouse_code, w.name AS warehouse_name, v.quantity
         FROM wms_inventory v
@@ -46,6 +46,9 @@ public interface WmsStockReadMapper {
         JOIN wms_item i ON i.id=s.item_id AND i.tenant_id=v.tenant_id AND i.deleted=0
         JOIN wms_warehouse w ON w.id=v.warehouse_id AND w.tenant_id=v.tenant_id AND w.deleted=0
         WHERE v.deleted=0 AND v.tenant_id=#{tenantId}
+        <if test="q.itemId != null">AND i.id=#{q.itemId}</if>
+        <if test="q.skuId != null">AND v.sku_id=#{q.skuId}</if>
+        <if test="q.warehouseId != null">AND v.warehouse_id=#{q.warehouseId}</if>
         <if test="q.materialCode != null and q.materialCode != ''">AND i.code=#{q.materialCode}</if>
         <if test="q.materialName != null and q.materialName != ''">AND i.name LIKE CONCAT('%',#{q.materialName},'%')</if>
         <if test="q.skuCode != null and q.skuCode != ''">AND s.code=#{q.skuCode}</if>
@@ -57,14 +60,14 @@ public interface WmsStockReadMapper {
             @Param("tenantId") Long tenantId, @Param("q") WmsStockPageReqDTO request);
 
     @Select("""
-        SELECT code,name,warehouse_type,status,address,principal,remark,sort FROM wms_warehouse
+        SELECT id,code,name,warehouse_type,status,address,principal,remark,sort FROM wms_warehouse
         WHERE tenant_id=#{tenantId} AND deleted=0 ORDER BY sort,id
         """)
     List<WmsWarehouseReadRespDTO> selectWarehouses(@Param("tenantId") Long tenantId);
 
     @Select("""
-        SELECT i.code AS material_code,i.name AS material_name,
-               s.code AS sku_code,s.name AS sku_name,i.unit AS unit_name
+        SELECT i.id AS item_id,s.id AS sku_id,i.code AS material_code,i.name AS material_name,
+               i.material_type,s.code AS sku_code,s.name AS sku_name,i.unit AS unit_name
         FROM wms_item_sku s
         JOIN wms_item i ON i.id=s.item_id AND i.tenant_id=s.tenant_id AND i.deleted=0
         WHERE s.tenant_id=#{tenantId} AND s.deleted=0 AND i.status=0

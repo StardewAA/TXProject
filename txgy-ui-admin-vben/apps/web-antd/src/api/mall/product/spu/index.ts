@@ -39,7 +39,7 @@ export namespace MallSpuApi {
     approvedVersion?: number | null;
     submissionId?: string | null;
     reviewRemark?: string;
-    expectedVersion?: number; // 暂保留后台维护的非试点店铺保存必须携带版本
+    expectedVersion?: number; // 后台保存时用于乐观锁校验
   }
 
   /** 商品 SKU */
@@ -54,6 +54,8 @@ export namespace MallSpuApi {
     barCode?: string; // 商品条码
     picUrl?: string; // 图片地址
     stock?: number; // 库存
+    wmsSkuId?: number; // WMS 成品 SKU 编号
+    wmsWarehouseId?: number; // WMS 成品仓编号
     weight?: number; // 商品重量，单位：kg 千克
     volume?: number; // 商品体积，单位：m^3 平米
     firstBrokeragePrice?: number | string; // 一级分销的佣金
@@ -121,7 +123,7 @@ export function decideSpuReview(data: MallSpuApi.ReviewDecision) {
   return requestClient.post<boolean>('/product/spu-review/decision', data);
 }
 
-/** 非试点店铺临时后台经营入口，试点店铺由服务端拒绝。 */
+/** 后台经营账号提交商品审核；企业、店铺范围由服务端校验。 */
 export function submitSpuReview(data: { id: number; expectedVersion: number }) {
   return requestClient.post<boolean>('/product/spu-review/submit', data);
 }
@@ -142,6 +144,11 @@ export function getTabsCount(params?: Record<string, any>) {
   return requestClient.get<Record<string, number>>('/product/spu/get-count', {
     params,
   });
+}
+
+/** 从 WMS 重新同步商城商品库存缓存 */
+export function syncWmsStockCache() {
+  return requestClient.put<number>('/product/spu/sync-wms-stock-cache');
 }
 
 /** 创建商品 SPU */

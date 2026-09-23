@@ -290,11 +290,14 @@ async function generateAccess(options: GenerateMenuAndRoutesOptions) {
       injectCrmMenus(menus, accessStore.accessCodes);
       // 注入「AI对话助手」菜单项（前端演示用，无需后端配置）
       injectAiChatMenu(menus, accessStore.accessCodes);
-      // 先完成「后端菜单 → 路由记录」转换，再把 CRM 的扁平子菜单重组为分组。
-      return convertServerMenuToRouteRecordStringComponent(
-        filterMallPromotionMenus(
-          filterHrmEmployeePortalRecruitMenus(
-            transformMesMenus(transformWmsMenus(menus)),
+      // 先完成「后端菜单 → 路由记录」转换，再把 CRM 的扁平子菜单重组为分组：
+      // 分组必须发生在转换之后，否则子菜单路径会被拼接成 /crm/<分组>/xxx，导致地址变化。
+      return groupCrmSideMenus(
+        convertServerMenuToRouteRecordStringComponent(
+          filterMallPromotionMenus(
+            filterHrmEmployeePortalRecruitMenus(
+              transformMesMenus(transformWmsMenus(menus)),
+            ),
           ),
         ),
       );
@@ -310,6 +313,7 @@ async function generateAccess(options: GenerateMenuAndRoutesOptions) {
 /**
  * WMS 菜单改造：
  * 将历史菜单中的 WMS 首页入口统一指向 AI 首页，避免旧数据库菜单导致入口消失。
+ * 首页统一命名为「WMS 首页」，WMS 根菜单命名为「智慧仓储系统」。
  */
 function transformWmsMenus(
   menus: AppRouteRecordRaw[],
@@ -333,7 +337,7 @@ function transformWmsMenus(
     let menu = { ...original };
     if (kind.root || kind.home) {
       menu.componentName = menu.componentName || menu.name;
-      menu.name = kind.root ? '智慧仓储系统' : '仓储首页';
+      menu.name = kind.root ? '智慧仓储系统' : 'WMS 首页';
       menu.meta = { ...menu.meta, title: menu.name };
     }
     if (kind.home) {

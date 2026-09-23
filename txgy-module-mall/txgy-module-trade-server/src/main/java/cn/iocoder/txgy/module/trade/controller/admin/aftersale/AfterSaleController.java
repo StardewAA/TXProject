@@ -15,6 +15,7 @@ import cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderDO;
 import cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderItemDO;
 import cn.iocoder.txgy.module.trade.service.aftersale.AfterSaleLogService;
 import cn.iocoder.txgy.module.trade.service.aftersale.AfterSaleService;
+import cn.iocoder.txgy.module.trade.service.aftersale.PlatformAfterSaleRefundCallbackService;
 import cn.iocoder.txgy.module.trade.service.order.TradeOrderQueryService;
 import cn.iocoder.txgy.module.trade.service.order.TradeOrderUpdateService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -46,11 +47,13 @@ public class AfterSaleController {
     @Resource private cn.iocoder.txgy.module.trade.service.erp.TradeErpInventoryService erpInventory;
 
     @GetMapping("/get-count")
-    @PreAuthorize("@ss.hasPermission('trade:after-sale:query')")
+    @PreAuthorize("@ss.hasPermission('trade:after-sale:query') and @ss.hasAnyRoles('super_admin', 'tenant_admin')")
     public CommonResult<Map<String,Long>> getCounts(@Valid AfterSalePageReqVO req) { return success(workbenchPresentation.afterSaleCounts(req)); }
 
     @Resource
     private AfterSaleService afterSaleService;
+    @Resource
+    private PlatformAfterSaleRefundCallbackService platformRefundCallbacks;
     @Resource
     private TradeOrderQueryService tradeOrderQueryService;
     @Resource
@@ -62,7 +65,7 @@ public class AfterSaleController {
 
     @GetMapping("/page")
     @Operation(summary = "获得售后订单分页")
-    @PreAuthorize("@ss.hasPermission('trade:after-sale:query')")
+    @PreAuthorize("@ss.hasPermission('trade:after-sale:query') and @ss.hasAnyRoles('super_admin', 'tenant_admin')")
     public CommonResult<PageResult<AfterSaleRespPageItemVO>> getAfterSalePage(@Valid AfterSalePageReqVO pageVO) {
         // 查询售后
         PageResult<AfterSaleDO> pageResult = afterSaleService.getAfterSalePage(pageVO);
@@ -84,7 +87,7 @@ public class AfterSaleController {
     @GetMapping("/get-detail")
     @Operation(summary = "获得售后订单详情")
     @Parameter(name = "id", description = "售后编号", required = true, example = "1")
-    @PreAuthorize("@ss.hasPermission('trade:after-sale:query')")
+    @PreAuthorize("@ss.hasPermission('trade:after-sale:query') and @ss.hasAnyRoles('super_admin', 'tenant_admin')")
     public CommonResult<AfterSaleDetailRespVO> getOrderDetail(@RequestParam("id") Long id) {
         // 查询订单
         AfterSaleDO afterSale = afterSaleService.getAfterSale(id);
@@ -107,7 +110,7 @@ public class AfterSaleController {
     @PutMapping("/agree")
     @Operation(summary = "同意售后")
     @Parameter(name = "id", description = "售后编号", required = true, example = "1")
-    @PreAuthorize("@ss.hasPermission('trade:after-sale:agree')")
+    @PreAuthorize("@ss.hasPermission('trade:after-sale:agree') and @ss.hasAnyRoles('super_admin', 'tenant_admin')")
     public CommonResult<Boolean> agreeAfterSale(@RequestParam("id") Long id) {
         afterSaleService.agreeAfterSale(getLoginUserId(), id);
         return success(true);
@@ -115,7 +118,7 @@ public class AfterSaleController {
 
     @PutMapping("/disagree")
     @Operation(summary = "拒绝售后")
-    @PreAuthorize("@ss.hasPermission('trade:after-sale:disagree')")
+    @PreAuthorize("@ss.hasPermission('trade:after-sale:disagree') and @ss.hasAnyRoles('super_admin', 'tenant_admin')")
     public CommonResult<Boolean> disagreeAfterSale(@RequestBody AfterSaleDisagreeReqVO confirmReqVO) {
         afterSaleService.disagreeAfterSale(getLoginUserId(), confirmReqVO);
         return success(true);
@@ -124,7 +127,7 @@ public class AfterSaleController {
     @PutMapping("/receive")
     @Operation(summary = "确认收货")
     @Parameter(name = "id", description = "售后编号", required = true, example = "1")
-    @PreAuthorize("@ss.hasPermission('trade:after-sale:receive')")
+    @PreAuthorize("@ss.hasPermission('trade:after-sale:receive') and @ss.hasAnyRoles('super_admin', 'tenant_admin')")
     public CommonResult<Boolean> receiveAfterSale(@RequestParam("id") Long id) {
         afterSaleService.receiveAfterSale(getLoginUserId(), id);
         return success(true);
@@ -133,7 +136,7 @@ public class AfterSaleController {
     @PutMapping("/refuse")
     @Operation(summary = "拒绝收货")
     @Parameter(name = "id", description = "售后编号", required = true, example = "1")
-    @PreAuthorize("@ss.hasPermission('trade:after-sale:receive')")
+    @PreAuthorize("@ss.hasPermission('trade:after-sale:receive') and @ss.hasAnyRoles('super_admin', 'tenant_admin')")
     public CommonResult<Boolean> refuseAfterSale(AfterSaleRefuseReqVO refuseReqVO) {
         afterSaleService.refuseAfterSale(getLoginUserId(), refuseReqVO);
         return success(true);
@@ -142,7 +145,7 @@ public class AfterSaleController {
     @PutMapping("/refund")
     @Operation(summary = "确认退款")
     @Parameter(name = "id", description = "售后编号", required = true, example = "1")
-    @PreAuthorize("@ss.hasPermission('trade:after-sale:refund')")
+    @PreAuthorize("@ss.hasPermission('trade:after-sale:refund') and @ss.hasAnyRoles('super_admin', 'tenant_admin')")
     public CommonResult<Boolean> refundAfterSale(@RequestParam("id") Long id) {
         afterSaleService.refundAfterSale(getLoginUserId(), getClientIP(), id);
         return success(true);
@@ -157,7 +160,7 @@ public class AfterSaleController {
             Long orderId = Long.parseLong(StrUtil.subAfter(notifyReqDTO.getMerchantRefundId(), "order-", true));
             tradeOrderUpdateService.updatePaidOrderRefunded(orderId, notifyReqDTO.getPayRefundId());
         } else {
-            afterSaleService.updateAfterSaleRefunded(
+            platformRefundCallbacks.updateRefunded(
                     Long.parseLong(notifyReqDTO.getMerchantRefundId()),
                     Long.parseLong(notifyReqDTO.getMerchantOrderId()),
                     notifyReqDTO.getPayRefundId());

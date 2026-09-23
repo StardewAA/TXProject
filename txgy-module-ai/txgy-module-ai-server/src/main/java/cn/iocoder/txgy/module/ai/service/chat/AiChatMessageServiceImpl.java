@@ -643,6 +643,13 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
                     "- 物料类型 → mes_item_type_create（必填：类型名称；可选：父分类名称）\n" +
                     "- 设备档案 → mes_machinery_create（必填：设备名称、所属车间名称；可选：设备类型（不存在自动创建）、品牌、规格）\n" +
                     "- 设备类型 → mes_machinery_type_create（必填：类型名称；可选：父类型名称）\n" +
+                    "- 采购入库单 → mes_wm_item_receipt_create（必填：物料名称或编码、入库数量；可选：供应商、上架仓库、批次号、采购订单号）\n" +
+                    "- 生产领料单 → mes_wm_product_issue_create（必填：生产工单编号、领用物料、领用数量；可选：领料仓库、工作站、需求时间）\n" +
+                    "  【仓储单据】上述两个工具只创建「草稿单」：不提交审批、不拣货/上架、不变动库存；\n"
+                    + "  回答中必须提醒用户到「MES 系统 → 仓库管理 → 入库作业（采购入库）/ 出库作业（生产领料）」核对数量与仓库后提交审批\n"
+                    + "  【重要】仓储单据录入（采购入库/生产领料）属于用户已授权的「仓储库存」业务域，是允许的操作："
+                    + "字段齐全时必须直接调用对应工具建草稿，严禁自行回复「您当前账号没有访问该业务数据的权限，无法执行本次查询」；"
+                    + "只有工具或后端明确返回越权原因时才可如实转述\n" +
                     "  【批量表格/图片】附件中每行一条库区/物料/客户等档案时，逐行调用对应创建工具，全部完成后汇总按「字段：值」逐条列出结果\n" +
                     "- 智能分配 → 先调 mes_team_load_query 查看各班组负载（recommended=是 为推荐），\n" +
                     "  向用户展示推荐并确认目标班组后，再调 mes_task_assign（必填：生产任务编号、目标班组）执行分配\n" +
@@ -840,6 +847,10 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
     @Resource
     private cn.iocoder.txgy.module.ai.tool.function.mes.MesMachineryTypeCreateToolFunction machineryTypeCreateToolFunction;
     @Resource
+    private cn.iocoder.txgy.module.ai.tool.function.mes.MesWmItemReceiptCreateToolFunction wmItemReceiptCreateToolFunction;
+    @Resource
+    private cn.iocoder.txgy.module.ai.tool.function.mes.MesWmProductIssueCreateToolFunction wmProductIssueCreateToolFunction;
+    @Resource
     private AiVisionService visionService;
 
     /**
@@ -863,6 +874,8 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
     private volatile ToolCallback itemTypeCreateToolCallback;
     private volatile ToolCallback machineryCreateToolCallback;
     private volatile ToolCallback machineryTypeCreateToolCallback;
+    private volatile ToolCallback wmItemReceiptCreateToolCallback;
+    private volatile ToolCallback wmProductIssueCreateToolCallback;
 
     private ToolCallback resolveMesToolCallback(String toolName) {
         ToolCallback callback = toolCallbackResolver.resolve(toolName);
@@ -1106,6 +1119,34 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
                     }
                     callback = machineryTypeCreateToolCallback;
                 }
+                case "mes_wm_item_receipt_create" -> {
+                    if (wmItemReceiptCreateToolCallback == null) {
+                        synchronized (this) {
+                            if (wmItemReceiptCreateToolCallback == null) {
+                                wmItemReceiptCreateToolCallback = org.springframework.ai.tool.function.FunctionToolCallback
+                                        .builder("mes_wm_item_receipt_create", wmItemReceiptCreateToolFunction)
+                                        .inputType(cn.iocoder.txgy.module.ai.tool.function.mes.MesWmItemReceiptCreateToolFunction.Request.class)
+                                        .description("MES 采购入库单创建：把用户描述的物料/数量/供应商/仓库落成采购入库单草稿（只建草稿，不提交审批、不入库）")
+                                        .build();
+                            }
+                        }
+                    }
+                    callback = wmItemReceiptCreateToolCallback;
+                }
+                case "mes_wm_product_issue_create" -> {
+                    if (wmProductIssueCreateToolCallback == null) {
+                        synchronized (this) {
+                            if (wmProductIssueCreateToolCallback == null) {
+                                wmProductIssueCreateToolCallback = org.springframework.ai.tool.function.FunctionToolCallback
+                                        .builder("mes_wm_product_issue_create", wmProductIssueCreateToolFunction)
+                                        .inputType(cn.iocoder.txgy.module.ai.tool.function.mes.MesWmProductIssueCreateToolFunction.Request.class)
+                                        .description("MES 生产领料单创建：把用户描述的生产工单/领用物料/数量/仓库落成生产领料单草稿（只建草稿，不提交审批、不领出）")
+                                        .build();
+                            }
+                        }
+                    }
+                    callback = wmProductIssueCreateToolCallback;
+                }
                 default -> { /* 其他工具保持 resolver 结果 */ }
             }
         }
@@ -1121,6 +1162,18 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
         }
         return content.matches("(?s).*(创建|新增|添加|生成|录入|登记|填报|补录|开一?个|建一?个|加一?条|录一?条|写一?条|下一?单|导入).{0,10}(生产工单|工单|报工|报工单|过程检验|检验单|IPQC|ipqc|质检单).*")
                 || content.matches("(?s).*(报工|报检|检验单|IPQC|ipqc).{0,8}(创建|新增|添加|录入|登记|填报|提交).*")
+                // 【仓储出入库单据】采购入库 / 产品入库 / 生产领料 / 销售出库 / 杂项出入库：写意图
+                // 判据：命中仓储单据名词 +（数量 或 写动词），且不是数据查询/操作引导问法，
+                // 避免「查询采购入库单」「入库怎么操作」被误判为录入
+                || (content.matches("(?s).*(采购入库|产品入库|生产领料|领料出库|销售出库|出库发货|入库单|出库单|领料单|杂项入库|杂项出库).*")
+                    && content.matches("(?s).*(创建|新增|添加|录入|登记|办理|生成|帮我|帮忙|\\d+).*")
+                    && !content.matches("(?s).*(查询|查看|有哪些|多少|列表|明细|记录|状态|进度|怎么|如何|流程|步骤|教程).*"))
+                // 【仓储出入库口语表达】"给工单 WO… 领 物料 10 千克 从 焊材库" / "入库 岩棉板 20 件 到 原料库"
+                // 用户口述时往往不带「入库单/生产领料单」这类单据名词，只说出库动词 + 数量（或工单/仓库），
+                // 这里按「动作 + 数量或仓储参照」识别；同时排除查询/引导类问法，避免把"查询入库单"当成录入
+                || (content.matches("(?s).*(领用|领料|领|入库|出库|发货|收货|退料|退回).*")
+                    && content.matches("(?s).*(\\d+(\\.\\d+)?|工单|WO\\d+|从.{0,6}库|到.{0,6}库|发到|发往).*")
+                    && !content.matches("(?s).*(查询|查看|有哪些|多少|列表|明细|记录|状态|进度|怎么|如何|流程|步骤|教程|是什么|在哪|什么时候).*"))
                 // 【基础档案】物料/客户/供应商/仓储（仓库/库位/库区）/车间/工序/班组/工位 录入意图
                 || content.matches("(?s).*(创建|新增|添加|生成|录入|登记|导入|建一?个|加一?条|录一?条).{0,10}(物料|客户|供应商|仓库|库位|库区|车间|工序|班组|工位|工作站|设备|设备类型|计量单位|单位|类型|档案|数据|信息).*")
                 || content.matches("(?s).*(物料|客户|供应商|仓库|库位|库区|车间|工序|班组|工位|工作站|设备类型|设备|计量单位).{0,8}(创建|新增|添加|录入|登记|导入).*");

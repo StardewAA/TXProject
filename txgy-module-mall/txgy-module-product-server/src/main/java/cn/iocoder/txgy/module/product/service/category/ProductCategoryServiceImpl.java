@@ -4,6 +4,8 @@ import cn.hutool.core.collection.CollUtil;
 import cn.iocoder.txgy.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.txgy.framework.common.util.collection.CollectionUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
+import cn.iocoder.txgy.module.product.api.tenant.MallTenantWriteGuard;
 import cn.iocoder.txgy.module.product.controller.admin.category.vo.ProductCategoryListReqVO;
 import cn.iocoder.txgy.module.product.controller.admin.category.vo.ProductCategorySaveReqVO;
 import cn.iocoder.txgy.module.product.dal.dataobject.category.ProductCategoryDO;
@@ -41,6 +43,7 @@ public class ProductCategoryServiceImpl implements ProductCategoryService {
 
     @Override
     public Long createCategory(ProductCategorySaveReqVO createReqVO) {
+        requireWritableTenant();
         // 校验父分类存在
         validateParentProductCategory(createReqVO.getParentId());
 
@@ -53,6 +56,7 @@ public class ProductCategoryServiceImpl implements ProductCategoryService {
 
     @Override
     public void updateCategory(ProductCategorySaveReqVO updateReqVO) {
+        requireWritableTenant();
         // 校验分类是否存在
         validateProductCategoryExists(updateReqVO.getId());
         // 校验父分类存在
@@ -65,6 +69,7 @@ public class ProductCategoryServiceImpl implements ProductCategoryService {
 
     @Override
     public void deleteCategory(Long id) {
+        requireWritableTenant();
         // 校验分类是否存在
         validateProductCategoryExists(id);
         // 校验是否还有子分类
@@ -179,6 +184,10 @@ public class ProductCategoryServiceImpl implements ProductCategoryService {
     @Override
     public List<ProductCategoryDO> getEnableCategoryList(List<Long> ids) {
         return productCategoryMapper.selectListByIdAndStatus(ids, CommonStatusEnum.ENABLE.getStatus());
+    }
+
+    private static void requireWritableTenant() {
+        MallTenantWriteGuard.requireWritable(TenantContextHolder.getRequiredTenantId());
     }
 
 }

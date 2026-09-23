@@ -12,8 +12,8 @@ describe('truthful logistics presentation', () => {
     expect(logisticsPresentation(track(status)).events).toEqual([])
     expect(logisticsPresentation(track(status)).status).toBe(status)
   })
-  it('separates ERP wait, not configured, no events and temporary failure', () => {
-    expect(logisticsPresentation(track('ERP_PENDING')).message).toContain('ERP')
+  it('separates historical fulfillment wait, not configured, no events and temporary failure', () => {
+    expect(logisticsPresentation(track('ERP_PENDING')).message).toContain('历史')
     expect(logisticsPresentation(track('NOT_CONFIGURED')).message).toContain('暂未开通')
     expect(logisticsPresentation(track('NO_EVENTS')).message).toContain('暂未获取详细物流轨迹')
     expect(logisticsPresentation(track('PROVIDER_ERROR')).message).toContain('失败')

@@ -1,5 +1,6 @@
 package cn.iocoder.txgy.module.report.service.dataset;
 
+import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
@@ -51,6 +52,11 @@ public class ReportDatasetServiceImpl implements ReportDatasetService {
      */
     private static final Long PLATFORM_TENANT_ID = 0L;
 
+    /**
+     * 业务分组兜底值：未选择分组的数据集归入该分组
+     */
+    private static final String DEFAULT_BIZ_GROUP = "自定义";
+
     @Resource
     private ReportDatasetMapper datasetMapper;
     @Resource
@@ -64,6 +70,7 @@ public class ReportDatasetServiceImpl implements ReportDatasetService {
     public Long createDataset(ReportDatasetSaveReqVO reqVO) {
         validateDatasetSave(reqVO, null);
         ReportDatasetDO dataset = BeanUtils.toBean(reqVO, ReportDatasetDO.class);
+        dataset.setBizGroups(joinGroups(reqVO.getBizGroups()));
         dataset.setParamDefinitions(JsonUtils.toJsonString(
                 reqVO.getParams() == null ? Collections.emptyList() : reqVO.getParams()));
         dataset.setColumnLabels(JsonUtils.toJsonString(
@@ -81,6 +88,7 @@ public class ReportDatasetServiceImpl implements ReportDatasetService {
         validatePlatformReadonly(exists);
         validateDatasetSave(reqVO, reqVO.getId());
         ReportDatasetDO updateObj = BeanUtils.toBean(reqVO, ReportDatasetDO.class);
+        updateObj.setBizGroups(joinGroups(reqVO.getBizGroups()));
         updateObj.setParamDefinitions(JsonUtils.toJsonString(
                 reqVO.getParams() == null ? Collections.emptyList() : reqVO.getParams()));
         updateObj.setColumnLabels(JsonUtils.toJsonString(
@@ -190,6 +198,8 @@ public class ReportDatasetServiceImpl implements ReportDatasetService {
         saveReqVO.setCode(StrUtil.blankToDefault(reqVO.getCode(), "r" + System.currentTimeMillis()));
         saveReqVO.setName(StrUtil.blankToDefault(reqVO.getName(), table.label() + "报表"));
         saveReqVO.setCategory(StrUtil.blankToDefault(reqVO.getCategory(), "MES"));
+        // 业务分组由前端传入，留空时由 createDataset 兜底为「自定义」
+        saveReqVO.setBizGroups(reqVO.getBizGroups());
         saveReqVO.setSqlText(sql.toString());
         saveReqVO.setParams(params);
         saveReqVO.setColumnLabelList(fields.stream()
@@ -336,7 +346,37 @@ public class ReportDatasetServiceImpl implements ReportDatasetService {
         ReportDatasetRespVO respVO = BeanUtils.toBean(dataset, ReportDatasetRespVO.class);
         respVO.setParams(parseParams(dataset.getParamDefinitions()));
         respVO.setColumnLabelList(parseColumnLabels(dataset.getColumnLabels()));
+        respVO.setBizGroups(splitGroups(dataset.getBizGroups()));
         return respVO;
+    }
+
+    /**
+     * 业务分组：列表 -> 逗号串（为空时兜底「自定义」）
+     */
+    private String joinGroups(List<String> groups) {
+        if (CollUtil.isEmpty(groups)) {
+            return DEFAULT_BIZ_GROUP;
+        }
+        String joined = groups.stream()
+                .filter(StrUtil::isNotBlank)
+                .map(String::trim)
+                .distinct()
+                .collect(Collectors.joining(","));
+        return StrUtil.isBlank(joined) ? DEFAULT_BIZ_GROUP : joined;
+    }
+
+    /**
+     * 业务分组：逗号串 -> 列表
+     */
+    private List<String> splitGroups(String groups) {
+        if (StrUtil.isBlank(groups)) {
+            return Collections.emptyList();
+        }
+        return Arrays.stream(groups.split(","))
+                .map(String::trim)
+                .filter(StrUtil::isNotBlank)
+                .distinct()
+                .collect(Collectors.toList());
     }
 
     private List<ReportDatasetParamVO> parseParams(String paramDefinitions) {

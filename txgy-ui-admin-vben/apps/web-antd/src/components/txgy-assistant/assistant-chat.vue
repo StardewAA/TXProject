@@ -6,7 +6,16 @@ import { useRouter } from 'vue-router';
 
 import { useUserStore } from '@vben/stores';
 
+import {
+  createChatConversationMy,
+  deleteChatConversationMy,
+} from '#/api/ai/chat/conversation';
+import { sendChatMessageStream } from '#/api/ai/chat/message';
+import { getMyPage } from '#/api/ai/model/chatRole';
+import { uploadFile } from '#/api/infra/file';
 import txgyLogo from '#/assets/imgs/txgy-logo.png';
+import { MarkdownView } from '#/components/markdown-view';
+import { describeRequestError, stripThink } from '#/utils/ai-chat';
 
 defineOptions({ name: 'TxgyAssistantChat' });
 
@@ -16,7 +25,13 @@ defineOptions({ name: 'TxgyAssistantChat' });
  * 前台首页（/portal/home，门户布局）与后台「概览 → AI首页」（/dashboard/ai-home，
  * 基础布局）共用本组件：欢迎态居中显示三行文案 + 输入框，发起对话后切换为
  * 左侧会话列表 + 右侧微信风格气泡的对话布局。两端的差异（历史会话 key、
- * 跳转目标）全部由 config 决定。
+ * 快捷提问、跳转目标、AI 角色）全部由 config 决定。
+ *
+ * 【真实 AI】对话走 AI 模块的流式接口（与 MES 生产助手同一套后端能力）：
+ *   角色（模型 + 提示词 + 工具/知识库）由 config.roleName 指定，运行时按名称解析；
+ *   每个本地会话对应一个后端会话，`useContext=true` 携带多轮上下文；
+ *   回复逐字流式渲染，附件先上传再交给后端（图片走视觉、文档走文本抽取）。
+ *   config.dispatchRules 仍保留，但只用于在回答下方附「直达入口」卡片，不再编造回答。
  */
 const props = withDefaults(
   defineProps<{
@@ -31,9 +46,11 @@ const props = withDefaults(
   { embedded: false },
 );
 
-const { dispatchRules, fallbackTargets, historyKey, quickChips } = props.config;
+const { dispatchRules, historyKey, quickChips } = props.config;
 
 type ChatAttachment = {
+  /** 原始文件对象（发送时上传给后端做视觉识别/文本抽取） */
+  file?: File;
   name: string;
   size: string;
 };
@@ -49,6 +66,8 @@ type ChatMessage = {
 };
 
 type Conversation = {
+  /** 对应的后端会话编号（首次发送时创建，随本地会话一起缓存） */
+  backendId?: string;
   createdAt: number;
   id: string;
   messages: ChatMessage[];
@@ -63,7 +82,8 @@ type StoredState = {
 const MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024;
 const MAX_CONVERSATIONS = 30;
 const TIME_DIVIDER_GAP = 5 * 60 * 1000;
-const REPLY_DELAY = 420;
+/** 模型本轮未输出正文时的兜底提示（只输出了思考链也会走这里） */
+const EMPTY_REPLY_HINT = '（模型本次未生成正式回答，请重新提问）';
 
 const router = useRouter();
 const userStore = useUserStore();
@@ -82,6 +102,11 @@ const textareaRef = ref<HTMLTextAreaElement>();
 const fileInputRef = ref<HTMLInputElement>();
 const threadRef = ref<HTMLElement>();
 
+/** 后端 AI 角色编号（按 config.roleName 解析后缓存，避免每次发送都查） */
+const roleId = ref<null | number>(null);
+/** 流式中断控制器（切换会话/卸载组件时中断上一轮） */
+let abortController: AbortController | null = null;
+
 let mediaQuery: MediaQueryList | undefined;
 
 const isChatMode = computed(() => entered.value);
@@ -97,8 +122,24 @@ const isReplying = computed(
 );
 
 const canSend = computed(
-  () => input.value.trim().length > 0 || attachments.value.length > 0,
+  () =>
+    !isReplying.value &&
+    (input.value.trim().length > 0 || attachments.value.length > 0),
 );
+
+/**
+ * 是否展示「正在输入」动画
+ *
+ * 流式输出的内容会逐字写入最后一条 AI 气泡，因此仅在该气泡仍为空（模型还在思考/首字未到）时才展示动画，
+ * 避免出现"气泡里已有文字、下面还在转圈"的重复观感。
+ */
+const showTyping = computed(() => {
+  if (!isReplying.value) {
+    return false;
+  }
+  const last = activeMessages.value.at(-1);
+  return !last || !last.text.trim();
+});
 
 const displayName = computed(
   () => userStore.userInfo?.nickname || userStore.userInfo?.username || '用户',
@@ -207,39 +248,70 @@ function needsDivider(index: number) {
   }
   return current.at - (list[index - 1]?.at ?? 0) > TIME_DIVIDER_GAP;
 }
-function buildReply(
+/**
+ * 解析后端 AI 角色编号（按 config.roleName）
+ *
+ * 角色 id 按租户分配（同一角色在不同租户 id 不同），因此按名称动态查找：
+ *   1) 公开角色（publicStatus=true）——「平台通用助手」是全租户共用的公开角色；
+ *   2) 当前用户的私有角色（publicStatus=false）；
+ *   3) 都未命中时取公开角色列表第一个；仍为空的报错由调用方渲染成对话气泡。
+ */
+async function resolveChatRoleId(): Promise<number> {
+  if (roleId.value) {
+    return roleId.value;
+  }
+  const name = props.config.roleName;
+  for (const publicStatus of [true, false]) {
+    try {
+      const page = await getMyPage({
+        name,
+        pageNo: 1,
+        pageSize: 10,
+        publicStatus,
+      });
+      const list = (page?.list ?? []) as Array<{ id?: number; name?: string }>;
+      const hit = list.find((item) => item.name === name) ?? list[0];
+      if (hit?.id) {
+        roleId.value = hit.id;
+        return hit.id;
+      }
+    } catch {
+      // 单次查询失败不阻断：继续尝试下一种查询范围
+    }
+  }
+  throw new Error(
+    `未找到可用的 AI 角色「${name}」，请联系管理员在「AI 大模型 → 聊天角色」中配置`,
+  );
+}
+
+/** 确保本地会话已有对应后端会话（懒创建，创建结果随本地会话一起缓存） */
+async function ensureBackendConversation(
+  conversation: Conversation,
+): Promise<number> {
+  if (conversation.backendId) {
+    return Number(conversation.backendId);
+  }
+  const id = await resolveChatRoleId();
+  const created = await createChatConversationMy({ roleId: id } as any);
+  conversation.backendId = String(created ?? '');
+  persist();
+  return Number(conversation.backendId);
+}
+
+/**
+ * 命中的「直达入口」卡片
+ *
+ * 接入大模型后不再用关键词编造回答，只在回答下方附一张跳转卡片（保留原有导航价值）：
+ * 优先取用户点击的快捷入口，其次按 dispatchRules 匹配提问关键词。
+ */
+function resolveDispatchTarget(
   text: string,
-  files: ChatAttachment[],
   presetTarget?: DispatchTarget,
-): ChatMessage {
-  // 点了快捷入口就直接用它的目标卡片；否则按关键词规则匹配
-  const target =
-    presetTarget ??
-    dispatchRules.find((rule) => rule.pattern.test(text))?.target;
-  const message: ChatMessage = {
-    at: Date.now(),
-    id: createId(),
-    role: 'assistant',
-    text: '',
-  };
-
-  if (target) {
-    message.action = target;
-    message.text =
-      target.answer ??
-      `我帮你找到「${target.label}」，${target.description}点击下方卡片即可进入。`;
-  } else {
-    message.actions = fallbackTargets;
-    message.text =
-      '我还没听明白你的目标。你可以直接点下面的入口，或者换一种说法告诉我你想解决的问题。';
+): DispatchTarget | undefined {
+  if (presetTarget) {
+    return presetTarget;
   }
-
-  if (files.length > 0) {
-    const names = files.map((file) => `《${file.name}》`).join('、');
-    message.text = `已收到 ${names}，先记在当前会话里。助手暂时还不能解析文件正文，你可以直接描述文件中的问题。\n\n${message.text}`;
-  }
-
-  return message;
+  return dispatchRules.find((rule) => rule.pattern.test(text))?.target;
 }
 
 function persist() {
@@ -294,10 +366,18 @@ function ensureConversation(seed: string) {
   activeId.value = conversation.id;
   return conversation;
 }
-function submit(preset?: string, presetTarget?: DispatchTarget) {
+/**
+ * 发送消息：上传附件 → 建立后端会话 → 流式对话
+ *
+ * 同一时间只允许一轮（pendingId 非空时直接忽略），避免两轮流式互相覆盖。
+ */
+async function submit(preset?: string, presetTarget?: DispatchTarget) {
   const text = (preset ?? input.value).trim();
   if (!text && attachments.value.length === 0) {
     return;
+  }
+  if (pendingId.value) {
+    return; // 上一轮还在流式输出
   }
 
   const conversation = ensureConversation(text);
@@ -305,7 +385,10 @@ function submit(preset?: string, presetTarget?: DispatchTarget) {
 
   conversation.messages.push({
     at: Date.now(),
-    attachments: files.length > 0 ? files : undefined,
+    attachments:
+      files.length > 0
+        ? files.map((item) => ({ name: item.name, size: item.size }))
+        : undefined,
     id: createId(),
     role: 'user',
     text,
@@ -319,19 +402,111 @@ function submit(preset?: string, presetTarget?: DispatchTarget) {
   attachments.value = [];
   fileError.value = '';
   entered.value = true;
+  sidebarOpen.value = false;
+
+  // AI 占位气泡：流式内容逐字写入 text（text 为空时前端展示"正在输入"动画）
+  const reply: ChatMessage = {
+    at: Date.now(),
+    id: createId(),
+    role: 'assistant',
+    text: '',
+  };
+  conversation.messages.push(reply);
   pendingId.value = conversation.id;
   persist();
   void scrollThreadToBottom();
 
-  window.setTimeout(() => {
-    conversation.messages.push(buildReply(text, files, presetTarget));
+  let ended = false;
+  const finish = (content?: string) => {
+    if (ended) {
+      return;
+    }
+    ended = true;
+    if (content) {
+      reply.text = content;
+    }
     conversation.updatedAt = Date.now();
     if (pendingId.value === conversation.id) {
       pendingId.value = null;
     }
+    abortController = null;
     persist();
     void scrollThreadToBottom();
-  }, REPLY_DELAY);
+  };
+
+  try {
+    // 1. 附件上传：图片走视觉识别、文档走文本抽取（后端统一处理）
+    const attachmentUrls: string[] = [];
+    for (const item of files) {
+      if (!item.file) {
+        continue;
+      }
+      const url = (await uploadFile({ file: item.file })) as unknown as string;
+      if (url) {
+        attachmentUrls.push(url);
+      }
+    }
+
+    // 2. 后端会话（首次发送时创建）
+    const conversationId = await ensureBackendConversation(conversation);
+
+    // 3. 流式对话
+    let full = '';
+    abortController = new AbortController();
+    await sendChatMessageStream(
+      conversationId,
+      text,
+      abortController,
+      true, // 携带上下文
+      false, // 不启用联网搜索
+      (res: any) => {
+        let payload: any;
+        try {
+          payload = JSON.parse(res.data);
+        } catch {
+          return; // 忽略非 JSON 帧
+        }
+        const { code, data, msg } = payload;
+        if (code !== 0) {
+          // 后端业务异常（权限不足/角色或模型未配置/服务发现失败等）统一转中文分类提示
+          finish(describeRequestError({ msg }, '请求失败，请稍后再试。'));
+          return;
+        }
+        const chunk = data?.receive?.content;
+        if (!chunk) {
+          return; // 推理模型的思考链帧不展示
+        }
+        full += chunk;
+        reply.text = stripThink(full);
+        void scrollThreadToBottom();
+      },
+      (err: any) => {
+        if (full) {
+          // 已输出部分内容：保留内容并追加中断说明，避免用户以为回答已结束
+          finish(
+            `${stripThink(full)}\n\n（回答中断：${describeRequestError(err, '网络连接异常')}，请重新发送问题）`,
+          );
+        } else {
+          finish(describeRequestError(err, '网络异常，请检查网络连接后重试。'));
+        }
+      },
+      () => finish(stripThink(full) || EMPTY_REPLY_HINT),
+      attachmentUrls.length > 0 ? attachmentUrls : undefined,
+    );
+  } catch (e: any) {
+    // 上传/建会话/建立流阶段失败：附件放回输入区，便于用户重发
+    if (files.length > 0 && attachments.value.length === 0) {
+      attachments.value = files;
+    }
+    finish(reply.text || describeRequestError(e, '发送失败，请稍后重试。'));
+  } finally {
+    // 4. 命中快捷入口/关键词 → 回答下方附「直达入口」卡片（失败类回答不附）
+    const target = resolveDispatchTarget(text, presetTarget);
+    if (target && reply.text && !/(失败|异常|不可用|已失效|未找到)/.test(reply.text)) {
+      reply.action = target;
+    }
+    finish();
+  }
 }
 
 function openConversation(id: string) {
@@ -355,6 +530,20 @@ function startNewChat() {
 }
 
 function removeConversation(id: string) {
+  // 顺带删除后端会话（及其消息），避免只删本地记录后后端留下孤儿会话
+  const backendId = conversations.value.find((item) => item.id === id)?.backendId;
+  if (backendId) {
+    // 注意：后端会话 id 是 19 位雪花号，必须原样透传；
+    // Number(backendId) 会丢末位精度，后端按错误 id 查不到记录，会话就删不掉
+    void deleteChatConversationMy(backendId).catch(() => {
+      // 后端会话可能已不存在，忽略即可
+    });
+  }
+  if (pendingId.value === id) {
+    abortController?.abort();
+    abortController = null;
+    pendingId.value = null;
+  }
   conversations.value = conversations.value.filter((item) => item.id !== id);
   if (activeId.value === id) {
     activeId.value = conversations.value[0]?.id ?? null;
@@ -389,7 +578,12 @@ function onFileChange(event: Event) {
     if (file.size > MAX_ATTACHMENT_SIZE) {
       fileError.value = '单个文件请控制在 20MB 以内';
     } else {
-      attachments.value.push({ name: file.name, size: formatSize(file.size) });
+      // 保留原始 File：发送时上传给后端做视觉识别 / 文本抽取
+      attachments.value.push({
+        file,
+        name: file.name,
+        size: formatSize(file.size),
+      });
     }
   }
   target.value = '';
@@ -433,6 +627,9 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  // 中断仍在进行的流式请求，避免离开页面后继续写 DOM / 缓存
+  abortController?.abort();
+  abortController = null;
   mediaQuery?.removeEventListener('change', syncNarrow);
   window.removeEventListener('resize', syncHeaderHeight);
 });
@@ -576,7 +773,13 @@ onBeforeUnmount(() => {
             </span>
 
             <div class="bubble" :class="`bubble--${message.role}`">
-              <div v-if="message.text" class="bubble-text">
+              <!-- AI 回复按 Markdown 渲染（列表/加粗/表格），用户输入保持原样文本 -->
+              <MarkdownView
+                v-if="message.role === 'assistant' && message.text"
+                class="bubble-markdown"
+                :content="message.text"
+              />
+              <div v-else-if="message.text" class="bubble-text">
                 {{ message.text }}
               </div>
 
@@ -625,7 +828,7 @@ onBeforeUnmount(() => {
           </div>
         </template>
 
-        <div v-if="isReplying" class="thread-row thread-row--assistant">
+        <div v-if="showTyping" class="thread-row thread-row--assistant">
           <img alt="" class="thread-avatar" :src="txgyLogo" />
           <div class="bubble bubble--assistant bubble--typing">
             <i></i><i></i><i></i>
@@ -1155,6 +1358,64 @@ onBeforeUnmount(() => {
 
 .bubble-text {
   white-space: pre-wrap;
+}
+
+/* ========== AI 回复的 Markdown 渲染 ==========
+ * MarkdownView 自带一套全局样式（0.95rem / 大段间距 / 按视口算代码块宽度），
+ * 这里用「双类名」提高优先级把它收敛到对话气泡的排版（14px / 1.75 / 紧凑列表）。
+ */
+.bubble--assistant .bubble-markdown {
+  font-size: 14px;
+  line-height: 1.75;
+  color: inherit;
+  word-break: break-word;
+}
+
+.bubble--assistant .bubble-markdown :deep(p) {
+  margin-bottom: 6px;
+}
+
+.bubble--assistant .bubble-markdown :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+.bubble--assistant .bubble-markdown :deep(ul),
+.bubble--assistant .bubble-markdown :deep(ol) {
+  margin-bottom: 6px;
+}
+
+.bubble--assistant .bubble-markdown :deep(ul > li),
+.bubble--assistant .bubble-markdown :deep(ol > li) {
+  margin-bottom: 4px;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.bubble--assistant .bubble-markdown :deep(h1),
+.bubble--assistant .bubble-markdown :deep(h2),
+.bubble--assistant .bubble-markdown :deep(h3),
+.bubble--assistant .bubble-markdown :deep(h4),
+.bubble--assistant .bubble-markdown :deep(h5),
+.bubble--assistant .bubble-markdown :deep(h6) {
+  margin: 8px 0 4px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.bubble--assistant .bubble-markdown :deep(code.hljs) {
+  width: auto;
+  max-width: 100%;
+}
+
+.bubble--assistant .bubble-markdown :deep(pre) {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.bubble--assistant .bubble-markdown :deep(table) {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
 }
 
 .bubble-files {

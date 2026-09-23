@@ -47,6 +47,13 @@ public class AppAuthController {
     @Value("${mall.registration.platform-tenant-id:1}")
     private Long platformTenantId;
 
+    /**
+     * 仅用于确需回滚到旧版单租户注册的短期兼容开关。第 22 节平台账号启用后默认关闭，
+     * 避免匿名调用者绕过目标租户注册策略而被静默写入租户 1。
+     */
+    @Value("${mall.registration.legacy-endpoint-enabled:false}")
+    private boolean legacyRegistrationEnabled;
+
     @PostMapping("/login")
     @Operation(summary = "使用手机 + 密码登录")
     @PermitAll
@@ -58,6 +65,10 @@ public class AppAuthController {
     @Operation(summary = "使用手机号注册商城用户")
     @PermitAll
     public CommonResult<AppAuthLoginRespVO> register(@RequestBody @Valid AppAuthRegisterReqVO reqVO) {
+        if (!legacyRegistrationEnabled) {
+            throw cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception(
+                    cn.iocoder.txgy.module.member.service.tenant.MallAccountPolicy.LEGACY_REGISTRATION_DISABLED);
+        }
         AppAuthLoginRespVO result = TenantUtils.execute(platformTenantId, () -> authService.register(reqVO));
         return success(result);
     }

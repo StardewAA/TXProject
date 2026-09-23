@@ -165,7 +165,7 @@ public class ProductSkuServiceImpl implements ProductSkuService {
         if (CollUtil.isEmpty(skus)) return; // 数量由原有 SKU 完整性校验处理。
         if (skus.stream().anyMatch(s -> s == null || s.getWmsSkuId() != null || s.getWmsWarehouseId() != null))
             throw new cn.iocoder.txgy.framework.common.exception.ServiceException(400,
-                    "新增或复制商品不能继承WMS/ERP映射，请清空物料/仓库编号；真实映射须另行授权配置");
+                    "新增或复制商品不能继承 WMS 映射，请清空规格/仓库编号；真实映射须另行授权配置");
     }
 
     @Override
@@ -245,12 +245,15 @@ public class ProductSkuServiceImpl implements ProductSkuService {
             if (original == null) throw new cn.iocoder.txgy.framework.common.exception.ServiceException(400, "不得修改已有SKU规格结构");
             if ((input.getWmsSkuId() != null && !Objects.equals(input.getWmsSkuId(), original.getWmsSkuId()))
                     || (input.getWmsWarehouseId() != null && !Objects.equals(input.getWmsWarehouseId(), original.getWmsWarehouseId())))
-                throw new cn.iocoder.txgy.framework.common.exception.ServiceException(400, "商品编辑不得修改WMS/ERP物料映射");
+                throw new cn.iocoder.txgy.framework.common.exception.ServiceException(400, "商品编辑不得修改 WMS 规格和仓库映射");
             // 明确白名单，不写库存/销量/映射/规格，不靠空字段更新策略碰运气。
             var patch = new ProductSkuDO().setId(original.getId()).setPrice(input.getPrice())
                     .setMarketPrice(input.getMarketPrice()).setCostPrice(input.getCostPrice()).setBarCode(input.getBarCode())
                     .setPicUrl(input.getPicUrl()).setWeight(input.getWeight()).setVolume(input.getVolume())
                     .setFirstBrokeragePrice(input.getFirstBrokeragePrice()).setSecondBrokeragePrice(input.getSecondBrokeragePrice());
+            if (original.getWmsSkuId() == null && original.getWmsWarehouseId() == null) {
+                patch.setStock(input.getStock());
+            }
             if (productSkuMapper.updateById(patch) != 1) throw new IllegalStateException("商品SKU保存失败");
         }
     }
@@ -264,35 +267,35 @@ public class ProductSkuServiceImpl implements ProductSkuService {
     @Transactional(rollbackFor = Exception.class)
     public void updateSkuStock(ProductSkuUpdateStockReqDTO updateStockReqDTO) {
         throw new cn.iocoder.txgy.framework.common.exception.ServiceException(400,
-                "旧库存写入入口已停用，请通过ERP库存履约处理");
+                "商城本地库存写入已停用，库存以 WMS 实时查询结果为准");
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void reserveSkuStock(ProductSkuStockLockReqDTO reqDTO) {
         throw new cn.iocoder.txgy.framework.common.exception.ServiceException(400,
-                "旧库存写入入口已停用，请通过ERP库存履约处理");
+                "商城本地库存写入已停用，库存以 WMS 实时查询结果为准");
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void releaseSkuStock(ProductSkuStockLockReqDTO reqDTO) {
         throw new cn.iocoder.txgy.framework.common.exception.ServiceException(400,
-                "旧库存写入入口已停用，请通过ERP库存履约处理");
+                "商城本地库存写入已停用，库存以 WMS 实时查询结果为准");
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void outboundSkuStock(ProductSkuStockLockReqDTO reqDTO) {
         throw new cn.iocoder.txgy.framework.common.exception.ServiceException(400,
-                "旧库存写入入口已停用，请通过ERP库存履约处理");
+                "商城本地库存写入已停用，库存以 WMS 实时查询结果为准");
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void inboundReturnSkuStock(String returnNo, ProductSkuStockLockReqDTO reqDTO) {
         throw new cn.iocoder.txgy.framework.common.exception.ServiceException(400,
-                "旧库存写入入口已停用，请通过ERP库存履约处理");
+                "商城本地库存写入已停用，库存以 WMS 实时查询结果为准");
     }
 
     @Override
@@ -334,7 +337,7 @@ public class ProductSkuServiceImpl implements ProductSkuService {
     @Transactional(rollbackFor = Exception.class)
     public int syncWmsStockCache(Collection<Long> spuIds) {
         throw new cn.iocoder.txgy.framework.common.exception.ServiceException(400,
-                "旧库存写入入口已停用，请通过ERP库存履约处理");
+                "商城本地库存写入已停用，库存以 WMS 实时查询结果为准");
     }
 
     private ProductWmsStockReconciliationDTO reconcileWmsStock(ProductSkuDO sku) {

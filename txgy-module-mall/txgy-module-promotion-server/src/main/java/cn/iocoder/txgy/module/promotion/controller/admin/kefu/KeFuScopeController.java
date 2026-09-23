@@ -37,6 +37,13 @@ public class KeFuScopeController {
     }
 
     @ApiAccessLog(requestEnable = false, responseEnable = false)
+    @GetMapping("/my-scopes")
+    @PreAuthorize("@ss.hasPermission('promotion:kefu-agent:receive')")
+    public CommonResult<List<Agent>> myScopes() {
+        return success(service.myScopes(require(2)));
+    }
+
+    @ApiAccessLog(requestEnable = false, responseEnable = false)
     @GetMapping("/workbench")
     @PreAuthorize("@ss.hasPermission('promotion:kefu-agent:receive')")
     public CommonResult<List<Session>> list(@RequestParam("scope") String scope,

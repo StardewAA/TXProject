@@ -6,6 +6,9 @@ import { CommonStatusEnum, DICT_TYPE } from '@vben/constants';
 
 import { z } from '#/adapter/form';
 
+/** 业务分组的预置候选项（用户可在页面上继续输入新分组） */
+export const DEFAULT_BIZ_GROUPS = ['生产', '品质', '设备', '库存', '自定义'];
+
 /** 新增/修改数据集的表单 */
 export function useFormSchema(): VbenFormSchema[] {
   return [
@@ -22,9 +25,9 @@ export function useFormSchema(): VbenFormSchema[] {
       label: '数据集编码',
       component: 'Input',
       componentProps: {
-        placeholder: '如 mes_feedback_detail，租户内唯一',
+        disabled: true,
+        placeholder: '系统自动生成',
       },
-      rules: 'required',
     },
     {
       fieldName: 'name',
@@ -44,47 +47,17 @@ export function useFormSchema(): VbenFormSchema[] {
       },
     },
     {
-      fieldName: 'sqlText',
-      label: 'SQL 语句',
-      component: 'Textarea',
+      fieldName: 'bizGroups',
+      label: '业务分组',
+      component: 'Select',
       componentProps: {
-        placeholder:
-          '仅允许 SELECT / WITH 查询；参数用 ${name} 占位；禁止分号与注释符',
-        rows: 6,
+        mode: 'tags',
+        placeholder: '可多选；输入新分组名回车即新建',
+        options: DEFAULT_BIZ_GROUPS.map((group) => ({
+          label: group,
+          value: group,
+        })),
       },
-      rules: 'required',
-    },
-    {
-      fieldName: 'tenantColumn',
-      label: '租户过滤列',
-      component: 'Input',
-      componentProps: {
-        placeholder: '必填，如 tenant_id；该列必须出现在 SQL 的 SELECT 列表中',
-      },
-      rules: 'required',
-      defaultValue: 'tenant_id',
-    },
-    {
-      fieldName: 'maxRows',
-      label: '最大返回行数',
-      component: 'InputNumber',
-      componentProps: {
-        class: '!w-full',
-        min: 1,
-        step: 100,
-      },
-      defaultValue: 5000,
-    },
-    {
-      fieldName: 'timeoutSeconds',
-      label: '查询超时（秒）',
-      component: 'InputNumber',
-      componentProps: {
-        class: '!w-full',
-        min: 1,
-        step: 5,
-      },
-      defaultValue: 30,
     },
     {
       fieldName: 'status',
@@ -185,20 +158,11 @@ export function useGridColumns(): VxeTableGridOptions<ReportDatasetApi.Dataset>[
       width: 100,
     },
     {
-      field: 'tenantColumn',
-      title: '租户过滤列',
-      width: 130,
-    },
-    {
-      field: 'maxRows',
-      title: '行数上限',
-      width: 110,
-    },
-    {
-      field: 'params',
-      title: '参数个数',
-      width: 110,
-      formatter: ({ cellValue }) => (cellValue ? cellValue.length : 0),
+      field: 'bizGroups',
+      title: '分组',
+      minWidth: 150,
+      formatter: ({ cellValue }) =>
+        Array.isArray(cellValue) ? cellValue.join(' / ') : '',
     },
     {
       field: 'tenantId',

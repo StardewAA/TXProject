@@ -5,7 +5,11 @@ import cn.iocoder.txgy.module.pay.api.order.PayOrderApi;
 import cn.iocoder.txgy.module.pay.api.order.dto.PayOrderRespDTO;
 import cn.iocoder.txgy.module.pay.enums.order.PayOrderStatusEnum;
 import cn.iocoder.txgy.module.trade.controller.app.order.vo.AppTradeOrderPaymentRespVO;
+import cn.iocoder.txgy.module.trade.dal.dataobject.checkout.PlatformCheckoutDO;
+import cn.iocoder.txgy.module.trade.dal.dataobject.checkout.PlatformCheckoutOrderDO;
 import cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderDO;
+import cn.iocoder.txgy.module.trade.dal.mysql.checkout.PlatformCheckoutMapper;
+import cn.iocoder.txgy.module.trade.dal.mysql.checkout.PlatformCheckoutOrderMapper;
 import cn.iocoder.txgy.module.trade.enums.order.TradeOrderStatusEnum;
 import cn.iocoder.txgy.module.trade.framework.order.config.TradeOrderProperties;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +23,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 
 /**
- * 交易支付计时的唯一规则入口。新单记录下单时的时限，ERP 等待与支付窗口独立。
+ * 交易支付计时的唯一规则入口。WMS 当前只做实时库存核验，不等待预占回调。
  * 旧单没有时限快照时只读取已有支付单事实，不在查询期间回填或续期。
  */
 @Service
@@ -29,11 +33,12 @@ public class TradeOrderPaymentDeadlineService {
 
     private final TradeOrderProperties properties;
     private final PayOrderApi payOrderApi;
+    private final PlatformCheckoutMapper platformCheckoutMapper;
+    private final PlatformCheckoutOrderMapper platformCheckoutOrderMapper;
 
     public void initialize(TradeOrderDO order, LocalDateTime now) {
         order.setPayExpireSeconds(seconds(properties.getPayExpireTime(), "支付"));
-        order.setErpWaitExpireTime(now.plusSeconds(seconds(properties.getErpWaitExpireTime(), "ERP 等待"))
-                .truncatedTo(ChronoUnit.SECONDS));
+        order.setErpWaitExpireTime(null);
     }
 
     private long seconds(Duration duration, String label) {
@@ -47,15 +52,9 @@ public class TradeOrderPaymentDeadlineService {
         return order.getPayExpireSeconds() != null;
     }
 
-    public boolean isErpWaitExpired(TradeOrderDO order, LocalDateTime now) {
-        return isNewRule(order) && order.getPayExpireTime() == null
-                && order.getErpWaitExpireTime() != null && !now.isBefore(order.getErpWaitExpireTime());
-    }
-
     /** 只允许在订单行锁内首次调用，重复调用不续期。存量无支付单时保持原下单计时规则。 */
     public LocalDateTime startPayment(TradeOrderDO order, LocalDateTime now) {
         if (order.getPayExpireTime() != null) return order.getPayExpireTime();
-        if (isErpWaitExpired(order, now)) throw new ServiceException(400, "ERP 库存确认等待已超时");
         LocalDateTime deadline;
         if (isNewRule(order)) {
             if (order.getPayExpireSeconds() <= 0) throw new ServiceException(400, "订单支付时限快照无效");
@@ -79,12 +78,39 @@ public class TradeOrderPaymentDeadlineService {
         if (order.getPayOrderId() == null) throw new ServiceException(400, "订单尚未生成支付单");
         var result = payOrderApi.getOrder(order.getPayOrderId());
         PayOrderRespDTO pay = result == null ? null : result.getCheckedData();
-        if (pay == null || !Objects.equals(pay.getId(), order.getPayOrderId())
-                || !Objects.equals(pay.getMerchantOrderId(), String.valueOf(order.getId()))
-                || !Objects.equals(pay.getPrice(), order.getPayPrice()) || pay.getExpireTime() == null) {
+        if (pay == null || !Objects.equals(pay.getId(), order.getPayOrderId()) || pay.getExpireTime() == null
+                || !isVerifiedMerchantOrder(order, pay)) {
             throw new ServiceException(400, "支付信息尚未核实，请稍后重试");
         }
         return pay;
+    }
+
+    private boolean isVerifiedMerchantOrder(TradeOrderDO order, PayOrderRespDTO pay) {
+        if (Objects.equals(pay.getMerchantOrderId(), String.valueOf(order.getId()))) {
+            return Objects.equals(pay.getPrice(), order.getPayPrice());
+        }
+        Long checkoutId = negativeMerchantId(pay.getMerchantOrderId());
+        if (checkoutId == null) return false;
+        PlatformCheckoutOrderDO relation = platformCheckoutOrderMapper.selectByOrder(order.getId());
+        if (relation == null || !Objects.equals(relation.getCheckoutId(), checkoutId)
+                || !Objects.equals(relation.getPayAmount(), Long.valueOf(order.getPayPrice()))) return false;
+        PlatformCheckoutDO checkout = platformCheckoutMapper.selectById(checkoutId);
+        if (checkout == null || checkout.getPayAmount() == null) return false;
+        try {
+            return Objects.equals(checkout.getPlatformPayOrderId(), pay.getId())
+                    && Objects.equals(pay.getPrice(), Math.toIntExact(checkout.getPayAmount()));
+        } catch (ArithmeticException ignored) {
+            return false;
+        }
+    }
+
+    private static Long negativeMerchantId(String merchantOrderId) {
+        try {
+            long value = Long.parseLong(merchantOrderId);
+            return value < 0 && value != Long.MIN_VALUE ? -value : null;
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 
     /**
@@ -102,8 +128,6 @@ public class TradeOrderPaymentDeadlineService {
 
         if (!TradeOrderStatusEnum.isUnpaid(order.getStatus()) || Boolean.TRUE.equals(order.getPayStatus())) {
             reason = "ORDER_NOT_UNPAID";
-        } else if (isNewRule(order) && deadline == null) {
-            reason = isErpWaitExpired(order, now) ? "ERP_WAIT_EXPIRED" : "ERP_WAITING";
         } else if (order.getPayOrderId() == null) {
             // 旧单没有支付单只保留历史关闭规则，不以页面访问时间构造可支付期限。
             reason = "PAY_ORDER_MISSING";

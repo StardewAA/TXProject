@@ -34,6 +34,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertList;
@@ -143,7 +144,31 @@ public class WmsShipmentOrderServiceImpl implements WmsShipmentOrderService {
         completeApprovedShipmentOrder(order);
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void autoCompleteMallShipment(Long id) {
+        WmsShipmentOrderDO order = validateShipmentOrderPrepare(id);
+        if (!"MALL".equals(order.getSourceModule())) {
+            throw new IllegalArgumentException("自动出库仅适用于商城销售订单");
+        }
+        if (ObjectUtil.notEqual(order.getApprovalStatus(), BpmProcessInstanceStatusEnum.NOT_START.getStatus())) {
+            throw new IllegalArgumentException("商城自动出库单已进入人工审批或已处理，不能重复执行");
+        }
+        shipmentOrderDetailService.validateShipmentOrderDetailListExists(id);
+        shipmentOrderMapper.updateById(new WmsShipmentOrderDO().setId(id)
+                .setApprovalStatus(BpmProcessInstanceStatusEnum.APPROVE.getStatus())
+                .setApprovalTime(LocalDateTime.now()).setApprovalReason("商城销售订单自动出库"));
+        order.setApprovalStatus(BpmProcessInstanceStatusEnum.APPROVE.getStatus());
+        completeApprovedShipmentOrder(order);
+        WmsShipmentOrderDO completed = validateShipmentOrderExists(id);
+        if (!Integer.valueOf(1).equals(completed.getExecutionStatus())) {
+            throw new IllegalStateException("商城订单自动出库失败："
+                    + Objects.toString(completed.getExecutionError(), "WMS 库存执行失败"));
+        }
+    }
+
     private void completeApprovedShipmentOrder(WmsShipmentOrderDO order) {
+        validateMallShopOwnership(order);
         executeShipmentInventory(order);
     }
 
@@ -287,9 +312,10 @@ public class WmsShipmentOrderServiceImpl implements WmsShipmentOrderService {
         if (!java.util.Objects.equals(current.getNo(), req.getNo())
                 || !java.util.Objects.equals(current.getType(), req.getType())
                 || !java.util.Objects.equals(current.getWarehouseId(), req.getWarehouseId())
+                || !java.util.Objects.equals(current.getShopId(), req.getShopId())
                 || !java.util.Objects.equals(current.getBizOrderNo(), req.getBizOrderNo())
                 || !java.util.Objects.equals(current.getMerchantId(), req.getMerchantId())) {
-            throw new IllegalArgumentException("来源出库单不得修改单号、类型、仓库及来源关联");
+            throw new IllegalArgumentException("来源出库单不得修改单号、类型、店铺、仓库及来源关联");
         }
         var old = shipmentOrderDetailService.getShipmentOrderDetailList(current.getId());
         if (req.getDetails() == null || old.size() != req.getDetails().size())
@@ -308,6 +334,13 @@ public class WmsShipmentOrderServiceImpl implements WmsShipmentOrderService {
 
     private static boolean sameAmount(BigDecimal left, BigDecimal right) {
         return left == null ? right == null : right != null && left.compareTo(right) == 0;
+    }
+
+    private static void validateMallShopOwnership(WmsShipmentOrderDO order) {
+        if ("MALL".equals(order.getSourceModule()) && (order.getShopId() == null || order.getShopId() <= 0)) {
+            throw exception(INTEGRATION_RECEIPT_REQUEST_INVALID,
+                    "历史商城出库单缺少有效店铺归属，禁止正式出库，须转人工异常处理");
+        }
     }
 
     private void validateShipmentOrderNoUnique(Long id, String no) {

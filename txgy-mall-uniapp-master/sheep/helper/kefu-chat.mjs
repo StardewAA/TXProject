@@ -11,13 +11,39 @@ export function chatTarget(input = {}) {
       throw new Error('咨询内容编号不正确');
     resource = { resourceType: input.resourceType, resourceId: id };
   }
-  return { scope, shopId, ...(resource || {}) };
+  let productSkuId;
+  if (input.productSkuId != null) {
+    productSkuId = Number(input.productSkuId);
+    if (!positive(productSkuId) || scope !== 'SHOP' || resource?.resourceType !== 'PRODUCT')
+      throw new Error('咨询商品规格不正确');
+  }
+  let tenantId;
+  // `tenantId` is appended by the mobile router to account-scoped pages. It is not the
+  // product owner. Only the namespaced value created by chatEntry may select a service tenant.
+  const serviceTenantId = input.serviceTenantId;
+  if (serviceTenantId != null) {
+    tenantId = Number(serviceTenantId);
+    if (!positive(tenantId) || !productSkuId)
+      throw new Error('咨询商品所属商城不正确');
+  }
+  return {
+    scope,
+    shopId,
+    ...(resource || {}),
+    ...(productSkuId ? { productSkuId } : {}),
+    ...(tenantId ? { tenantId } : {}),
+  };
 }
-export function chatEntry(shopId, resourceType, resourceId) {
+export function chatEntry(shopId, resourceType, resourceId, productSkuId, tenantId) {
   const id = Number(shopId),
     target = positive(id) ? { scope: 'SHOP', shopId: id } : { scope: 'PLATFORM', shopId: 0 };
   if (['PRODUCT', 'ORDER'].includes(resourceType) && positive(Number(resourceId)))
     Object.assign(target, { resourceType, resourceId: Number(resourceId) });
+  if (resourceType === 'PRODUCT' && target.scope === 'SHOP' && positive(Number(productSkuId)))
+    target.productSkuId = Number(productSkuId);
+  // `tenantId` is reserved by the mobile router for switching the signed-in mall.  Customer
+  // service only needs it to validate the server-resolved product owner, so keep it namespaced.
+  if (target.productSkuId && positive(Number(tenantId))) target.serviceTenantId = Number(tenantId);
   return target;
 }
 export function chatData(response) {
@@ -34,6 +60,12 @@ export function chatEnabled(value) {
 }
 export function chatThread(value, target, sessionId, identity) {
   const session = value?.session;
+  const crossTenantProduct = target.scope === 'SHOP' && positive(target.productSkuId);
+  const expectedTenantId = positive(target.tenantId)
+    ? target.tenantId
+    : crossTenantProduct
+      ? null
+      : Number(identity?.tenantId);
   if (
     !session ||
     typeof session.id !== 'string' ||
@@ -47,7 +79,8 @@ export function chatThread(value, target, sessionId, identity) {
     (identity &&
       (!positive(Number(identity.tenantId)) ||
         !positive(Number(identity.memberId)) ||
-        String(session.tenantId) !== String(identity.tenantId) ||
+        !positive(Number(session.tenantId)) ||
+        (expectedTenantId && String(session.tenantId) !== String(expectedTenantId)) ||
         String(session.memberId) !== String(identity.memberId)))
   )
     throw new Error('会话范围或状态已变化，请重新进入');
@@ -69,7 +102,7 @@ export function chatPage(value, sessionId, afterId, target) {
       !positive(item.id) ||
       item.id <= previous ||
       item.sessionId !== sessionId ||
-      !['MEMBER', 'AGENT', 'FAQ', 'SYSTEM'].includes(item.senderRole) ||
+      !['MEMBER', 'AGENT', 'FAQ', 'AI', 'SYSTEM'].includes(item.senderRole) ||
       typeof item.text !== 'string'
     )
       throw new Error('消息范围或顺序不正确');
@@ -177,7 +210,8 @@ export function createChatController(api, current, state, uuid = chatUuid, ident
       state.capability = capability;
       if (!chatEnabled(capability)) return;
       const thread = getThread(
-        chatData(await api.open({ scope: target.scope, shopId: target.shopId })),
+        chatData(await api.open({ scope: target.scope, shopId: target.shopId,
+          ...(target.productSkuId ? { productSkuId: target.productSkuId } : {}) })),
       );
       if (!valid()) return;
       state.thread = thread;

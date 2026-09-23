@@ -14,8 +14,10 @@ import cn.iocoder.txgy.module.wms.enums.order.WmsOrderStatusEnum;
 import cn.iocoder.txgy.module.wms.enums.order.WmsShipmentOrderTypeEnum;
 import cn.iocoder.txgy.module.wms.service.inventory.WmsInventoryService;
 import cn.iocoder.txgy.module.wms.service.inventory.dto.WmsInventoryChangeReqDTO;
+import cn.iocoder.txgy.module.wms.service.integration.WmsCollaborationOrderGService;
 import cn.iocoder.txgy.module.wms.service.md.item.WmsItemSkuService;
 import cn.iocoder.txgy.module.wms.service.md.merchant.WmsMerchantService;
+import cn.iocoder.txgy.module.wms.service.md.warehouse.WmsWarehousePersonnelService;
 import cn.iocoder.txgy.module.wms.service.md.warehouse.WmsWarehouseService;
 import jakarta.annotation.Resource;
 import org.junit.jupiter.api.Test;
@@ -33,12 +35,14 @@ import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.txgy.module.wms.enums.ErrorCodeConstants.SHIPMENT_ORDER_DETAIL_REQUIRED;
 import static cn.iocoder.txgy.module.wms.enums.ErrorCodeConstants.SHIPMENT_ORDER_STATUS_NOT_DELETABLE;
 import static cn.iocoder.txgy.module.wms.enums.ErrorCodeConstants.SHIPMENT_ORDER_STATUS_NOT_PREPARE;
+import static cn.iocoder.txgy.module.wms.enums.ErrorCodeConstants.INTEGRATION_RECEIPT_REQUEST_INVALID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @Import({WmsShipmentOrderServiceImpl.class, WmsShipmentOrderDetailServiceImpl.class,
@@ -57,6 +61,8 @@ public class WmsShipmentOrderServiceImplTest extends BaseDbUnitTest {
     @MockitoBean
     private WmsWarehouseService warehouseService;
     @MockitoBean
+    private WmsWarehousePersonnelService warehousePersonnelService;
+    @MockitoBean
     private WmsMerchantService merchantService;
     @MockitoBean
     private WmsItemSkuService itemSkuService;
@@ -64,6 +70,8 @@ public class WmsShipmentOrderServiceImplTest extends BaseDbUnitTest {
     private WmsInventoryService inventoryService;
     @MockitoBean
     private BpmProcessInstanceApi processInstanceApi;
+    @MockitoBean
+    private WmsCollaborationOrderGService collaborationOrderGService;
 
 
     @Test
@@ -92,6 +100,39 @@ public class WmsShipmentOrderServiceImplTest extends BaseDbUnitTest {
         }).when(inventoryService).changeInventory(any());
         shipmentOrderService.completeShipmentOrder(order.getId());
         assertEquals(1, shipmentOrderMapper.selectById(order.getId()).getExecutionStatus());
+    }
+
+    @Test
+    public void historicalMallShipmentWithoutShopCannotComplete() {
+        WmsShipmentOrderDO order = createShipmentOrder(100L).setSourceModule("MALL").setShopId(null)
+                .setApprovalStatus(BpmProcessInstanceStatusEnum.APPROVE.getStatus());
+        shipmentOrderMapper.insert(order);
+        shipmentOrderDetailMapper.insert(createShipmentOrderDetail(order.getId(), 200L, 100L));
+
+        assertServiceException(() -> shipmentOrderService.completeShipmentOrder(order.getId()),
+                INTEGRATION_RECEIPT_REQUEST_INVALID,
+                "历史商城出库单缺少有效店铺归属，禁止正式出库，须转人工异常处理");
+
+        verify(inventoryService, never()).changeInventory(any());
+        assertEquals(WmsOrderStatusEnum.PREPARE.getStatus(),
+                shipmentOrderMapper.selectById(order.getId()).getStatus());
+    }
+
+    @Test
+    public void mallShipmentAutomaticallyCompletesWithoutBpm() {
+        WmsShipmentOrderDO order = createShipmentOrder(100L).setSourceModule("MALL").setShopId(300L);
+        shipmentOrderMapper.insert(order);
+        shipmentOrderDetailMapper.insert(createShipmentOrderDetail(order.getId(), 200L, 100L));
+
+        shipmentOrderService.autoCompleteMallShipment(order.getId());
+
+        WmsShipmentOrderDO saved = shipmentOrderMapper.selectById(order.getId());
+        assertEquals(BpmProcessInstanceStatusEnum.APPROVE.getStatus(), saved.getApprovalStatus());
+        assertEquals(WmsOrderStatusEnum.FINISHED.getStatus(), saved.getStatus());
+        assertEquals(1, saved.getExecutionStatus());
+        assertEquals("商城销售订单自动出库", saved.getApprovalReason());
+        verifyNoInteractions(processInstanceApi);
+        verify(inventoryService).changeInventory(any());
     }
 
     @Test

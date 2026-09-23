@@ -1,3 +1,5 @@
+
+
 # 后端服务公共环境变量单独一个锚点。
 # 【重要】compose 里 `environment` 是整体替换、不是深合并：服务块只要自己写了
 # environment，就完全丢掉锚点里的环境（DB/Nacos/Redis 地址全没了，容器会退回连
@@ -36,9 +38,14 @@ x-backend-service: &backend-service
     SERVER_PORT: 48080
     SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR: nacos:8848
     SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
-    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
+    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
     SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_USERNAME: root
     SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    # 本地配置中保留了 lazy slave 数据源；Docker 内首次触发读库时也必须指向 mysql，
+    # 否则会连接容器自身的 127.0.0.1 并占满请求线程，表现为订单、购物车和后台栏目超时。
+    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_SLAVE_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
+    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_SLAVE_USERNAME: root
+    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_SLAVE_PASSWORD: ${MYSQL_ROOT_PASSWORD}
     SPRING_DATA_REDIS_HOST: redis
     # 资源中心本地文件上传根目录（training 服务使用，绝对路径落于卷 /app/uploads）
     RESOURCE_UPLOAD_DIR: /app/uploads
@@ -199,13 +206,17 @@ services:
   report:
     <<: *backend-service
     build:
-      context: ./jars/report
-      dockerfile: Dockerfile.runtime
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
       args:
-        JAR_FILE: app.jar
+        MODULE_PATH: txgy-module-report/txgy-module-report-server
     environment:
       <<: *backend-env
       JAVA_OPTS: -Xms96m -Xmx384m -XX:MaxMetaspaceSize=288m -XX:+UseG1GC -XX:MaxRAMPercentage=38
+      # 报表只读数据源：仅 SELECT 权限的独立账号，避免报表大查询与写入风险
+      REPORT_DB_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
+      REPORT_DB_USERNAME: ${REPORT_DB_USERNAME:-report_ro}
+      REPORT_DB_PASSWORD: ${REPORT_DB_PASSWORD}
 
   mp:
     <<: *backend-service
@@ -247,8 +258,13 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-mall/txgy-module-promotion-server
+    entrypoint: ["sh", "-c", "exec java $$JAVA_OPTS -jar /app/app.jar"]
     environment:
       <<: *backend-env
+      # 本地演示默认启用按店铺隔离的固定 FAQ 与人工客服链路；可通过 deploy/.env 关闭。
+      # AI 默认关闭，仅在 ai-server 可用且已注入有效 DeepSeek Key 时显式开启。
+      MALL_CUSTOMER_SERVICE_SCOPED_ENABLED: ${MALL_CUSTOMER_SERVICE_SCOPED_ENABLED:-true}
+      MALL_CUSTOMER_SERVICE_AI_ENABLED: ${MALL_CUSTOMER_SERVICE_AI_ENABLED:-false}
       JAVA_OPTS: -Xms96m -Xmx448m -XX:MaxMetaspaceSize=320m -XX:+UseG1GC -XX:MaxRAMPercentage=45
 
   statistics:
@@ -280,12 +296,8 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-erp/txgy-module-erp-server
-    # 联调：关闭 ERP 侧集成 Mock 网关，走真实 WMS/MES 调用
-    # （默认 mock 时采购入库、工单恢复等只返回模拟结果，不真正通信）
     environment:
       <<: *backend-env
-      TXGY_INTEGRATION_WMS_MODE: "remote"
-      TXGY_INTEGRATION_MES_MODE: "remote"
       JAVA_OPTS: -Xms96m -Xmx512m -XX:MaxMetaspaceSize=384m -XX:+UseG1GC -XX:MaxRAMPercentage=51
 
   iot:
@@ -310,6 +322,10 @@ services:
       <<: *backend-env
       JAVA_OPTS: -Xms96m -Xmx320m -XX:MaxMetaspaceSize=224m -XX:+UseG1GC -XX:MaxRAMPercentage=32
 
+  # mes-server：注册服务名由 jar 内 application.yaml 的 spring.application.name=mes-server 决定
+  # （网关路由 lb://mes-server，必须严格一致）；继承 x-backend-service 的 depends_on（mysql/redis/nacos
+  # 均须 service_healthy 后才启动），因此 Nacos 未就绪时 mes 不会被拉起，避免历史报错
+  # "Unable to resolve host nacos / Unable to find instance for mes-server" 复现。
   mes:
     <<: *backend-service
     build:
@@ -317,13 +333,7 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-mes/txgy-module-mes-server
-    # 联调：开启 MES→WMS 集成，定时任务才会发送生产领料/完工入库请求（默认 false 时只落任务不发送）
-    environment:
-      <<: *backend-env
-      MES_WMS_INTEGRATION_ENABLED: "true"
-      # MES 无仓库模型，须指定 WMS 默认原料仓/成品仓编码（须与该租户 WMS 主数据一致）
-      MES_WMS_WAREHOUSE_RAW_MATERIAL_CODE: "SH"
-      MES_WMS_WAREHOUSE_FINISHED_GOODS_CODE: "FG"
+    mem_limit: 2048m # 与 slim 覆盖的 JAVA_OPTS -Xmx1024m 配套，单容器限高，防止拖垮整个 Docker VM
 
   wms:
     <<: *backend-service
@@ -332,10 +342,11 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-wms/txgy-module-wms-server
-    # 联调：开启缺口事件自动上送，WmsShortageScheduler 才会把缺口事件发给 ERP（默认不启用）
     environment:
       <<: *backend-env
+      # 联调：开启缺口事件自动上送，WmsShortageSender 才会把缺口事件发给 ERP（默认不启用）
       WMS_SHORTAGE_SENDER_ENABLED: "true"
+      JAVA_OPTS: -Xms96m -Xmx512m -XX:MaxMetaspaceSize=384m -XX:+UseG1GC -XX:MaxRAMPercentage=51
 
   im:
     <<: *backend-service
@@ -355,9 +366,19 @@ services:
       dockerfile: Dockerfile.runtime
       args:
         JAR_FILE: app.jar
+    # 知识库向量持久化：当前向量库是进程内 SimpleVectorStore，代码会把它定时落盘到
+    # ${user.home}/vector_store/simple_<EmbeddingModel>.json（容器内即 /root/vector_store）。
+    # 不挂卷时容器一重建/重启向量就丢，知识库检索不到、必须手动点「重建向量索引」。
+    # 只影响 ai 服务本身：其他模块（MES/ERP/WMS…）不共用这套向量库。
+    volumes:
+      - ai-vector-store:/root/vector_store
     # ai 的 jar 最大（419MB），构建器与向量库相关类较多，元空间给宽一些
     environment:
       <<: *backend-env
+      # Key is supplied by the host environment or an untracked deploy/.env; never bake it into an image.
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:?DEEPSEEK_API_KEY must be set before starting the AI service}
+      AI_PROVIDER_CONNECT_TIMEOUT_MS: ${AI_PROVIDER_CONNECT_TIMEOUT_MS:-3000}
+      AI_PROVIDER_READ_TIMEOUT_MS: ${AI_PROVIDER_READ_TIMEOUT_MS:-15000}
       JAVA_OPTS: -Xms96m -Xmx512m -XX:MaxMetaspaceSize=384m -XX:+UseG1GC -XX:MaxRAMPercentage=51
 
   hrm:
@@ -400,10 +421,31 @@ services:
       - txgy-dev
     restart: unless-stopped
 
+  # GoView 大屏设计器（独立前端工程 txgy-ui-go-view）：容器内 Nginx 托管 dist，
+  # /admin-api 反代 gateway:48080，与 vben 管理后台（frontend）共用同一套后端。
+  goview:
+    build:
+      context: ..
+      dockerfile: deploy/goview/Dockerfile
+    depends_on:
+      gateway:
+        condition: service_started
+    ports:
+      - "5273:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks:
+      - txgy-dev
+    restart: unless-stopped
 volumes:
   mysql-data:
   redis-data:
   nacos-data:
+  # ai 知识库向量文件（SimpleVectorStore 落盘目录，见 ai 服务 volumes 注释）
+  ai-vector-store:
 
 networks:
   txgy-dev:

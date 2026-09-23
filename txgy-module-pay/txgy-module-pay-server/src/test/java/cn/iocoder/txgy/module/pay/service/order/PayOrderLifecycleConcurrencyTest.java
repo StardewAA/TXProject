@@ -377,9 +377,9 @@ class PayOrderLifecycleConcurrencyTest {
         }
     }
 
-    @Test void onlyWaitingOrdersAllowSamePriceIdempotencyEvenWithAttempts() {
+    @Test void samePriceIsRejectedAfterAnyPaymentAttemptAndNonWaitingOrdersAreRejected() {
         jdbc.update("INSERT INTO lifecycle_test_attempt VALUES(11,1,0,NULL)");
-        service.updatePrice(1L, 1000);
+        assertThrows(ServiceException.class, () -> service.updatePrice(1L, 1000));
         verify(orders, never()).updateByIdAndStatus(anyLong(), anyInt(), any());
         for (int status : new int[]{10, 20, 30}) {
             jdbc.update("UPDATE lifecycle_test_order SET status=?", status);

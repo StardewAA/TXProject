@@ -15,7 +15,7 @@ const routes: RouteRecordRaw[] = [
         path: 'spu/add',
         name: 'ProductSpuAdd',
         meta: {
-          title: '商品经营入口说明',
+          title: '新增商品',
           activePath: '/mall/product/spu',
         },
         component: () => import('#/views/mall/product/spu/form/index.vue'),
@@ -24,7 +24,7 @@ const routes: RouteRecordRaw[] = [
         path: String.raw`spu/edit/:id(\d+)`,
         name: 'ProductSpuEdit',
         meta: {
-          title: '商品只读详情',
+          title: '编辑商品',
           activePath: '/mall/product/spu',
         },
         component: () => import('#/views/mall/product/spu/form/index.vue'),

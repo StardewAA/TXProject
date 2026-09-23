@@ -1,11 +1,13 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import request from '@/sheep/request';
 import $store from '@/sheep/store';
-import { tenantTransport, ensureTenantReady, getControlledTenantId, captureTenantOperation, isTenantOperationCurrent } from '@/sheep/helper/tenant-runtime';
+import { tenantId } from '@/sheep/config';
+import { tenantTransport, ensureTenantReady, getControlledTenantId, captureTenantOperation, isTenantOperationCurrent, verifyPlatformSession } from '@/sheep/helper/tenant-runtime';
 import { assertAuthAvailable, createChallengeState } from '@/sheep/helper/auth-challenge.mjs';
 import { targetAuth } from '@/sheep/api/tenant-auth';
 import { parseRegistrationOptions, resolveRegistrationChoice, assertRegistrationContext, registrationChoiceNotice } from '@/sheep/helper/registration-choice.mjs';
 import { createImageRegistrationState, createCaptchaSession, normalizeLoginName } from '@/sheep/helper/image-registration.mjs';
+import { isPlatformAccountAddress, isPlatformPortalAddress } from '@/sheep/helper/tenant-navigation.mjs';
 
 export const mallAuthPassword = { rules: [
   { required: true, errorMessage: '请输入密码' },
@@ -24,6 +26,9 @@ export function useMallAuthForm(model, purpose) {
   const imageChallenge = ref(null), imageSending = ref(false);
   let captchaSession = '';
   const registrationOptions = ref(null), selectedTenant = ref('');
+  const platformLogin = purpose === 'PASSWORD_LOGIN' && typeof window !== 'undefined'
+    && (isPlatformPortalAddress(window.location?.href || '')
+      || isPlatformAccountAddress(window.location?.href || '', tenantId));
   // #ifdef H5
   if (typeof window !== 'undefined') selectedTenant.value = new URLSearchParams(window.location.search).get('registrationTenant') || '';
   // #endif
@@ -40,7 +45,7 @@ export function useMallAuthForm(model, purpose) {
   const newProtocol = computed(() => entry.value?.protocol === 'challenge-v1');
   // Image registration and account login are independent of the legacy SMS protocol switch.
   const imageRegistration = computed(() => entry.value?.registrationMethod === 'image-v1');
-  const loginNameEnabled = computed(() => entry.value?.loginNameEnabled === true);
+  const loginNameEnabled = computed(() => platformLogin || entry.value?.loginNameEnabled === true);
   const imageCountdown = computed(() => { void tick.value; return imageState.remaining(); });
   const imageExpiresIn = computed(() => { void tick.value; return imageState.expiresIn(); });
   const available = computed(() => Boolean(!error.value && !choiceError.value && entry.value?.available
@@ -59,6 +64,12 @@ export function useMallAuthForm(model, purpose) {
     if (!alive) return;
     const rev = ++loadRevision; entry.value = null; registrationOptions.value = null; error.value = '';
     try {
+      if (platformLogin) {
+        if (alive && rev === loadRevision) entry.value = Object.freeze({ protocol: 'legacy',
+          tenantId: getControlledTenantId(), available: true, registrationAvailable: false,
+          tenantSelection: false, loginNameEnabled: true, platformLogin: true });
+        return;
+      }
       await ensureTenantReady();
       const parsed = await targetAuth.discover(getControlledTenantId(), () => alive && rev === loadRevision);
       if ((parsed.registrationMethod !== undefined && !['image-v1', 'sms'].includes(parsed.registrationMethod))
@@ -70,7 +81,7 @@ export function useMallAuthForm(model, purpose) {
         let response;
         try { response = await tenantTransport('/member/mall-auth/registration-options'); }
         catch (reason) { if (reason?.statusCode === 404) response = { code: 404 }; else throw reason; }
-        options = parseRegistrationOptions(response?.code === 404 ? { enabled: false, tenants: [], crossTenantReady: false }
+        options = parseRegistrationOptions(response?.code === 404 ? { enabled: false, tenants: [], crossTenantReady: false, selectionRequired: false }
           : response?.code === 0 ? response.data : null);
       }
       if (alive && rev === loadRevision) { registrationOptions.value = options; entry.value = parsed; }
@@ -139,7 +150,9 @@ export function useMallAuthForm(model, purpose) {
       if (purpose === 'REGISTER') assertRegistrationContext(registrationChoice.value, getControlledTenantId());
       const useImage = kind === 'register' && imageRegistration.value;
       const useAccount = kind === 'login' && loginNameEnabled.value;
-      const data = useImage ? {} : useAccount ? { account: fields.account } : { mobile: fields.mobile ?? fields.account };
+      const usePlatform = kind === 'login' && platformLogin;
+      const data = useImage ? {} : useAccount ? { account: String(fields.account || '').trim().toLowerCase() }
+        : { mobile: fields.mobile ?? fields.account };
       if (kind !== 'sms-login') {
         const minLength = kind === 'login' ? 4 : 6;
         if (typeof fields.password !== 'string' || fields.password.length < minLength || fields.password.length > 16) throw new Error(`密码需要为 ${minLength}-16 位`);
@@ -151,24 +164,42 @@ export function useMallAuthForm(model, purpose) {
           nickname: fields.nickname?.trim(), agree: fields.agree, memberIdentity: fields.memberIdentity,
         });
       } else if (kind !== 'login') { data.code = fields.code; Object.assign(data, state.payload(binding(), fields.code)); }
-      if (newProtocol.value || useImage || useAccount) data.tenantId = binding().tenantId;
+      if (!usePlatform && (newProtocol.value || useImage || useAccount)) data.tenantId = binding().tenantId;
       if (kind === 'register' && !useImage) {
         data.nickname = fields.nickname?.trim(); data.agree = fields.agree; data.memberIdentity = fields.memberIdentity;
         if (!data.nickname || data.nickname.length > 30 || data.agree !== true || !['buyer', 'supplier'].includes(data.memberIdentity)) throw new Error('请完善昵称、会员身份并同意协议');
       }
       const legacyUrl = kind === 'reset-password' ? '/member/user/reset-password' : '/member/auth/' + kind;
       const endpoint = useImage ? 'register-image' : useAccount ? 'account-login' : kind;
-      const result = await transport(endpoint, data, legacyUrl, kind === 'reset-password' ? 'PUT' : 'POST', current);
+      let result;
+      if (usePlatform) {
+        const response = await tenantTransport('/member/mall-auth/platform-login', {
+          method: 'POST',
+          header: { terminal: '20', 'Content-Type': 'application/json' },
+          data: { account: data.account, password: data.password },
+        });
+        if (!current()) return null;
+        if (response?.code !== 0 || !response.data) throw new Error('平台账号或密码不正确');
+        const identity = await verifyPlatformSession(response.data, current);
+        result = { code: 0, data: identity };
+      } else {
+        result = await transport(endpoint, data, legacyUrl, kind === 'reset-password' ? 'PUT' : 'POST', current);
+      }
       if (!current()) return null;
       if (result?.code !== 0) throw new Error(result?.msg || '认证失败，请重试');
       if (kind === 'reset-password') {
         $store('user').logout(); toast('密码已重置，请重新登录');
       } else {
         const identity = result.data;
-        if (!identity?.accessToken || !identity.refreshToken || !/^[1-9]\d*$/.test(String(identity.userId))
+        if (usePlatform) {
+          $store('user').setPlatformToken(identity.accessToken, identity.refreshToken, identity);
+        } else if (!identity?.accessToken || !identity.refreshToken || !/^[1-9]\d*$/.test(String(identity.userId))
             || ((newProtocol.value || useImage || useAccount) && String(identity.tenantId) !== entry.value.tenantId)
-            || (identity.tenantId != null && String(identity.tenantId) !== getControlledTenantId())) throw new Error('认证返回的会员身份不匹配');
-        $store('user').setToken(identity.accessToken, identity.refreshToken, identity.tenantId ? identity : undefined);
+            || (identity.tenantId != null && String(identity.tenantId) !== getControlledTenantId())) {
+          throw new Error('认证返回的会员身份不匹配');
+        } else {
+          $store('user').setToken(identity.accessToken, identity.refreshToken, identity.tenantId ? identity : undefined);
+        }
         toast(kind === 'register' ? '注册成功' : '登录成功');
       }
       return result;
@@ -186,5 +217,6 @@ export function useMallAuthForm(model, purpose) {
   onBeforeUnmount(() => { alive = false; revision++; loadRevision++; state.invalidate(); imageState.invalidate(); clearInterval(timer); });
   return { entry, error, newProtocol, available, countdown, codeText, sending, submitting, refresh, send, submit,
     imageRegistration, loginNameEnabled, imageChallenge, imageSending, imageCountdown, imageExpiresIn, loadImage,
-    registrationOptions, selectedTenant, registrationChoice, registrationTarget, choiceNotice, choiceError };
+    registrationOptions, selectedTenant, registrationChoice, registrationTarget, choiceNotice, choiceError,
+    platformLogin };
 }

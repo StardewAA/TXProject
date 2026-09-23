@@ -4,6 +4,7 @@ import cn.iocoder.txgy.framework.common.exception.ErrorCode;
 import cn.iocoder.txgy.framework.common.exception.ServiceException;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.security.core.LoginUser;
+import cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.txgy.module.member.api.user.MemberUserApi;
 import cn.iocoder.txgy.module.member.api.user.dto.MemberUserRespDTO;
@@ -111,6 +112,7 @@ class KeFuScopeServiceTest {
         jdbc.update("DELETE FROM promotion_kefu_faq_config");
         jdbc.update("DELETE FROM promotion_kefu_chat_meta");
         jdbc.update("DELETE FROM promotion_kefu_scope_audit");
+        jdbc.update("DELETE FROM promotion_kefu_platform_session");
         jdbc.update("DELETE FROM promotion_kefu_session");
         jdbc.update("DELETE FROM promotion_kefu_agent");
     }
@@ -158,6 +160,38 @@ class KeFuScopeServiceTest {
         assertNotEquals(session.id(), foreign.id());
         TenantContextHolder.setTenantId(1L);
         error(FORBIDDEN, () -> service.own(buyer, foreign.id()));
+    }
+
+    @Test void platformConversationUsesResolvedTargetTenantButOnlyAccountOwnerCanReadIt() {
+        var session = service.openPlatform(buyer, 2L, 201L, 9001L);
+        assertEquals(2L, session.tenantId());
+        assertEquals(1L, TenantContextHolder.getTenantId());
+        assertEquals(session, service.chatAccess(buyer, session.id(), false, false));
+        error(FORBIDDEN, () -> service.chatAccess(other, session.id(), false, false));
+
+        // Even a target-tenant account with the same legacy numeric member id must not inherit it.
+        TenantContextHolder.setTenantId(2L);
+        error(FORBIDDEN, () -> service.chatAccess(buyer, session.id(), false, false));
+        TenantContextHolder.setTenantId(1L);
+        assertEquals(1, count("promotion_kefu_platform_session"));
+    }
+
+    @Test void targetTenantRpcDropsAccountPrincipalAndRestoresItAfterFailure() {
+        login(11, 1, 1L, null);
+        var originalAuthentication = SecurityContextHolder.getContext().getAuthentication();
+        when(shops.getShop(201L)).thenAnswer(call -> {
+            assertEquals(2L, TenantContextHolder.getTenantId());
+            assertNull(SecurityFrameworkUtils.getLoginUser());
+            throw new IllegalStateException("target shop unavailable");
+        });
+
+        assertThrows(IllegalStateException.class,
+                () -> service.openPlatform(buyer, 2L, 201L, 9001L));
+
+        assertEquals(1L, TenantContextHolder.getTenantId());
+        assertSame(originalAuthentication, SecurityContextHolder.getContext().getAuthentication());
+        assertEquals(11L, SecurityFrameworkUtils.getLoginUserId());
+        assertEquals(0, count("promotion_kefu_session"));
     }
 
     @Test void missingOrIgnoredTenantIsDenied() {
@@ -221,6 +255,15 @@ class KeFuScopeServiceTest {
         grant(agent, true);
         assertEquals(1, audit("GRANT"));
         assertEquals(1, service.agents(operator, "SHOP", 101L, 1, 20).size());
+    }
+
+    @Test void agentCanDiscoverOnlyOwnEnabledWorkbenchScopes() {
+        grant(adminAgent, true);
+        grant(agent, true);
+        assertEquals(List.of(new Agent("SHOP", 101L, 2, 22L, true, 1L)), service.myScopes(adminAgent));
+        grant(adminAgent, false);
+        assertTrue(service.myScopes(adminAgent).isEmpty());
+        assertEquals(1, service.myScopes(agent).size());
     }
 
     @Test void claimAndCloseRequireCurrentVersionAndAssignedTypedActor() {

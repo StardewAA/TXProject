@@ -6,18 +6,18 @@ defineProps<{ product: Product }>()
 </script>
 
 <template>
-  <MallLink class="product-card" :to="`/goods/${product.id}`">
+  <MallLink class="product-card" :to="product.tenantSlug ? `/tenants/${product.tenantSlug}/products/${product.id}` : `/goods/${product.id}`">
     <div class="product-card__image">
       <img v-if="productImage(product.id, product.picUrl)" :src="productImage(product.id, product.picUrl)" :alt="product.name" loading="lazy" />
       <span v-else>暂无商品图片</span>
-      <b v-if="Number(product.stock || 0) <= 0" class="sold-out">暂时售罄</b>
+      <b v-if="product.stock !== undefined && Number(product.stock) <= 0" class="sold-out">暂时售罄</b>
     </div>
     <div class="product-card__body">
       <h3>{{ product.name }}</h3>
       <p>{{ product.introduction || '防腐保温工程适用材料' }}</p>
       <div class="product-card__meta">
         <strong>¥{{ formatMoney(product.price) }}</strong>
-        <span>{{ Number(product.stock || 0) > 0 ? `库存 ${product.stock}` : '不可购买' }}</span>
+        <span>{{ product.stock === undefined ? '公开可售' : Number(product.stock) > 0 ? `库存 ${product.stock}` : '不可购买' }}</span>
       </div>
       <small>{{ product.shopName || '店铺信息以详情为准' }}</small>
       <div class="product-card__footer"><span>查看规格与详情</span><b aria-hidden="true">↗</b></div>

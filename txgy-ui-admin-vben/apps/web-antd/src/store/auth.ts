@@ -107,7 +107,7 @@ export const useAuthStore = defineStore('auth', () => {
           (type === 'register' && params.registerType === 'personal') ||
           (type === 'username' && params.loginType === 'personal');
         if (isPersonalAuthentication) {
-          accessStore.setTenantId(personalEffectiveTenantId ?? 0);
+          accessStore.setTenantId(0);
           accessStore.clearVisitTenantId();
         }
         // 企业登录：以后端返回的「账号实际所属租户」为准，自动纠正登录时选错的租户，

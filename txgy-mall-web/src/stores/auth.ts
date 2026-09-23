@@ -2,9 +2,9 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import { authApi, memberApi } from '@/api/mall'
-import { ApiError, StaleSessionError, tokenStorage, ensureAccountSession } from '@/api/http'
-import { challengeRequest } from '@/api/mall-auth'
-import { AccountContextError, assertResponseTenant, confirmAccountContext, getTenantContext, invalidateAccountContext, isCurrentTenantEpoch } from '@/utils/tenant-context'
+import { ApiError, StaleSessionError, tokenStorage, ensureAccountSession, stageTenantEntrySession } from '@/api/http'
+import { challengeRequest, platformLoginRequest } from '@/api/mall-auth'
+import { AccountContextError, assertResponseTenant, assertVerifiedAccountTenant, confirmAccountContext, confirmPlatformAccountContext, entryTenantId, getTenantContext, invalidateAccountContext, isCurrentTenantEpoch } from '@/utils/tenant-context'
 import type { TokenResult, UserProfile } from '@/types/mall'
 import type { ImageRegistrationPayload } from '@/utils/image-registration.mjs'
 
@@ -25,6 +25,14 @@ export const useAuthStore = defineStore('mall-auth', () => {
     accessToken.value = result.accessToken
   }
 
+  function applyPlatformToken(result: TokenResult) {
+    if (!result.accessToken || !result.refreshToken || !/^[1-9]\d*$/.test(String(result.tenantId))
+      || !/^[1-9]\d*$/.test(String(result.userId))) throw new Error('服务器未返回有效平台会员身份')
+    tokenStorage.set(result.accessToken, result.refreshToken)
+    confirmPlatformAccountContext({ tenantId: result.tenantId!, userId: result.userId }, getTenantContext().epoch)
+    accessToken.value = result.accessToken
+  }
+
   async function loadProfile() {
     const epoch = getTenantContext().epoch
     if (!tokenStorage.getAccess()) {
@@ -36,8 +44,11 @@ export const useAuthStore = defineStore('mall-auth', () => {
       if (!isCurrentTenantEpoch(epoch)) return null
       // /member/user/get is tenant-filtered but its legacy VO may omit tenantId.
       // A private request has already proved this entry's session; still require the same member.
-      if (result.tenantId !== undefined || !getTenantContext().accountTenantId) assertResponseTenant(result.tenantId)
-      if (getTenantContext().accountUserId && String(result.id) !== getTenantContext().accountUserId) throw new AccountContextError('会员身份与会话不一致')
+      const context = getTenantContext()
+      if (context.accountSessionKind === 'platform') {
+        if (result.tenantId !== undefined) assertVerifiedAccountTenant(result.tenantId, context.accountTenantId)
+      } else if (result.tenantId !== undefined || !context.accountTenantId) assertResponseTenant(result.tenantId)
+      if (context.accountUserId && String(result.id) !== context.accountUserId) throw new AccountContextError('会员身份与会话不一致')
       if (!isCurrentTenantEpoch(epoch)) return null
       sessionError.value = ''
       profile.value = result
@@ -105,8 +116,37 @@ export const useAuthStore = defineStore('mall-auth', () => {
     return imageAuthenticate('account-login', data, current)
   }
 
+  async function platformLogin(data: { account: string; password: string }, current = () => true) {
+    const currentAttempt = ++attempt
+    const authEpoch = invalidateAccountContext()
+    loading.value = true
+    try {
+      const result = await platformLoginRequest<TokenResult>(data, () => currentAttempt === attempt && current())
+      if (currentAttempt !== attempt || !isCurrentTenantEpoch(authEpoch) || !current()) throw new StaleSessionError()
+      applyPlatformToken(result)
+      await loadProfile()
+      if (currentAttempt !== attempt) throw new StaleSessionError()
+    } finally {
+      if (currentAttempt === attempt) loading.value = false
+    }
+  }
+
   function registerImage(data: ImageRegistrationPayload & { password: string; confirmPassword: string; contactMobile?: string; nickname?: string; agree: true; memberIdentity: 'buyer' | 'supplier' }, current = () => true) {
-    return imageAuthenticate('register-image', { ...data }, current)
+    if (String(data.tenantId) === entryTenantId) return imageAuthenticate('register-image', { ...data }, current)
+    return (async () => {
+      const currentAttempt = ++attempt
+      const authEpoch = invalidateAccountContext()
+      loading.value = true
+      try {
+        const result = await challengeRequest<TokenResult>('register-image', { ...data }, () => currentAttempt === attempt && current())
+        if (currentAttempt !== attempt || !isCurrentTenantEpoch(authEpoch) || !current()) throw new StaleSessionError()
+        if (String(result.tenantId) !== String(data.tenantId)) throw new AccountContextError('认证返回租户不一致')
+        stageTenantEntrySession(String(data.tenantId), result.accessToken, result.refreshToken)
+        return { entryTenantId: String(data.tenantId) }
+      } finally {
+        if (currentAttempt === attempt) loading.value = false
+      }
+    })()
   }
 
   async function logout() {
@@ -142,5 +182,5 @@ export const useAuthStore = defineStore('mall-auth', () => {
     if (profileEpoch !== getTenantContext().epoch) { profileEpoch = getTenantContext().epoch; profile.value = null }
   })
 
-  return { profile, loading, sessionError, isLoggedIn, login, register, accountLogin, registerImage, logout, loadProfile, restoreSession }
+  return { profile, loading, sessionError, isLoggedIn, login, register, accountLogin, platformLogin, registerImage, logout, loadProfile, restoreSession }
 })

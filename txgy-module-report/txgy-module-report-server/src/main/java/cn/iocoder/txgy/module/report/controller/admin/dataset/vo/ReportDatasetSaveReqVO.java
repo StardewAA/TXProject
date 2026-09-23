@@ -31,6 +31,9 @@ public class ReportDatasetSaveReqVO {
     @Schema(description = "分类（域）", example = "MES")
     private String category;
 
+    @Schema(description = "业务分组（可多选、可新建；留空则归入「自定义」）", example = "[\"生产\",\"库存\"]")
+    private List<String> bizGroups;
+
     @Schema(description = "SQL 语句（SELECT/WITH 开头，参数用 ${name} 占位）", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotEmpty(message = "SQL 语句不能为空")
     private String sqlText;

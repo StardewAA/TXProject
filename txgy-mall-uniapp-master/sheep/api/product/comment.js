@@ -15,6 +15,7 @@ const CommentApi = {
       custom: {
         showLoading: false,
         showError: false,
+        scope: 'browse',
       },
     });
   },

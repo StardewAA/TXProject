@@ -12,6 +12,8 @@ import cn.iocoder.txgy.module.product.controller.admin.spu.vo.ProductSpuPageReqV
 import cn.iocoder.txgy.module.product.controller.admin.spu.vo.ProductSpuSaveReqVO;
 import cn.iocoder.txgy.module.product.controller.admin.spu.vo.ProductSpuUpdateStatusReqVO;
 import cn.iocoder.txgy.module.product.controller.app.spu.vo.AppProductSpuPageReqVO;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
+import cn.iocoder.txgy.module.product.api.tenant.MallTenantWriteGuard;
 import cn.iocoder.txgy.module.product.dal.dataobject.category.ProductCategoryDO;
 import cn.iocoder.txgy.module.product.dal.dataobject.spu.ProductSpuDO;
 import cn.iocoder.txgy.module.product.dal.mysql.spu.ProductSpuMapper;
@@ -60,6 +62,7 @@ public class ProductSpuServiceImpl implements ProductSpuService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createSpu(ProductSpuSaveReqVO createReqVO) {
+        requireWritableTenant();
         checkAdminWrite(createReqVO.getShopId());
         if (createReqVO.getShopId() == null || createReqVO.getShopId() <= 0)
             throw cn.iocoder.txgy.module.product.service.enterprise.EnterpriseMembershipService.invalid("新增商品须选择有效店铺");
@@ -89,6 +92,7 @@ public class ProductSpuServiceImpl implements ProductSpuService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateSpu(ProductSpuSaveReqVO updateReqVO) {
+        requireWritableTenant();
         // 校验 SPU 是否存在
         ProductSpuDO spu = reviewService.lock(updateReqVO.getId());
         checkAdminWrite(spu.getShopId());
@@ -104,8 +108,12 @@ public class ProductSpuServiceImpl implements ProductSpuService {
         productSkuService.validateSkuList(skuSaveReqList, updateReqVO.getSpecType());
 
         // 更新 SPU
+        boolean initialStockEditable = productSkuService.getSkuListBySpuId(spu.getId()).stream()
+                .allMatch(sku -> sku.getWmsSkuId() == null && sku.getWmsWarehouseId() == null);
         ProductSpuDO updateObj = BeanUtils.toBean(updateReqVO, ProductSpuDO.class).setStatus(null)
-                .setSalesCount(null).setBrowseCount(null).setStock(null);
+                .setSalesCount(null).setBrowseCount(null)
+                .setStock(initialStockEditable
+                        ? getSumValue(skuSaveReqList, ProductSkuSaveReqVO::getStock, Math::addExact) : null);
         updateObj.setPrice(getMinValue(skuSaveReqList, ProductSkuSaveReqVO::getPrice))
                 .setMarketPrice(getMinValue(skuSaveReqList, ProductSkuSaveReqVO::getMarketPrice))
                 .setCostPrice(getMinValue(skuSaveReqList, ProductSkuSaveReqVO::getCostPrice));
@@ -190,6 +198,7 @@ public class ProductSpuServiceImpl implements ProductSpuService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteSpu(Long id) {
+        requireWritableTenant();
         // 兼容既有可信内部调用；公开 Controller 只能使用带 expectedVersion 的重载。
         deleteLocked(reviewService.lock(id));
     }
@@ -197,6 +206,7 @@ public class ProductSpuServiceImpl implements ProductSpuService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteSpu(Long id, Long expectedVersion) {
+        requireWritableTenant();
         var current = reviewService.lock(id);
         cn.iocoder.txgy.module.product.service.review.ProductSpuReviewService.expect(current, expectedVersion);
         deleteLocked(current);
@@ -292,6 +302,7 @@ public class ProductSpuServiceImpl implements ProductSpuService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateSpuStatus(ProductSpuUpdateStatusReqVO updateReqVO) {
+        requireWritableTenant();
         // 校验存在
         var current = reviewService.lock(updateReqVO.getId());
         checkAdminWrite(current.getShopId());
@@ -315,6 +326,10 @@ public class ProductSpuServiceImpl implements ProductSpuService {
         var user = cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils.getLoginUser();
         if (user != null && Objects.equals(user.getUserType(), cn.iocoder.txgy.framework.common.enums.UserTypeEnum.ADMIN.getValue()))
             reviewService.requireAdminWrite(shopId);
+    }
+
+    private static void requireWritableTenant() {
+        MallTenantWriteGuard.requireWritable(TenantContextHolder.getRequiredTenantId());
     }
 
     @Override

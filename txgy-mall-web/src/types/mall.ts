@@ -74,6 +74,7 @@ export interface ProductSku {
 
 export interface Product {
   id: Identifier
+  tenantSlug?: string
   name: string
   introduction?: string
   description?: string
@@ -104,6 +105,7 @@ export interface ProductCollectionItem {
   shopName?: string
   saleable?: boolean | null
   unavailableReason?: string | null
+  tenantSlug?: string
 }
 
 export interface Shop {
@@ -169,8 +171,16 @@ export interface OrderItem {
   latestAfterSaleReason?: string
 }
 
-export interface TradeOrder extends PaymentDeadlineFields {
+  export interface TradeOrder extends PaymentDeadlineFields {
+    sourceType?: string
+    inquiryId?: Identifier
+    inquiryQuoteId?: Identifier
+    inquiryQuoteVersion?: number
+    buyerEnterpriseId?: Identifier
+    createdByCurrentMember?: boolean
   shopId?: Identifier
+  deliveryType?: number
+  deliveryPrice?: number
   receiverLongitude?: AddressLocation['longitude']
   receiverLatitude?: AddressLocation['latitude']
   receiverCoordSystem?: AddressLocation['coordSystem']
@@ -196,6 +206,7 @@ export interface TradeOrder extends PaymentDeadlineFields {
 }
 
 export interface AfterSale {
+  createdByCurrentMember?: boolean
   shopId?: Identifier
   orderId?: Identifier
   returnReceiverName?: string

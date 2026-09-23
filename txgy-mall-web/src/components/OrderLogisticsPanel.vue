@@ -2,16 +2,20 @@
 import { computed } from 'vue'
 import type { Identifier } from '@/types/mall'
 import { useOrderLogistics } from '@/composables/useOrderLogistics'
-import { logisticsPresentation } from '@/utils/fulfillment'
+import { hasAddressLocation, logisticsPresentation } from '@/utils/fulfillment'
 import { formatDate } from '@/utils/format'
 import ServiceEntry from '@/components/ServiceEntry.vue'
 import OrderLogisticsMap from '@/components/OrderLogisticsMap.vue'
 import type { AddressLocation } from '@/types/fulfillment'
 
-const props = defineProps<{ orderId: Identifier; receiverLocation?: AddressLocation; receiverAddress?: string; dispatchOriginAddress?: string }>()
-const { data, loading, failed, remaining, canRefresh, load } = useOrderLogistics(() => props.orderId)
+const props = defineProps<{ orderId: Identifier; enterprise?: boolean; receiverLocation?: AddressLocation; receiverAddress?: string; dispatchOriginAddress?: string }>()
+const { data, loading, failed, remaining, canRefresh, load } = useOrderLogistics(() => props.orderId, () => Boolean(props.enterprise))
 const presentation = computed(() => logisticsPresentation(data.value))
 const providerName = computed(() => ({ kd100: '快递100', kdniao: '快递鸟' }[data.value?.source || ''] || '物流服务'))
+const hasMapContext = computed(() => presentation.value.events.length > 0
+  || Boolean(props.dispatchOriginAddress?.trim())
+  || hasAddressLocation(props.receiverLocation)
+  || Boolean(props.receiverAddress?.trim()))
 </script>
 
 <template>
@@ -28,7 +32,7 @@ const providerName = computed(() => ({ kd100: '快递100', kdniao: '快递鸟' }
         <p class="source-note">数据来源：{{ providerName }}<template v-if="data?.updatedTime"> · 查询更新时间：{{ formatDate(data.updatedTime) }}</template><template v-if="data?.cached"> · 缓存结果</template></p>
         <ol><li v-for="(event, index) in presentation.events" :key="`${event.time}-${index}`"><time>{{ formatDate(event.time ?? undefined) }}</time><p><span v-if="event.statusLabel">{{ event.statusLabel }} · </span>{{ event.content }}</p></li></ol>
       </div>
-      <OrderLogisticsMap v-if="presentation.events.length || dispatchOriginAddress" :events="presentation.events" :receiver-location="receiverLocation" :receiver-address="receiverAddress" :dispatch-origin-address="dispatchOriginAddress" />
+      <OrderLogisticsMap v-if="hasMapContext" :events="presentation.events" :receiver-location="receiverLocation" :receiver-address="receiverAddress" :dispatch-origin-address="dispatchOriginAddress" />
       <p class="logistics-footnote">物流签收不等于您已确认收货，也不会自动触发退款或结算。当前仅展示文字轨迹，不提供车辆实时定位。</p>
       <ServiceEntry resource-type="ORDER" :resource-id="orderId" label="联系订单客服核实物流" />
     </template>

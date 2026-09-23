@@ -32,6 +32,11 @@ public class PayOrderApiImpl implements PayOrderApi {
     }
 
     @Override
+    public CommonResult<Long> getOrderTenantId(Long id) {
+        return success(payOrderService.getOrderTenantId(id));
+    }
+
+    @Override
     public CommonResult<Boolean> expireOrder(Long id, String appKey, String merchantOrderId) {
         return success(payOrderService.expireOrder(id, appKey, merchantOrderId));
     }

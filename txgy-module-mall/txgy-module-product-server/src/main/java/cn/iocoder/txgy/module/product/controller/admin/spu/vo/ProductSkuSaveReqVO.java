@@ -3,6 +3,7 @@ package cn.iocoder.txgy.module.product.controller.admin.spu.vo;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
 import lombok.*;
 
 import java.util.List;
@@ -34,6 +35,7 @@ public class ProductSkuSaveReqVO {
 
     @Schema(description = "库存", requiredMode = Schema.RequiredMode.REQUIRED, example = "200")
     @NotNull(message = "库存不能为空")
+    @PositiveOrZero(message = "期初库存不能小于零")
     private Integer stock;
 
     @Schema(description = "WMS 物料 SKU 编号；和 WMS 仓库编号需同时填写", example = "1001")

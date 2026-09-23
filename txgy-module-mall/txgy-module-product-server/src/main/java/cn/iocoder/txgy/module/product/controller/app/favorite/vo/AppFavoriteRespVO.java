@@ -14,6 +14,7 @@ public class AppFavoriteRespVO {
     private Long spuId;
     private Boolean saleable;
     private String unavailableReason;
+    private String tenantSlug;
 
     // ========== 商品相关字段 ==========
 
@@ -25,5 +26,8 @@ public class AppFavoriteRespVO {
 
     @Schema(description = "商品单价", example = "100")
     private Integer price;
+    private String introduction;
+    private String shopName;
+    private Integer salesCount;
 
 }

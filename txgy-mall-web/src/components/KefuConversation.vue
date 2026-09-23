@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { productApi } from '@/api/mall'
+import { portalApi } from '@/api/portal'
 import { useKefuConversation } from '@/composables/useKefuConversation'
 import { useAccountMessageBox } from '@/composables/useAccountOperation'
 import { getTenantContext } from '@/utils/tenant-context'
 import { formatMoney, productImage } from '@/utils/format'
 import type { KefuMessage, KefuResource, KefuThread } from '@/types/kefu-chat'
 import type { Product } from '@/types/mall'
-const props = defineProps<{ initial: KefuThread; agent?: boolean; resource?: KefuResource }>()
+const props = defineProps<{ initial: KefuThread; agent?: boolean; resource?: KefuResource; portalProduct?: boolean }>()
 const emit = defineEmits<{ update: [thread: KefuThread] }>()
 const chat = useKefuConversation(props.initial, props.agent === true)
 const { thread, messages, input, error, sending, loading, failed, uncertain, sentResourceKey, loadedCursor, acknowledging, acknowledge, retryPending, discardPending, send, sendResource, human, refresh } = chat
@@ -22,10 +23,13 @@ watch(() => props.resource, async value => {
   if (!value || value.resourceType !== 'PRODUCT') return
   resourceLoading.value = true
   try {
-    const product = await productApi.getDetail(value.resourceId)
+    const product = props.portalProduct ? await portalApi.getProduct(value.resourceId) : await productApi.getDetail(value.resourceId)
     if (generation !== previewGeneration) return
-    if (String(product.id) !== String(value.resourceId) || String(product.shopId) !== String(thread.value.session.shopId)) throw new Error('商品信息与当前店铺不一致')
-    resourceProduct.value = product
+    const productId = 'spuId' in product ? product.spuId : product.id
+    if (String(productId) !== String(value.resourceId) || String(product.shopId) !== String(thread.value.session.shopId)) throw new Error('商品信息与当前店铺不一致')
+    resourceProduct.value = 'spuId' in product
+      ? { id: product.spuId, name: product.spuName, introduction: product.introduction, picUrl: product.picUrl, price: product.price, shopId: product.shopId }
+      : product
   } catch (reason) {
     if (generation === previewGeneration) resourceError.value = reason instanceof Error ? reason.message : '商品信息暂时无法加载'
   } finally { if (generation === previewGeneration) resourceLoading.value = false }
@@ -52,7 +56,7 @@ const legacySnapshotNotes = new Set(['本人订单快照，不包含收货地址
 const visibleMessageText = (message: KefuMessage) => message.card && legacySnapshotNotes.has(message.text) ? '' : message.text
 const visibleCardText = (text: string) => legacySnapshotNotes.has(text) ? '' : text
 const serviceTitle = computed(() => thread.value.session.scope === 'PLATFORM' ? '平台客服' : '店铺客服')
-const senderName = (role: KefuMessage['senderRole']) => role === 'MEMBER' ? '我' : role === 'AGENT' ? serviceTitle.value : role === 'FAQ' ? '客服助手' : '服务通知'
+const senderName = (role: KefuMessage['senderRole']) => role === 'MEMBER' ? '我' : role === 'AGENT' ? serviceTitle.value : role === 'FAQ' ? '客服助手' : role === 'AI' ? 'AI 客服' : '服务通知'
 const serviceStatus = computed(() => {
   if (thread.value.mode === 'CLOSED') return '本次服务已结束'
   if (thread.value.mode === 'HUMAN') return '客服正在为您服务'
@@ -73,7 +77,7 @@ watch(thread, value => emit('update', value))
     <div v-if="uncertain" class="delivery-warning"><b>消息发送状态暂未确认</b><span>建议先刷新消息，避免重复发送。</span><el-button :disabled="sending || failed" @click="retryPending">重新发送</el-button><el-button :disabled="sending" @click="abandon">取消</el-button></div>
     <div class="messages" aria-live="polite">
       <div v-if="!messages.length && !loading" class="chat-empty"><span>欢迎光临</span><div class="welcome-avatar">客</div><b>您好，很高兴为您服务</b><p>请告诉我们您想咨询的商品、规格或订单问题</p></div>
-      <article v-for="message in messages" :key="String(message.id)" :class="{ mine: agent ? message.senderRole === 'AGENT' : message.senderRole === 'MEMBER', automatic: message.senderRole === 'FAQ', notice: message.senderRole === 'SYSTEM' }">
+      <article v-for="message in messages" :key="String(message.id)" :class="{ mine: agent ? message.senderRole === 'AGENT' : message.senderRole === 'MEMBER', automatic: message.senderRole === 'FAQ' || message.senderRole === 'AI', notice: message.senderRole === 'SYSTEM' }">
         <div class="bubble-avatar">{{ (agent ? message.senderRole === 'AGENT' : message.senderRole === 'MEMBER') ? '我' : '客' }}</div>
         <div class="bubble-wrap"><small>{{ senderName(message.senderRole) }} · {{ time(message.createdAt) }}</small><p v-if="visibleMessageText(message)" class="bubble">{{ visibleMessageText(message) }}</p>
           <section v-if="message.card" class="resource-card">

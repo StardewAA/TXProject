@@ -2,11 +2,15 @@ package cn.iocoder.txgy.module.promotion.service.kefu.chat;
 
 import cn.iocoder.txgy.framework.common.exception.ServiceException;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
+import cn.iocoder.txgy.framework.security.core.LoginUser;
+import cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.txgy.module.member.api.user.MemberUserApi;
 import cn.iocoder.txgy.module.member.api.user.dto.MemberUserRespDTO;
 import cn.iocoder.txgy.module.product.api.shop.ProductShopApi;
 import cn.iocoder.txgy.module.product.api.shop.dto.ProductShopRespDTO;
+import cn.iocoder.txgy.module.product.api.sku.ProductPublicSkuApi;
+import cn.iocoder.txgy.module.product.api.sku.dto.ProductPublicSkuRespDTO;
 import cn.iocoder.txgy.module.promotion.dal.mysql.kefu.*;
 import cn.iocoder.txgy.module.promotion.service.kefu.scope.*;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
@@ -17,6 +21,8 @@ import org.springframework.core.io.FileSystemResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.*;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
 import org.springframework.transaction.interceptor.TransactionInterceptor;
@@ -34,7 +40,8 @@ import static org.mockito.Mockito.*;
 class KeFuChatServiceTest {
     JdbcTemplate jdbc;KeFuScopeRepository sessions;KeFuChatRepository repository;
     KeFuScopeService scopeTarget,scopes;KeFuChatService target,service;KeFuChatCardService cards;
-    MemberUserApi members;AdminUserApi admins;ProductShopApi shops;
+    MemberUserApi members;AdminUserApi admins;ProductShopApi shops;KeFuAiReplyService aiReplies;
+    ProductPublicSkuApi publicSkus;
     final Actor buyer=new Actor(11,1),agent=new Actor(22,1),other=new Actor(33,1),admin=new Actor(22,2),operator=new Actor(99,2);
     long now=1_800_000_000_000L;
     @BeforeEach void setup() {
@@ -49,18 +56,18 @@ class KeFuChatServiceTest {
         new ResourceDatabasePopulator(new FileSystemResource(root.resolve("deploy/mysql/repair/2026-09-17-promotion-kefu-scope.sql")),
                 new FileSystemResource(root.resolve("deploy/mysql/repair/2026-09-17-promotion-kefu-chat.sql"))).execute(source);
         clearTables();sessions=spy(new KeFuScopeRepository(jdbc));repository=spy(new KeFuChatRepository(jdbc));
-        members=mock(MemberUserApi.class);admins=mock(AdminUserApi.class);shops=mock(ProductShopApi.class);cards=mock(KeFuChatCardService.class);
+        members=mock(MemberUserApi.class);admins=mock(AdminUserApi.class);shops=mock(ProductShopApi.class);cards=mock(KeFuChatCardService.class);aiReplies=mock(KeFuAiReplyService.class);publicSkus=mock(ProductPublicSkuApi.class);
         when(members.getUser(anyLong())).thenAnswer(c->CommonResult.success(new MemberUserRespDTO().setId(c.getArgument(0)).setStatus(0)));
         when(admins.getUser(anyLong())).thenAnswer(c->CommonResult.success(new AdminUserRespDTO().setId(c.getArgument(0)).setStatus(0)));
         when(shops.getShop(anyLong())).thenAnswer(c->{long id=c.getArgument(0);return CommonResult.success((TenantContextHolder.getTenantId()==1L?(id==101||id==102):id==201)?new ProductShopRespDTO().setId(id).setStatus(0):null);});
         var manager=new DataSourceTransactionManager(source);
         scopeTarget=new KeFuScopeService(sessions,shops,members,admins);ReflectionTestUtils.setField(scopeTarget,"enabled",true);scopes=proxy(scopeTarget,manager);
-        target=new KeFuChatService(scopes,sessions,repository,cards);clock(now);service=proxy(target,manager);TenantContextHolder.setTenantId(1L);
+        target=new KeFuChatService(scopes,sessions,repository,cards,aiReplies,publicSkus);clock(now);service=proxy(target,manager);TenantContextHolder.setTenantId(1L);
     }
     @SuppressWarnings("unchecked") static <T>T proxy(T value,DataSourceTransactionManager manager){var p=new ProxyFactory(value);p.setProxyTargetClass(true);p.addAdvice(new TransactionInterceptor(manager,new AnnotationTransactionAttributeSource()));return(T)p.getProxy();}
     void clock(long time){ReflectionTestUtils.setField(target,"clock",Clock.fixed(Instant.ofEpochMilli(time),ZoneOffset.UTC));}
-    @AfterEach void cleanup(){TenantContextHolder.clear();clearTables();}
-    void clearTables(){for(String table:List.of("promotion_kefu_chat_message","promotion_kefu_chat_read","promotion_kefu_chat_meta","promotion_kefu_chat_presence","promotion_kefu_faq_config","promotion_kefu_scope_audit","promotion_kefu_session","promotion_kefu_agent"))jdbc.update("DELETE FROM "+table);}
+    @AfterEach void cleanup(){TenantContextHolder.clear();SecurityContextHolder.clearContext();clearTables();}
+    void clearTables(){for(String table:List.of("promotion_kefu_chat_message","promotion_kefu_chat_read","promotion_kefu_chat_meta","promotion_kefu_chat_presence","promotion_kefu_faq_config","promotion_kefu_scope_audit","promotion_kefu_platform_session","promotion_kefu_session","promotion_kefu_agent"))jdbc.update("DELETE FROM "+table);}
     KeFuChatModels.Thread open(){return service.open(buyer,"SHOP",101L);}
     void grant(Actor actor){scopes.grant(operator,new GrantRequest("SHOP",101L,actor.type(),actor.id(),true,0L,"隔离测试"));}
     SendRequest text(Session s,String key,String value){return new SendRequest(s.id(),s.version(),key,value,null,null);}
@@ -73,8 +80,48 @@ class KeFuChatServiceTest {
     @Test void capabilityDisabledByDefaultWithoutDatabaseOrIdentity(){var result=new KeFuChatCapability().get();assertFalse(result.enabled());assertFalse(result.attachmentsEnabled());assertEquals("FAQ_HUMAN",result.mode());}
     @Test void disabledWritesStopBeforeAnyPersistence(){ReflectionTestUtils.setField(scopeTarget,"enabled",false);assertThrows(ServiceException.class,this::open);assertEquals(0,count());verifyNoInteractions(cards);}
     @Test void openIsIdempotentAndDoesNotClaimHumanOnline(){var a=open();var b=open();assertEquals(a.session().id(),b.session().id());assertEquals("SELF_SERVICE",a.mode());assertEquals(0,a.onlineAgents());assertTrue(a.availabilityMessage().contains("留言"));assertTrue(a.faq().isEmpty());assertEquals(0,count());}
+    @Test void platformProductOwnershipCreatesTargetTenantThreadWithoutTrustingClientShop(){
+        var ownership=new ProductPublicSkuRespDTO().setTenantId(2L).setShopId(201L).setSkuId(9001L).setSaleable(true);
+        when(publicSkus.getOwnershipList(List.of(9001L))).thenReturn(List.of(ownership));
+        var thread=service.openProduct(buyer,"SHOP",201L,9001L);
+        assertEquals(2L,thread.session().tenantId());assertEquals(201L,thread.session().shopId());assertEquals(1L,TenantContextHolder.getTenantId());
+        assertEquals(thread.session(),service.thread(buyer,thread.session().id(),false).session());
+        assertThrows(ServiceException.class,()->service.thread(other,thread.session().id(),false));
+        assertThrows(ServiceException.class,()->service.openProduct(buyer,"SHOP",101L,9001L));
+        ownership.setSaleable(false);
+        assertThrows(ServiceException.class,()->service.openProduct(buyer,"SHOP",201L,9001L));
+    }
+    @Test void targetTenantCardRpcUsesScopedPrincipalAndRestoresItAfterFailure(){
+        var login=new LoginUser().setId(11L).setUserType(1).setTenantId(1L);
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(login,null,List.of()));
+        var originalAuthentication=SecurityContextHolder.getContext().getAuthentication();
+        var ownership=new ProductPublicSkuRespDTO().setTenantId(2L).setShopId(201L).setSkuId(9001L).setSaleable(true);
+        when(publicSkus.getOwnershipList(List.of(9001L))).thenReturn(List.of(ownership));
+        var session=service.openProduct(buyer,"SHOP",201L,9001L).session();
+        when(cards.build(session,buyer,"PRODUCT",42L)).thenAnswer(call->{
+            assertEquals(2L,TenantContextHolder.getTenantId());
+            assertEquals(11L,SecurityFrameworkUtils.getLoginUserId());
+            assertEquals(2L,SecurityFrameworkUtils.getLoginUser().getTenantId());
+            assertNull(SecurityFrameworkUtils.getLoginUser().getVisitTenantId());
+            assertNotSame(login,SecurityFrameworkUtils.getLoginUser());
+            throw new IllegalStateException("product card unavailable");
+        });
+
+        assertThrows(IllegalStateException.class,()->service.send(buyer,
+                new SendRequest(session.id(),session.version(),"request01",null,"PRODUCT",42L),false));
+
+        assertEquals(1L,TenantContextHolder.getTenantId());
+        assertSame(originalAuthentication,SecurityContextHolder.getContext().getAuthentication());
+        assertEquals(11L,SecurityFrameworkUtils.getLoginUserId());
+        assertEquals(0,count());
+    }
     @Test void draftFaqNeverAnswersUntilPublished(){service.saveFaq(operator,new FaqSaveRequest("SHOP",101L,0L,List.of(entry("return","秘密草稿","退货"))));var s=open().session();var result=service.send(buyer,text(s,"request01","退货怎么办"),false);assertEquals("SYSTEM",result.messages().getLast().senderRole());assertFalse(result.messages().getLast().text().contains("秘密"));}
     @Test void publishedFaqAnswersWithVersionAndExplicitRole(){var config=publish("SHOP",101,List.of(entry("return","请先在本人订单申请售后","退货")));var t=open();assertEquals(1,t.faq().size());var result=service.send(buyer,text(t.session(),"request01","请问如何退货"),false);assertEquals(2,result.messages().size());assertEquals("FAQ",result.messages().getLast().senderRole());assertEquals(config.publishedVersion(),result.messages().getLast().faqVersion());assertEquals("return",result.messages().getLast().faqId());}
+    @Test void unmatchedQuestionUsesAiWithoutChangingPublishedFaqPriority(){when(aiReplies.reply(eq("SHOP"),eq(101L),eq(11L),anyString(),eq("这个材料耐温多少"),anyString())).thenReturn(new KeFuAiReplyService.Answer("请以商品参数页标注的耐温范围为准，需要选型时可转人工。",List.of()));var s=open().session();var result=service.send(buyer,text(s,"request01","这个材料耐温多少"),false);assertEquals("AI",result.messages().getLast().senderRole());assertTrue(result.messages().getLast().text().contains("商品参数页"));}
+    @Test void aiRecommendationBecomesValidatedClickableProductCards(){var s=open().session();var card=new KeFuChatCardService.Card("PRODUCT",100L,101L,"保温管 DN100","",100L,null,"https://example.test/pipe.jpg",12800,1);when(aiReplies.reply(anyString(),anyLong(),anyLong(),anyString(),anyString(),anyString())).thenReturn(new KeFuAiReplyService.Answer("为您推荐以下在售保温管。",List.of(100L)));when(cards.build(s,buyer,"PRODUCT",100L)).thenReturn(card);var result=service.send(buyer,text(s,"request01","推荐保温管"),false);assertEquals(3,result.messages().size());assertEquals("AI",result.messages().get(1).senderRole());assertEquals(card,result.messages().get(2).card());assertEquals(result.messages(),service.send(buyer,text(s,"request01","推荐保温管"),false).messages());}
+    @Test void aiFailureFallsBackToSafeSystemMessage(){when(aiReplies.reply(anyString(),anyLong(),anyLong(),anyString(),anyString(),anyString())).thenReturn(null);var s=open().session();var result=service.send(buyer,text(s,"request01","未知问题"),false);assertEquals("SYSTEM",result.messages().getLast().senderRole());assertTrue(result.messages().getLast().text().contains("转人工"));}
+    @Test void faqHitDoesNotSpendAiQuota(){publish("SHOP",101,List.of(entry("return","固定答复","退货")));var s=open().session();assertEquals("FAQ",service.send(buyer,text(s,"request01","退货"),false).messages().getLast().senderRole());verifyNoInteractions(aiReplies);}
+    @Test void aiRepliesAreLimitedToTenPerConversationPerMinute(){when(aiReplies.reply(anyString(),anyLong(),anyLong(),anyString(),anyString(),anyString())).thenReturn(new KeFuAiReplyService.Answer("AI答复",List.of()));var s=open().session();for(int i=0;i<10;i++)assertEquals("AI",service.send(buyer,text(s,"request_"+i,"问题"+i),false).messages().getLast().senderRole());assertEquals("SYSTEM",service.send(buyer,text(s,"request_10","问题10"),false).messages().getLast().senderRole());verify(aiReplies,times(10)).reply(anyString(),anyLong(),anyLong(),anyString(),anyString(),anyString());}
     @Test void shopSpecificPolicyPrecedesLongerPlatformKeyword(){publish("PLATFORM",0,List.of(entry("general","平台一般规则","退货问题")));publish("SHOP",101,List.of(entry("specific","本店具体规则","退货")));var s=open().session();assertEquals("本店具体规则",service.send(buyer,text(s,"request01","退货问题"),false).messages().getLast().text());}
     @Test void shopFaqDoesNotLeakToAnotherShopOrTenant(){publish("SHOP",101,List.of(entry("private","101店专有规则","退货")));var s=service.open(buyer,"SHOP",102L).session();assertTrue(service.thread(buyer,s.id(),false).faq().isEmpty());assertEquals("SYSTEM",service.send(buyer,text(s,"request01","退货"),false).messages().getLast().senderRole());TenantContextHolder.setTenantId(2L);var otherTenant=service.open(buyer,"SHOP",201L).session();assertTrue(service.thread(buyer,otherTenant.id(),false).faq().isEmpty());}
     @Test void unpublishedDraftChangeDoesNotAlterActivePublishedReply(){var pub=publish("SHOP",101,List.of(entry("return","已发布原文","退货")));service.saveFaq(operator,new FaqSaveRequest("SHOP",101L,pub.version(),List.of(entry("return","新草稿不能泄露","退货"))));var s=open().session();assertEquals("已发布原文",service.send(buyer,text(s,"request01","退货"),false).messages().getLast().text());}

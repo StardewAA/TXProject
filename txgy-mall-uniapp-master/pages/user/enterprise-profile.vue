@@ -3,7 +3,7 @@
     <view class="enterprise-profile">
       <view class="heading">完善企业信息</view>
       <view class="notice">注册账号 → 提交企业资料 → 后台审核。普通客户归属不代表企业采购或销售权限。</view>
-      <view class="pc-only-notice">移动端仅支持企业资料提交和审核进度查询。采购中心、销售中心仅在 PC 端开放。</view>
+      <view class="pc-only-notice">移动端仅支持企业资料提交和审核进度查询。采购中心在 PC 商城开放，供应经营请使用后台管理端。</view>
       <view v-if="error" class="error">{{ error }}</view>
       <button size="mini" :disabled="busy || loading" @tap="load">{{ loading ? '读取中' : '刷新审核状态' }}</button>
       <view v-if="loaded" class="notice">{{ statusText }}</view>
@@ -18,7 +18,7 @@
         <view class="field">企业介绍<textarea v-model="form.introduction" maxlength="1024" :disabled="!editable || busy" placeholder="主营产品与企业介绍（选填）" /></view>
         <button v-if="editable" type="primary" :disabled="busy" @tap="submit">{{ busy ? '提交中' : form.status === 2 ? '修改并重新提交' : '提交后台审核' }}</button>
       </view>
-      <view class="notice">平台审核不代表外部工商认证。供应商审核通过后还须关联店铺才能经营；采购管理和销售管理请统一前往 PC 端。</view>
+      <view class="notice">平台审核不代表外部工商认证。采购企业在 PC 商城使用采购中心；供应企业审核通过并关联后台账号、店铺授权后，在后台管理端经营。</view>
     </view>
   </s-layout>
 </template>
@@ -36,7 +36,7 @@ const fields = [ { key:'name', label:'企业名称', max:100, required:true }, {
   { key:'contactName', label:'联系人', max:32, required:true }, { key:'contactMobile', label:'联系电话', max:11, required:true }, { key:'address', label:'企业地址', max:255, required:true } ];
 const editable = computed(() => loaded.value && !loading.value && ownerId.value === String(sheep.$store('user').userInfo.id) && ['buyer','supplier'].includes(identity.value) && (form.status === undefined || form.status === 2));
 const statusText = computed(() => !identity.value ? '原有账号如需开通企业身份，请联系平台，原有购物功能不受影响。'
-  : form.status === 0 ? '已提交后台审核，尚未认证成功。' : form.status === 1 ? '企业资料审核通过。采购中心、销售中心仅在 PC 端开放，具体权限以后台授权为准。'
+  : form.status === 0 ? '已提交后台审核，尚未认证成功。' : form.status === 1 ? '企业资料审核通过。采购业务请使用 PC 商城，供应经营请使用后台管理端，具体权限以审核与授权结果为准。'
   : form.status === 2 ? '审核未通过：' + (form.auditRemark || '请补充企业资料') : '请填写企业资料后提交审核。');
 function reset() { Object.keys(form).forEach(key => delete form[key]); Object.assign(form, emptyEnterpriseApplication()); loaded.value = false; identity.value = ''; ownerId.value = ''; ownerOperation = undefined; }
 async function load() {

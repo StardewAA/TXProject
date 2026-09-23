@@ -323,13 +323,19 @@ export function getVideoPage(params: PageParam & Record<string, any>) {
   );
 }
 
-/** 异步上传视频（multipart，返回视频ID与转码任务信息） */
-export function uploadVideo(data: FormData) {
+/** 异步上传视频（multipart，返回视频ID与转码任务信息）；onProgress 用于显示真实上传进度百分比 */
+export function uploadVideo(
+  data: FormData,
+  onProgress?: (percent: number) => void,
+) {
   return requestClient.post<TrainingResourceApi.VideoUploadResult>(
     '/training/video/upload',
     data,
     {
       headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: (e) => {
+        if (e.total) onProgress?.(Math.round((e.loaded / e.total) * 100));
+      },
     },
   );
 }

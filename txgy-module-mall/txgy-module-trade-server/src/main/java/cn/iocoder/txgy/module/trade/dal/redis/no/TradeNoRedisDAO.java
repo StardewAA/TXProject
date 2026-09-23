@@ -22,6 +22,9 @@ public class TradeNoRedisDAO {
 
     public static final String AFTER_SALE_NO_PREFIX = "r";
 
+    /** 平台跨租户结算编号；与普通租户订单号使用不同前缀。 */
+    public static final String PLATFORM_CHECKOUT_NO_PREFIX = "pc";
+
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 

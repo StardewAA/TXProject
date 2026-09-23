@@ -5,24 +5,27 @@ import type { MallSpuApi } from '#/api/mall/product/spu';
 import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
+import { useAccess } from '@vben/access';
 import { confirm, Page } from '@vben/common-ui';
 import { downloadFileFromBlobPart } from '@vben/utils';
 
 import { Alert, Button, message, Tabs } from 'ant-design-vue';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
-import { exportSpu, getSpuPage, getSpuReviewPolicy, getTabsCount, submitSpuReview, updateStatus, withdrawSpuReview } from '#/api/mall/product/spu';
+import { exportSpu, getSpuPage, getSpuReviewPolicy, getTabsCount, submitSpuReview, syncWmsStockCache, updateStatus, withdrawSpuReview } from '#/api/mall/product/spu';
 
 import { useGridColumns, useGridFormSchema } from './data';
-import { canAdminMaintain } from './review-model';
+import { canOperateProduct } from './review-model';
 
 const { push } = useRouter();
 const route = useRoute();
+const { hasAccessByCodes } = useAccess();
 const tabType = ref<number | undefined>();
 const policy = ref<MallSpuApi.ReviewPolicy>();
 const policyError = ref(false);
 const countError = ref(false);
 const busyId = ref<number>();
+const syncingStock = ref(false);
 const tabsData = ref([
   { name: '出售中', type: 0, count: undefined as number | undefined },
   { name: '仓库中', type: 1, count: undefined as number | undefined },
@@ -44,6 +47,23 @@ async function loadPolicy() {
 async function handleExport() {
   const data = await exportSpu({ ...(await gridApi.formApi.getValues()), tabType: tabType.value });
   downloadFileFromBlobPart({ fileName: '商品.xls', source: data });
+}
+
+async function handleSyncWmsStock() {
+  if (syncingStock.value) return;
+  try {
+    await confirm('确认从 WMS 同步当前租户的商品库存？WMS 已完成入库的库存会更新到商城。');
+  } catch {
+    return;
+  }
+  syncingStock.value = true;
+  try {
+    const count = await syncWmsStockCache();
+    message.success(`WMS 库存同步完成，已更新 ${count} 个 SKU`);
+    await gridApi.query();
+  } finally {
+    syncingStock.value = false;
+  }
 }
 
 let countRequest = 0;
@@ -68,7 +88,19 @@ function handleReview(row: MallSpuApi.Spu) {
 }
 
 function canMaintain(row: MallSpuApi.Spu) {
-  return canAdminMaintain(policy.value, row.shopId);
+  return canOperateProduct(
+    policy.value,
+    row.shopId,
+    hasAccessByCodes(['product:spu:review']),
+  );
+}
+
+function canCreate() {
+  return canOperateProduct(
+    policy.value,
+    undefined,
+    hasAccessByCodes(['product:spu:review']),
+  );
 }
 
 function canPublish(row: MallSpuApi.Spu) {
@@ -155,7 +187,7 @@ onMounted(async () => {
 
 <template>
   <Page auto-content-height>
-    <Alert class="mb-3" type="info" show-icon message="华能店试点：后台只查看与审核，经营资料交由销售中心维护。" description="其他店铺补齐经营账号前临时保留后台维护，但新增、修改、复制、恢复后均须审核，提交人员不可自审。未修改的存量在售商品按历史过渡保留，通过审核不自动上架。" />
+    <Alert class="mb-3" type="info" show-icon message="商品经营与商品审核均在后台完成，并由不同角色分别操作。" description="页面会同时校验后台权限和服务端经营策略；新增、修改、复制、恢复后均须审核，提交人员不可自审。未修改的存量在售商品按历史过渡保留，通过审核不自动上架。" />
     <Alert v-if="policyError" class="mb-3" type="warning" show-icon message="暂无法加载审核策略，页面保持只读，审核入口暂不可用。">
       <template #action><Button size="small" @click="loadPolicy">重试</Button></template>
     </Alert>
@@ -167,9 +199,17 @@ onMounted(async () => {
         </Tabs>
       </template>
       <template #toolbar-tools>
+        <Button
+          v-access:code="['product:spu:update']"
+          class="mr-2"
+          :loading="syncingStock"
+          @click="handleSyncWmsStock"
+        >
+          同步 WMS 库存
+        </Button>
         <Button class="mr-2" @click="showPendingQueue">待审队列</Button>
         <TableAction :actions="[
-          { label: '新增非试点商品', icon: ACTION_ICON.ADD, auth: ['product:spu:create'], ifShow: () => canAdminMaintain(policy), onClick: () => push({ name: 'ProductSpuAdd' }) },
+          { label: '新增商品草稿', icon: ACTION_ICON.ADD, auth: ['product:spu:create'], ifShow: canCreate, onClick: () => push({ name: 'ProductSpuAdd' }) },
           { label: '导出', icon: ACTION_ICON.DOWNLOAD, auth: ['product:spu:export'], onClick: handleExport },
         ]" />
       </template>

@@ -21,7 +21,7 @@ const targetAuth = createTenantAuthClient(async ({ path, headers, ...config }) =
 export async function getRegistrationOptions() {
   try { return parseRegistrationOptions(await request({ url: '/member/mall-auth/registration-options', scope: 'entry', headers: { 'x-silent-error': true } })) }
   catch (error) {
-    if (error instanceof ApiError && (error.status === 404 || error.code === 404)) return parseRegistrationOptions({ enabled: false, tenants: [], crossTenantReady: false })
+    if (error instanceof ApiError && (error.status === 404 || error.code === 404)) return parseRegistrationOptions({ enabled: false, tenants: [], crossTenantReady: false, selectionRequired: false })
     throw error
   }
 }
@@ -35,4 +35,9 @@ export async function challengeRequest<T>(endpoint: string, data: Record<string,
   const epoch = getTenantContext().epoch
   if (invalidEntryHint || entryTenantId !== legacyTenantId) await ensureEntryReady()
   return targetAuth.execute(endpoint, data, () => current() && isCurrentTenantEpoch(epoch)) as Promise<T>
+}
+
+export async function platformLoginRequest<T>(data: { account: string; password: string }, current = () => true): Promise<T> {
+  const epoch = getTenantContext().epoch
+  return targetAuth.executePlatformLogin(data, () => current() && isCurrentTenantEpoch(epoch)) as Promise<T>
 }

@@ -8,8 +8,13 @@ import cn.iocoder.txgy.module.trade.controller.admin.order.vo.TradeOrderPageReqV
 import cn.iocoder.txgy.module.trade.controller.app.order.vo.AppTradeOrderPageReqVO;
 import cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderDO;
 import cn.iocoder.txgy.module.trade.enums.order.TradeOrderTypeEnum;
+import cn.iocoder.txgy.module.trade.enums.delivery.DeliveryTypeEnum;
+import cn.iocoder.txgy.module.trade.enums.order.TradeOrderStatusEnum;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
+import com.baomidou.mybatisplus.annotation.InterceptorIgnore;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -19,12 +24,100 @@ import java.util.Set;
 @Mapper
 public interface TradeOrderMapper extends BaseMapperX<TradeOrderDO> {
 
+    String APP_BUYER_OWNERSHIP = "((o.tenant_id=#{sourceTenantId} AND o.user_id=#{legacyMemberId}) "
+            + "<if test='platformAccountId != null'> OR EXISTS (SELECT 1 FROM trade_platform_checkout_order r "
+            + "JOIN trade_platform_checkout c ON c.id=r.checkout_id AND c.deleted=0 "
+            + "WHERE r.deleted=0 AND r.order_id=o.id AND r.tenant_id=o.tenant_id "
+            + "AND c.platform_member_id=#{platformAccountId})</if>)";
+
+    /** Buyer-visible orders across tenants. Platform checkout ownership is the cross-tenant authorization boundary. */
+    @InterceptorIgnore(tenantLine = "true")
+    @Select("<script>SELECT o.* FROM trade_order o WHERE o.deleted=0 AND " + APP_BUYER_OWNERSHIP
+            + " <if test='status != null'>AND o.status=#{status}</if>"
+            + " <if test='commentStatus != null'>AND o.comment_status=#{commentStatus}</if>"
+            + " ORDER BY o.id DESC LIMIT #{offset},#{pageSize}</script>")
+    List<TradeOrderDO> selectAppBuyerPage(@Param("legacyMemberId") Long legacyMemberId,
+                                           @Param("sourceTenantId") Long sourceTenantId,
+                                           @Param("platformAccountId") Long platformAccountId,
+                                           @Param("status") Integer status,
+                                           @Param("commentStatus") Boolean commentStatus,
+                                           @Param("offset") long offset,
+                                           @Param("pageSize") int pageSize);
+
+    @InterceptorIgnore(tenantLine = "true")
+    @Select("<script>SELECT COUNT(*) FROM trade_order o WHERE o.deleted=0 AND " + APP_BUYER_OWNERSHIP
+            + " <if test='status != null'>AND o.status=#{status}</if>"
+            + " <if test='commentStatus != null'>AND o.comment_status=#{commentStatus}</if></script>")
+    Long selectAppBuyerCount(@Param("legacyMemberId") Long legacyMemberId,
+                             @Param("sourceTenantId") Long sourceTenantId,
+                             @Param("platformAccountId") Long platformAccountId,
+                             @Param("status") Integer status,
+                             @Param("commentStatus") Boolean commentStatus);
+
+    @InterceptorIgnore(tenantLine = "true")
+    @Select("<script>SELECT o.* FROM trade_order o WHERE o.deleted=0 AND o.id=#{orderId} AND "
+            + APP_BUYER_OWNERSHIP + " LIMIT 1</script>")
+    TradeOrderDO selectAppBuyerOwnedOrder(@Param("orderId") Long orderId,
+                                           @Param("legacyMemberId") Long legacyMemberId,
+                                           @Param("sourceTenantId") Long sourceTenantId,
+                                           @Param("platformAccountId") Long platformAccountId);
+
+    @InterceptorIgnore(tenantLine = "true")
+    @Select("<script>SELECT o.tenant_id FROM trade_order o WHERE o.deleted=0 AND o.id=#{orderId} AND "
+            + APP_BUYER_OWNERSHIP + " LIMIT 1</script>")
+    Long selectAppBuyerOwnedOrderTenantId(@Param("orderId") Long orderId,
+                                           @Param("legacyMemberId") Long legacyMemberId,
+                                           @Param("sourceTenantId") Long sourceTenantId,
+                                           @Param("platformAccountId") Long platformAccountId);
+
+    @InterceptorIgnore(tenantLine = "true")
+    @Select("<script>SELECT o.tenant_id FROM trade_order o "
+            + "JOIN trade_order_item i ON i.order_id=o.id AND i.tenant_id=o.tenant_id "
+            + "AND i.user_id=o.user_id AND i.deleted=0 "
+            + "WHERE o.deleted=0 AND i.id=#{orderItemId} AND " + APP_BUYER_OWNERSHIP
+            + " LIMIT 1</script>")
+    Long selectAppBuyerOwnedOrderTenantIdByItem(@Param("orderItemId") Long orderItemId,
+                                                 @Param("legacyMemberId") Long legacyMemberId,
+                                                 @Param("sourceTenantId") Long sourceTenantId,
+                                                 @Param("platformAccountId") Long platformAccountId);
+
     default int updateAddressAndClearLocation(TradeOrderDO update, Integer expectedStatus) {
         return update(update, new LambdaUpdateWrapper<TradeOrderDO>()
                 .eq(TradeOrderDO::getId, update.getId()).eq(TradeOrderDO::getStatus, expectedStatus)
                 .set(TradeOrderDO::getReceiverLongitude, null).set(TradeOrderDO::getReceiverLatitude, null)
                 .set(TradeOrderDO::getReceiverCoordSystem, null).set(TradeOrderDO::getReceiverLocationSource, null)
                 .set(TradeOrderDO::getReceiverLocationPrecision, null).set(TradeOrderDO::getReceiverLocationConfirmedAt, null));
+    }
+
+    default int updateUnpaidAddressAndPrice(TradeOrderDO update, Long userId) {
+        return update(update, new LambdaUpdateWrapper<TradeOrderDO>()
+                .eq(TradeOrderDO::getId, update.getId()).eq(TradeOrderDO::getUserId, userId)
+                .eq(TradeOrderDO::getStatus, TradeOrderStatusEnum.UNPAID.getStatus())
+                .eq(TradeOrderDO::getPayStatus, false)
+                .eq(TradeOrderDO::getDeliveryType, DeliveryTypeEnum.EXPRESS.getType())
+                .set(TradeOrderDO::getReceiverLongitude, update.getReceiverLongitude())
+                .set(TradeOrderDO::getReceiverLatitude, update.getReceiverLatitude())
+                .set(TradeOrderDO::getReceiverCoordSystem, update.getReceiverCoordSystem())
+                .set(TradeOrderDO::getReceiverLocationSource, update.getReceiverLocationSource())
+                .set(TradeOrderDO::getReceiverLocationPrecision, update.getReceiverLocationPrecision())
+                .set(TradeOrderDO::getReceiverLocationConfirmedAt, update.getReceiverLocationConfirmedAt()));
+    }
+
+    /** 企业采购协作修改地址。调用方已校验当前会员资格，这里仍以企业、来源和订单状态做原子约束。 */
+    default int updateEnterpriseInquiryUnpaidAddressAndPrice(TradeOrderDO update, Long buyerEnterpriseId) {
+        return update(update, new LambdaUpdateWrapper<TradeOrderDO>()
+                .eq(TradeOrderDO::getId, update.getId())
+                .eq(TradeOrderDO::getSourceType, TradeOrderDO.SOURCE_TYPE_INQUIRY)
+                .eq(TradeOrderDO::getBuyerEnterpriseId, buyerEnterpriseId)
+                .eq(TradeOrderDO::getStatus, TradeOrderStatusEnum.UNPAID.getStatus())
+                .eq(TradeOrderDO::getPayStatus, false)
+                .eq(TradeOrderDO::getDeliveryType, DeliveryTypeEnum.EXPRESS.getType())
+                .set(TradeOrderDO::getReceiverLongitude, update.getReceiverLongitude())
+                .set(TradeOrderDO::getReceiverLatitude, update.getReceiverLatitude())
+                .set(TradeOrderDO::getReceiverCoordSystem, update.getReceiverCoordSystem())
+                .set(TradeOrderDO::getReceiverLocationSource, update.getReceiverLocationSource())
+                .set(TradeOrderDO::getReceiverLocationPrecision, update.getReceiverLocationPrecision())
+                .set(TradeOrderDO::getReceiverLocationConfirmedAt, update.getReceiverLocationConfirmedAt()));
     }
 
     default TradeOrderDO selectByIdForUpdate(Long id) {
@@ -39,6 +132,17 @@ public interface TradeOrderMapper extends BaseMapperX<TradeOrderDO> {
 
     default TradeOrderDO selectByIdAndUserId(Long id, Long userId) {
         return selectOne(TradeOrderDO::getId, id, TradeOrderDO::getUserId, userId);
+    }
+
+    default TradeOrderDO selectByInquiryQuoteId(Long inquiryQuoteId) {
+        return selectOne(new LambdaQueryWrapperX<TradeOrderDO>()
+                .eq(TradeOrderDO::getInquiryQuoteId, inquiryQuoteId));
+    }
+
+    default TradeOrderDO selectByInquiryQuoteIdForUpdate(Long inquiryQuoteId) {
+        return selectOne(new LambdaQueryWrapperX<TradeOrderDO>()
+                .eq(TradeOrderDO::getInquiryQuoteId, inquiryQuoteId)
+                .last("FOR UPDATE"));
     }
 
     default PageResult<TradeOrderDO> selectPage(TradeOrderPageReqVO reqVO, Set<Long> userIds) {
@@ -89,6 +193,24 @@ public interface TradeOrderMapper extends BaseMapperX<TradeOrderDO> {
                 .orderByDesc(TradeOrderDO::getId)); // TODO 芋艿：未来不同的 status，不同的排序
     }
 
+    default PageResult<TradeOrderDO> selectEnterpriseInquiryPage(AppTradeOrderPageReqVO reqVO,
+                                                                  Long buyerEnterpriseId) {
+        return selectPage(reqVO, new LambdaQueryWrapperX<TradeOrderDO>()
+                .eq(TradeOrderDO::getSourceType, TradeOrderDO.SOURCE_TYPE_INQUIRY)
+                .eq(TradeOrderDO::getBuyerEnterpriseId, buyerEnterpriseId)
+                .eqIfPresent(TradeOrderDO::getStatus, reqVO.getStatus())
+                .eqIfPresent(TradeOrderDO::getCommentStatus, reqVO.getCommentStatus())
+                .orderByDesc(TradeOrderDO::getId));
+    }
+
+    default Long selectEnterpriseInquiryCount(Long buyerEnterpriseId, Integer status, Boolean commentStatus) {
+        return selectCount(new LambdaQueryWrapperX<TradeOrderDO>()
+                .eq(TradeOrderDO::getSourceType, TradeOrderDO.SOURCE_TYPE_INQUIRY)
+                .eq(TradeOrderDO::getBuyerEnterpriseId, buyerEnterpriseId)
+                .eqIfPresent(TradeOrderDO::getStatus, status)
+                .eqIfPresent(TradeOrderDO::getCommentStatus, commentStatus));
+    }
+
     default Long selectCountByUserIdAndStatus(Long userId, Integer status, Boolean commentStatus) {
         return selectCount(new LambdaQueryWrapperX<TradeOrderDO>()
                 .eq(TradeOrderDO::getUserId, userId)
@@ -108,7 +230,7 @@ public interface TradeOrderMapper extends BaseMapperX<TradeOrderDO> {
                 .lt(TradeOrderDO::getCreateTime, createTime));
     }
 
-    /** 新单按持久化的两个截止时间筛选；旧未付单需再核实支付单实际期限，不能套用当前配置。 */
+    /** 新单按持久化支付截止时间筛选；旧 ERP 等待字段只用于兼容扫描历史未付单。 */
     default List<TradeOrderDO> selectPaymentTimeoutCandidates(LocalDateTime now, Long afterId, int limit) {
         return selectList(new LambdaQueryWrapperX<TradeOrderDO>()
                 .eq(TradeOrderDO::getStatus, 0)

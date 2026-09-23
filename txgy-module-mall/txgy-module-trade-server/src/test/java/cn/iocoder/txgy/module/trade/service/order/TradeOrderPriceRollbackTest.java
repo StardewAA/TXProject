@@ -31,6 +31,7 @@ class TradeOrderPriceRollbackTest {
     private JdbcTemplate jdbc;
     private PayOrderApi payment;
     private TradeOrderUpdateServiceImpl service;
+    private String sourceType;
 
     @BeforeEach void setup() {
         DriverManagerDataSource source = new DriverManagerDataSource("jdbc:h2:mem:price-rollback-"
@@ -43,9 +44,11 @@ class TradeOrderPriceRollbackTest {
         TradeOrderMapper orders = mock(TradeOrderMapper.class);
         TradeOrderItemMapper items = mock(TradeOrderItemMapper.class);
         payment = mock(PayOrderApi.class);
+        sourceType = TradeOrderDO.SOURCE_TYPE_NORMAL;
         when(orders.selectById(1L)).thenAnswer(call -> jdbc.queryForObject("SELECT * FROM fixture_order WHERE id=1",
                 (rs, row) -> new TradeOrderDO().setId(1L).setPayOrderId(7L).setPayStatus(false).setStatus(0)
-                        .setPayPrice(rs.getInt("pay_price")).setAdjustPrice(rs.getInt("adjust_price"))));
+                        .setSourceType(sourceType).setPayPrice(rs.getInt("pay_price"))
+                        .setAdjustPrice(rs.getInt("adjust_price"))));
         when(orders.updateById(any(TradeOrderDO.class))).thenAnswer(call -> {
             TradeOrderDO update = call.getArgument(0);
             return jdbc.update("UPDATE fixture_order SET pay_price=?,adjust_price=? WHERE id=?",
@@ -105,5 +108,13 @@ class TradeOrderPriceRollbackTest {
         when(payment.updatePayOrderPrice(7L, 1200)).thenReturn(CommonResult.success(true));
         adjust();
         assertAmounts(1200, 200);
+    }
+
+    @Test void acceptedInquiryQuotePriceCannotBeChangedByAdminAdjustment() {
+        sourceType = TradeOrderDO.SOURCE_TYPE_INQUIRY;
+        ServiceException error = assertThrows(ServiceException.class, this::adjust);
+        assertEquals(1_011_000_051, error.getCode());
+        verifyNoInteractions(payment);
+        assertAmounts(1000, 0);
     }
 }

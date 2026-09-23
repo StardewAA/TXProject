@@ -32,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.util.List;
+import java.util.Objects;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.framework.common.util.json.JsonUtils.toJsonString;
@@ -93,6 +94,19 @@ public class PayRefundServiceImpl implements PayRefundService {
     public Long createRefund(PayRefundCreateReqDTO reqDTO) {
         // 1.1 校验 App
         PayAppDO app = appService.validPayApp(reqDTO.getAppKey());
+        // 退款是跨服务操作：支付侧可能已经成功，而业务侧因后续补偿失败回滚。
+        // 因此必须先按业务退款号做幂等判断，不能先用已累计退款金额拒绝重试。
+        PayRefundDO existingRefund = refundMapper.selectByAppIdAndMerchantRefundId(
+                app.getId(), reqDTO.getMerchantRefundId());
+        if (existingRefund != null) {
+            if (Objects.equals(existingRefund.getMerchantOrderId(), reqDTO.getMerchantOrderId())
+                    && Objects.equals(existingRefund.getRefundPrice(), reqDTO.getPrice())
+                    && Objects.equals(existingRefund.getUserId(), reqDTO.getUserId())
+                    && Objects.equals(existingRefund.getUserType(), reqDTO.getUserType())) {
+                return existingRefund.getId();
+            }
+            throw exception(REFUND_EXISTS);
+        }
         // 1.2 校验支付订单
         PayOrderDO order = validatePayOrderCanRefund(reqDTO, app.getId());
         // 1.3 校验支付渠道是否有效
@@ -102,16 +116,9 @@ public class PayRefundServiceImpl implements PayRefundService {
             log.error("[refund][渠道编号({}) 找不到对应的支付客户端]", channel.getId());
             throw exception(CHANNEL_NOT_FOUND);
         }
-        // 1.4 校验退款订单是否已经存在
-        PayRefundDO refund = refundMapper.selectByAppIdAndMerchantRefundId(
-                app.getId(), reqDTO.getMerchantRefundId());
-        if (refund != null) {
-            throw exception(REFUND_EXISTS);
-        }
-
         // 2.1 插入退款单
         String no = noRedisDAO.generate(payProperties.getRefundNoPrefix());
-        refund = PayRefundConvert.INSTANCE.convert(reqDTO)
+        PayRefundDO refund = PayRefundConvert.INSTANCE.convert(reqDTO)
                 .setNo(no).setAppId(app.getId()).setOrderId(order.getId()).setOrderNo(order.getNo())
                 .setChannelId(order.getChannelId()).setChannelCode(order.getChannelCode())
                 // 商户相关的字段

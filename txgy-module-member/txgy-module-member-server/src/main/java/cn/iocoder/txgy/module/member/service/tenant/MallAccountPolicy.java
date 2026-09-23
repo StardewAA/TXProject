@@ -18,6 +18,8 @@ public class MallAccountPolicy {
     public static final ErrorCode INVALID_ACCOUNT = new ErrorCode(1_004_008_190, "登录名须以字母开头，包含6至20位字母、数字或下划线");
     public static final ErrorCode ACCOUNT_USED = new ErrorCode(1_004_008_191, "该登录名已被使用");
     public static final ErrorCode IMAGE_REQUIRED = new ErrorCode(1_004_008_192, "请使用登录名和图片验证码注册，已有账号请登录");
+    public static final ErrorCode LEGACY_REGISTRATION_DISABLED = new ErrorCode(1_004_008_194,
+            "旧版固定租户注册入口已关闭，请从目标租户商城进入注册");
     private final MallTenantProperties tenants;
     private final MallTenantAuthProperties auth;
     private final MallTenantCatalogService catalog;
@@ -45,6 +47,7 @@ public class MallAccountPolicy {
             var valid = tenantApi.validTenant(target);
             if (valid == null || !Boolean.TRUE.equals(valid.getCheckedData())) throw exception(MALL_TENANT_UNAVAILABLE);
         } else {
+            if (registration && requested == null) throw exception(MALL_TENANT_UNAVAILABLE);
             var directory = catalog.getConfig();
             target = requested == null ? directory.getPublicTenantId() : requested;
             final Long chosen = target;

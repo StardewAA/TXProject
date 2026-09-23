@@ -46,7 +46,7 @@ function timedState(kind: 'payment' | 'erp', deadline: number | undefined, now: 
     kind, deadline, remaining, expired,
     canPay: kind === 'payment' && remaining !== undefined && remaining > 0,
     message: kind === 'erp'
-      ? expired ? 'ERP 库存确认等待已到期，正在等待服务端处理；暂不可付款。' : '等待 ERP 确认库存，当前暂不可付款；支付期限以服务端确认结果为准。'
+      ? expired ? '历史库存确认等待已到期，正在等待服务端处理；暂不可付款。' : '该历史订单仍在等待库存确认，当前暂不可付款。'
       : expired ? '支付已到期，正在核实或关闭订单；请查询最新状态，勿重复付款。'
         : remaining === undefined ? '支付期限或服务端时间暂未核实，请刷新后再支付。' : '请在支付期限内完成付款，超时未付款将由服务端自动取消。',
   }
@@ -61,7 +61,7 @@ export function tradePaymentState(order: PaymentDeadlineFields | null | undefine
     if (reason === 'ERP_WAIT_EXPIRED') {
       state.expired = true
       state.remaining = 0
-      state.message = 'ERP 库存确认等待已到期，正在等待服务端处理；暂不可付款。'
+      state.message = '历史库存确认等待已到期，正在等待服务端处理；暂不可付款。'
     }
     return state
   }

@@ -18,6 +18,8 @@ import cn.iocoder.txgy.module.product.dal.mysql.review.ProductSpuReviewRecordMap
 import cn.iocoder.txgy.module.product.dal.mysql.sku.ProductSkuMapper;
 import cn.iocoder.txgy.module.product.dal.mysql.spu.ProductSpuMapper;
 import cn.iocoder.txgy.module.product.service.enterprise.EnterpriseMembershipService;
+import cn.iocoder.txgy.module.product.service.enterprise.ProductAdminBusinessScopeService;
+import cn.iocoder.txgy.module.product.service.audit.ProductBusinessOperationAuditService;
 import cn.iocoder.txgy.module.product.service.shop.ProductShopService;
 import cn.iocoder.txgy.module.product.service.category.ProductCategoryService;
 import cn.iocoder.txgy.module.product.service.brand.ProductBrandService;
@@ -52,6 +54,9 @@ class ProductSpuReviewTest {
     ProductShopService shops;
     ProductSpuReviewService service;
     ProductReviewProperties policy;
+    ProductAdminBusinessScopeService businessScope;
+    ProductWmsListingValidator wmsListingValidator;
+    ProductWmsListingProvisioner wmsListingProvisioner;
     TransactionTemplate tx;
     DataSourceTransactionManager transactionManager;
 
@@ -100,6 +105,13 @@ class ProductSpuReviewTest {
         ReflectionTestUtils.setField(target,"spuMapper",spus); ReflectionTestUtils.setField(target,"skuMapper",skus);
         ReflectionTestUtils.setField(target,"recordMapper",records); ReflectionTestUtils.setField(target,"shopService",shops);
         ReflectionTestUtils.setField(target,"membership",mock(EnterpriseMembershipService.class)); ReflectionTestUtils.setField(target,"properties",policy);
+        businessScope = mock(ProductAdminBusinessScopeService.class);
+        ReflectionTestUtils.setField(target,"businessScopeService",businessScope);
+        ReflectionTestUtils.setField(target,"operationAuditService",mock(ProductBusinessOperationAuditService.class));
+        wmsListingValidator = mock(ProductWmsListingValidator.class);
+        ReflectionTestUtils.setField(target,"wmsListingValidator",wmsListingValidator);
+        wmsListingProvisioner = mock(ProductWmsListingProvisioner.class);
+        ReflectionTestUtils.setField(target,"wmsListingProvisioner",wmsListingProvisioner);
         ReflectionTestUtils.setField(target,"enterpriseMapper",enterprises); ReflectionTestUtils.setField(target,"deliveryApi",delivery);
         ReflectionTestUtils.setField(target,"categoryService",mock(ProductCategoryService.class)); ReflectionTestUtils.setField(target,"brandService",mock(ProductBrandService.class));
         var manager = new DataSourceTransactionManager(source); transactionManager=manager; tx = new TransactionTemplate(manager);
@@ -122,6 +134,18 @@ class ProductSpuReviewTest {
         var snapshot = service.history(10L).getFirst().getSnapshot();
         assertFalse(snapshot.contains("wmsSkuId")); assertFalse(snapshot.contains("stock")); assertFalse(snapshot.contains("salesCount"));
         assertEquals(9,skus.selectById(11L).getStock()); assertEquals(999L,skus.selectById(11L).getWmsSkuId());
+        verify(wmsListingValidator, atLeastOnce()).validate(argThat(rows -> rows.size() == 1
+                && Objects.equals(rows.getFirst().getWmsSkuId(), 999L)
+                && Objects.equals(rows.getFirst().getWmsWarehouseId(), 888L)));
+        verify(wmsListingProvisioner).provision(any(ProductSpuDO.class), argThat(rows -> rows.size() == 1));
+    }
+    @Test void wmsMasterDataFailurePreventsSubmissionWithoutChangingReviewState() {
+        doThrow(new ServiceException(503,"WMS 主数据暂时无法核验"))
+                .when(wmsListingValidator).validate(anyList());
+        assertThrows(ServiceException.class, () -> service.submit(301L,100L,10L,1L));
+        assertEquals(0, product().getReviewStatus());
+        assertNull(product().getSubmissionId());
+        assertEquals(0, count("SUBMIT"));
     }
     @Test void sameDecisionRetriesCreateExactlyOneAudit() {
         String id=submit(); login(2,801); service.decide(10L,1L,id,true,""); service.decide(10L,1L,id,true,"");
@@ -152,6 +176,12 @@ class ProductSpuReviewTest {
         assertThrows(ServiceException.class,()->service.decide(10L,1L,id,true,""));
         login(2,802); when(shops.getShop(100L)).thenReturn(new ProductShopDO().setId(100L).setEnterpriseId(1000L).setManagerUserId(802L).setStatus(0));
         assertThrows(ServiceException.class,()->service.decide(10L,1L,id,true,""));
+    }
+    @Test void anyEnterpriseBusinessMemberCannotReviewItsEnterpriseProduct() {
+        String id=submit(); login(2,801);
+        when(businessScope.isEnterpriseBusinessMember(801L,1000L)).thenReturn(true);
+        assertThrows(ServiceException.class,()->service.decide(10L,1L,id,true,""));
+        assertEquals(10,product().getReviewStatus()); assertEquals(0,count("APPROVE"));
     }
     @Test void rejectedVersionShowsReasonAndBlankRejectionHasNoMutation() {
         String id=submit(); login(2,801); assertThrows(ServiceException.class,()->service.decide(10L,1L,id,false,"  "));

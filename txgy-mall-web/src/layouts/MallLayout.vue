@@ -2,8 +2,6 @@
 import PurchaseLayout from './PurchaseLayout.vue'
 import AccountPage from '@/components/AccountPage.vue'
 import OrderWorkbenchBadge from '@/components/OrderWorkbenchBadge.vue'
-import PublicMarketEntry from '@/components/PublicMarketEntry.vue'
-import TenantEntrySwitch from '@/components/TenantEntrySwitch.vue'
 import { isPurchasePath } from '@/utils/buyer-navigation'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -11,16 +9,18 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
 import { useComparisonStore } from '@/stores/comparison'
+import { getRegistrationEntryPath } from '@/utils/tenant-context'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const cartStore = useCartStore()
 const comparison = useComparisonStore()
+const registrationEntryPath = getRegistrationEntryPath()
 const isMemberArea = computed(() => router.currentRoute.value.path.startsWith('/member'))
 const searchMode = ref('goods')
 function search(event: Event) {
   const q = String(new FormData(event.target as HTMLFormElement).get('keyword') || '').trim()
-  void router.push({ path: searchMode.value === 'shops' ? '/shops' : '/search', query: q ? { q } : {} })
+  void router.push({ name: 'goods-list', query: q ? { keyword: q } : {} })
 }
 
 async function logout() {
@@ -41,22 +41,21 @@ onMounted(() => {
       <div class="container service-bar__inner">
         <span>您好，欢迎来到防腐保温购物平台</span>
         <nav>
-          <PublicMarketEntry />
-          <TenantEntrySwitch />
+          <RouterLink to="/">平台首页</RouterLink>
           <template v-if="authStore.isLoggedIn">
             <MallLink to="/member">{{ authStore.profile?.nickname || authStore.profile?.mobile || '个人中心' }}</MallLink>
             <button class="link-button" @click="logout">退出登录</button>
           </template>
           <template v-else>
-            <MallLink to="/login">登录</MallLink>
-            <MallLink to="/register">免费注册</MallLink>
+            <RouterLink to="/platform-login">登录</RouterLink>
+            <a :href="registrationEntryPath">免费注册</a>
           </template>
           <MallLink to="/member/orders">我的订单<OrderWorkbenchBadge /></MallLink>
           <MallLink to="/purchase">采购中心</MallLink>
+          <MallLink to="/enterprise/profile">企业入驻</MallLink>
           <MallLink to="/compare">商品对比（{{ comparison.count }}）</MallLink>
-          <MallLink to="/sales">销售中心</MallLink>
           <MallLink to="/member/after-sales">售后服务</MallLink>
-          <MallLink to="/member/customer-service">在线客服</MallLink>
+          <MallLink to="/member/customer-service/scoped">在线客服</MallLink>
         </nav>
       </div>
     </div>
@@ -68,8 +67,8 @@ onMounted(() => {
           <span><strong>防腐保温</strong><small>工业材料一站式采购</small></span>
         </MallLink>
         <div class="header-discovery"><form class="header-search" @submit.prevent="search">
-          <select v-model="searchMode" aria-label="搜索范围"><option value="goods">商品</option><option value="shops">店铺</option></select>
-          <input name="keyword" aria-label="搜索关键词" :value="router.currentRoute.value.query.q" :placeholder="searchMode === 'shops' ? '搜索店铺或企业名称' : '搜索防腐材料、保温材料、管件及施工配套'" />
+          <select v-model="searchMode" aria-label="搜索范围"><option value="goods">全平台</option></select>
+          <input name="keyword" aria-label="搜索关键词" :value="router.currentRoute.value.query.keyword || router.currentRoute.value.query.q" placeholder="搜索防腐材料、保温材料、管件及施工配套" />
           <button type="submit">搜索</button>
         </form><div class="header-hotwords"><span>热门选材</span><MallLink v-for="word in ['防腐', '岩棉', '玻璃棉', '硅酸铝', '管件']" :key="word" :to="{ path: '/goods', query: { keyword: word } }">{{ word }}</MallLink></div></div>
         <MallLink class="cart-entry" to="/cart">
@@ -79,14 +78,12 @@ onMounted(() => {
       </div>
       <div class="primary-nav">
         <nav class="container">
-          <MallLink to="/categories">全部商品分类</MallLink>
-          <MallLink to="/">首页</MallLink>
+          <RouterLink to="/">全平台商品</RouterLink>
+          <RouterLink to="/">首页</RouterLink>
           <MallLink to="/shops">企业店铺</MallLink>
+          <MallLink to="/inquiries">询价专栏</MallLink>
           <MallLink to="/marketing">采购优惠</MallLink>
-          <MallLink :to="{ path: '/goods', query: { keyword: '防腐' } }">防腐材料</MallLink>
-          <MallLink :to="{ path: '/goods', query: { keyword: '保温' } }">保温材料</MallLink>
-          <MallLink :to="{ path: '/goods', query: { keyword: '管件' } }">管材管件</MallLink>
-          <MallLink :to="{ path: '/goods', query: { keyword: '施工' } }">施工配套</MallLink>
+          <MallLink to="/categories">商品分类</MallLink>
         </nav>
       </div>
     </header>
@@ -94,13 +91,13 @@ onMounted(() => {
     <header v-else class="member-header">
       <div class="container member-header__inner">
         <MallLink class="brand" to="/"><img class="brand__mark" src="/mall-logo.png" alt="天信管业" /><span><strong>防腐保温</strong><small>会员中心</small></span></MallLink>
-        <nav><MallLink to="/">商城首页</MallLink><MallLink to="/member/orders">我的订单</MallLink><MallLink to="/member/wallet">我的钱包</MallLink><MallLink to="/member/customer-service">在线客服</MallLink><MallLink to="/cart">购物车（{{ cartStore.count }}）</MallLink></nav>
+        <nav><MallLink to="/">商城首页</MallLink><MallLink to="/enterprise/profile">企业入驻</MallLink><MallLink to="/member/orders">我的订单</MallLink><MallLink to="/member/wallet">我的钱包</MallLink><MallLink to="/member/customer-service/scoped">在线客服</MallLink><MallLink to="/cart">购物车（{{ cartStore.count }}）</MallLink></nav>
       </div>
     </header>
 
     <main class="site-main"><AccountPage v-if="router.currentRoute.value.meta.auth"><PurchaseLayout v-if="isPurchasePath(router.currentRoute.value.path)"><RouterView /></PurchaseLayout><RouterView v-else :key="router.currentRoute.value.name === 'supplier-kefu' ? router.currentRoute.value.fullPath : undefined" /></AccountPage><RouterView v-else /></main>
 
-    <aside v-if="comparison.count && router.currentRoute.value.path !== '/compare'" class="comparison-dock" aria-label="商品对比篮"><span>已选 {{ comparison.count }} / 4 个规格</span><MallLink to="/compare">打开商品对比 →</MallLink></aside>
+    <aside v-if="comparison.count && router.currentRoute.value.path !== '/compare'" class="comparison-dock" aria-label="商品对比篮"><i>⇄</i><span><b>商品对比</b>已选 {{ comparison.count }} / 4 个规格</span><MallLink to="/compare">去对比 →</MallLink></aside>
 
     <footer class="site-footer">
       <div class="container footer-features">
@@ -115,5 +112,5 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.comparison-dock{position:fixed;right:28px;bottom:26px;z-index:30;display:flex;gap:20px;align-items:center;padding:18px 24px;border:1px solid #b8d3cf;border-radius:8px;background:white;box-shadow:0 8px 24px #16342c26;color:var(--brand)}.comparison-dock span{font-size:13px;color:var(--muted)}.comparison-dock a{font-weight:700}
+.comparison-dock{position:fixed;right:28px;bottom:26px;z-index:30;display:flex;gap:14px;align-items:center;padding:13px 15px;border:1px solid #c7dcd7;border-radius:14px;background:#fffffff2;box-shadow:0 14px 38px #123b3330;color:var(--brand);backdrop-filter:blur(12px)}.comparison-dock i{display:grid;place-items:center;width:42px;height:42px;border-radius:11px;background:linear-gradient(145deg,#173943,#0e8672);color:#fff;font-size:21px;font-style:normal}.comparison-dock span{display:flex;flex-direction:column;color:var(--muted);font-size:12px}.comparison-dock span b{margin-bottom:2px;color:#1b403a;font-size:14px}.comparison-dock a{padding:9px 13px;border-radius:8px;background:#0d826f;color:#fff;font-size:13px;font-weight:700}
 </style>
