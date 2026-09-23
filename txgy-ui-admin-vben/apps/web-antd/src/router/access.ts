@@ -296,7 +296,6 @@ async function generateAccess(options: GenerateMenuAndRoutesOptions) {
             filterHrmEmployeePortalRecruitMenus(
               transformMesMenus(transformWmsMenus(menus)),
             ),
-            ),
           ),
         ),
       );
