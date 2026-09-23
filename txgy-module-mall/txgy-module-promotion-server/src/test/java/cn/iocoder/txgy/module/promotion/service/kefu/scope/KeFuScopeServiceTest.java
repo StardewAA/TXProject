@@ -257,6 +257,15 @@ class KeFuScopeServiceTest {
         assertEquals(1, service.agents(operator, "SHOP", 101L, 1, 20).size());
     }
 
+    @Test void agentCanDiscoverOnlyOwnEnabledWorkbenchScopes() {
+        grant(adminAgent, true);
+        grant(agent, true);
+        assertEquals(List.of(new Agent("SHOP", 101L, 2, 22L, true, 1L)), service.myScopes(adminAgent));
+        grant(adminAgent, false);
+        assertTrue(service.myScopes(adminAgent).isEmpty());
+        assertEquals(1, service.myScopes(agent).size());
+    }
+
     @Test void claimAndCloseRequireCurrentVersionAndAssignedTypedActor() {
         grant(agent, true);
         grant(other, true);

@@ -16,7 +16,7 @@ function clear() {
   error.value = ''; notice.value = ''; editing.value = false; existing.value = false;
   Object.assign(form, { actorType: 1, actorId: undefined, enabled: true, version: 0, reason: '' });
 }
-const context = useScopedView(MANAGE_PERMISSION, clear);
+const context = useScopedView(MANAGE_PERMISSION, clear, true);
 const listFence = context.fence(), writeFence = context.fence();
 const pageSize = 20;
 const scopeOptions = [{ label: '平台客服（仅本租户）', value: 'PLATFORM' }, { label: '店铺客服', value: 'SHOP' }];
@@ -71,10 +71,12 @@ watch(context.ready, (ready) => { if (ready) void load(); });
       <Alert type="info" show-icon message="仅修改客服独立授权，不修改账号角色、商品权限或企业资格。会员与管理员即使编号相同也不是同一个坐席。" />
       <div class="scoped-toolbar">
         <strong>{{ context.label.value }}</strong>
-        <Select v-model:value="context.scope.value" :options="scopeOptions" :disabled="busy" style="width: 220px" aria-label="客服范围" />
-        <InputNumber v-if="context.scope.value === 'SHOP'" v-model:value="context.shopId.value" :min="1" :precision="0" :disabled="busy" placeholder="店铺编号" aria-label="店铺编号" />
+        <Select :value="context.scope.value" :options="scopeOptions" :disabled="busy" style="width: 220px" aria-label="客服范围" @update:value="context.selectScope" />
+        <Select v-if="context.scope.value === 'SHOP'" v-model:value="context.shopId.value" :options="context.shops.value" :loading="context.shopsLoading.value" :disabled="busy || context.shopsLoading.value || context.shops.value.length <= 1" style="width: 260px" placeholder="选择店铺" aria-label="店铺选择" />
+        <Button v-if="context.scope.value === 'SHOP'" :loading="context.shopsLoading.value" :disabled="busy" @click="context.refreshShops">刷新店铺</Button>
         <Button :loading="context.capabilityLoading.value" @click="context.refreshCapability">核实开通状态</Button>
       </div>
+      <Alert v-if="context.shopsError.value" type="warning" show-icon :message="context.shopsError.value" />
       <Alert v-if="context.blocked.value" type="warning" show-icon :message="context.blocked.value" />
       <template v-if="context.ready.value">
         <div class="scoped-toolbar">

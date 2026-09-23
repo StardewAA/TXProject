@@ -264,7 +264,9 @@
         return;
       }
       state.payMethods = (getPayMethods(data) || []).filter(
-        (item) => item && typeof item === 'object' && item.value,
+        (item) => item && typeof item === 'object' && item.value
+          // 余额不能用于给同一个余额账户充值，否则会形成无意义的自循环支付。
+          && !(state.orderType === 'recharge' && item.value === 'wallet'),
       );
       channelAppId = state.orderInfo.appId;
       if (!state.payMethods.some((item) => item.value === state.payment && !item.disabled)) {

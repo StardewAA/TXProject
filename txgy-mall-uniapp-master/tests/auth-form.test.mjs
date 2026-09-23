@@ -6,9 +6,10 @@ import { parseAuthEntry, assertAuthAvailable, createChallengeState } from '../sh
 import { parseRegistrationOptions, resolveRegistrationChoice, assertRegistrationContext, registrationChoiceNotice } from '../sheep/helper/registration-choice.mjs';
 import { createTenantAuthClient } from '../sheep/helper/tenant-auth-client.mjs';
 import { createImageRegistrationState, createCaptchaSession, normalizeLoginName } from '../sheep/helper/image-registration.mjs';
-import { isPlatformPortalAddress } from '../sheep/helper/tenant-navigation.mjs';
+import { isPlatformAccountAddress, isPlatformPortalAddress } from '../sheep/helper/tenant-navigation.mjs';
 
-const source = readFileSync(new URL('../sheep/hooks/useMallAuthForm.js', import.meta.url), 'utf8')
+const sourceText = readFileSync(new URL('../sheep/hooks/useMallAuthForm.js', import.meta.url), 'utf8');
+const source = sourceText
   .replace(/^import .*;\r?\n/gm, '').replace(/export (function|const) /g, '$1 ');
 const settle = async () => { for (let n = 0; n < 15; n++) await Promise.resolve(); };
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
@@ -18,7 +19,12 @@ const challenge = { tenantId: 1, challengeId: 'a'.repeat(32), expiresIn: 300, re
 const imageConfig = { ...config, protocol: 'legacy', registrationMethod: 'image-v1', loginNameEnabled: true };
 const imageChallenge = { tenantId: 1, challengeId: 'b'.repeat(32), imageDataUrl: 'data:image/png;base64,aGVsbG8=', expiresIn: 300, retryAfter: 2 };
 const ok = data => ({ code: 0, data });
-function harness({ purpose = 'PASSWORD_LOGIN', platform = false, entry = ok(config), options = ok({enabled:false,tenants:[],crossTenantReady:false}), answer, legacyAnswer, platformProof } = {}) {
+
+test('account login imports the legacy tenant id used to recognize the public account center', () => {
+  assert.match(sourceText, /import\s*\{\s*tenantId\s*\}\s*from\s*['"]@\/sheep\/config['"]/);
+});
+
+function harness({ purpose = 'PASSWORD_LOGIN', platform = false, platformAccount = false, entry = ok(config), options = ok({enabled:false,tenants:[],crossTenantReady:false}), answer, legacyAnswer, platformProof } = {}) {
   const calls = [], writes = [], toasts = [], cleanup = [], timers = new Set(); let epoch = 0;
   const model = reactive({ mobile: '19900000000', account: '19900000000', password: 'Password123', confirmPassword: 'Password123', code: '', nickname: '测试会员', memberIdentity: 'buyer', loginName: 'Buyer_01', contactMobile: '', imageCode: '' });
   const dependencies = { ref, computed, watch, onMounted() {}, onBeforeUnmount: fn => cleanup.push(fn),
@@ -27,8 +33,9 @@ function harness({ purpose = 'PASSWORD_LOGIN', platform = false, entry = ok(conf
     parseRegistrationOptions, resolveRegistrationChoice, assertRegistrationContext, registrationChoiceNotice,
     ensureTenantReady: async () => {}, getControlledTenantId: () => '1',
     captureTenantOperation: () => epoch, isTenantOperationCurrent: value => value === epoch,
-    isPlatformPortalAddress,
-    window: { location: { href: platform ? 'https://mall/pages/index/index' : 'https://mall/pages/index/user?tenantId=1', search: platform ? '' : '?tenantId=1' } },
+    isPlatformAccountAddress, isPlatformPortalAddress, tenantId: '1',
+    window: { location: { href: platform ? 'https://mall/pages/index/index' : platformAccount
+      ? 'https://mall/pages/index/user?tenantId=1' : 'https://mall/pages/index/user?tenantId=9001', search: platform ? '' : platformAccount ? '?tenantId=1' : '?tenantId=9001' } },
     verifyPlatformSession: async (candidate, current) => {
       calls.push({ type: 'platform-proof', candidate });
       if (!current()) throw new Error('登录状态已变化');
@@ -72,6 +79,16 @@ test('platform portal login sends no tenant choice and stores only a server-prov
     assert.equal(h.calls.filter(call => call.type === 'platform-proof').length, 1);
     assert.equal(h.writes.length, 1); assert.equal(h.writes[0].platform, true);
     assert.equal(h.writes[0].args[2].sourceTenantId, '2009');
+  } finally { h.dispose(); }
+});
+
+test('public account center uses platform login instead of disabled legacy tenant auth', async () => {
+  const platformIdentity = { accessToken: 'platform-access', refreshToken: 'platform-refresh', tenantId: 2009, userId: 316 };
+  const h = harness({ platformAccount: true, answer: path => ok(path.endsWith('/platform-login') ? platformIdentity : null) });
+  try {
+    await h.form.refresh();
+    assert.equal(h.form.platformLogin, true); assert.equal(h.form.available.value, true);
+    assert.equal(h.calls.some(call => call.path?.endsWith('/config')), false);
   } finally { h.dispose(); }
 });
 

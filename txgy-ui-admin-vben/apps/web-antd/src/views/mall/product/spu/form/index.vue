@@ -87,12 +87,17 @@ const formData = ref<MallSpuApi.Spu>({
   giveIntegral: 0,
   virtualSalesCount: 0,
 }); // spu 表单数据
+// 新增商品尚未形成 WMS 主数据，期初库存必须始终可填写。
+// 只有已经保存且实际绑定 WMS 的存量商品，库存才按 WMS 权威数据只读展示。
+const stockReadonly = computed(() => Boolean(spuId.value) && (formData.value.skus ?? []).some(
+  (sku) => Number(sku.wmsSkuId ?? 0) > 0 || Number(sku.wmsWarehouseId ?? 0) > 0,
+));
 const propertyList = ref<PropertyAndValues[]>([]); // 商品属性列表
 const ruleConfig: RuleConfig[] = [
   {
     name: 'stock',
     rule: (arg: number) => arg >= 0,
-    message: '商品库存必须大于等于 1 ！！！',
+    message: '商品期初库存不能小于 0 ！！！',
   },
   {
     name: 'price',
@@ -461,7 +466,7 @@ onMounted(async () => {
             <SkuList
               ref="skuListRef"
               class="w-full"
-              :readonly-stock="true"
+              :readonly-stock="stockReadonly"
               :is-detail="isDetail"
               :prop-form-data="formData"
               :property-list="propertyList"
@@ -483,7 +488,7 @@ onMounted(async () => {
           <template #batchSkuList>
             <SkuList
               :is-batch="true"
-              :readonly-stock="true"
+              :readonly-stock="stockReadonly"
               :is-detail="isDetail"
               :prop-form-data="formData"
               :property-list="propertyList"
@@ -492,7 +497,7 @@ onMounted(async () => {
           <template #multiSkuList>
             <SkuList
               ref="skuListRef"
-              :readonly-stock="true"
+              :readonly-stock="stockReadonly"
               :is-detail="isDetail"
               :prop-form-data="formData"
               :property-list="propertyList"

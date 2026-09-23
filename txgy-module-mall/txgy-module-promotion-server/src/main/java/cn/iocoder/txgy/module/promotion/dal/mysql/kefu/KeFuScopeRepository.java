@@ -119,6 +119,12 @@ public class KeFuScopeRepository {
                 + "ORDER BY actor_type,actor_id LIMIT ? OFFSET ?", AGENT, tenant, scope, shop, limit, offset);
     }
 
+    public List<Agent> enabledScopes(long tenant, Actor actor) {
+        return jdbc.query("SELECT * FROM promotion_kefu_agent WHERE tenant_id=? AND actor_type=? "
+                + "AND actor_id=? AND enabled=TRUE ORDER BY scope,shop_id", AGENT,
+                tenant, actor.type(), actor.id());
+    }
+
     public void setAgent(long tenant, Agent agent, boolean enabled) {
         jdbc.update("UPDATE promotion_kefu_agent SET enabled=?,version=version+1,update_time=CURRENT_TIMESTAMP "
                         + "WHERE tenant_id=? AND scope=? AND shop_id=? AND actor_type=? AND actor_id=?",

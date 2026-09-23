@@ -6,6 +6,7 @@ import cn.iocoder.txgy.framework.tenant.core.aop.TenantIgnore;
 import cn.iocoder.txgy.module.product.controller.app.portal.vo.AppPortalHotTenantRespVO;
 import cn.iocoder.txgy.module.product.controller.app.portal.vo.AppPortalProductPageReqVO;
 import cn.iocoder.txgy.module.product.controller.app.portal.vo.AppPortalProductRespVO;
+import cn.iocoder.txgy.module.product.controller.app.portal.vo.AppPortalShopRespVO;
 import cn.iocoder.txgy.module.product.controller.app.portal.vo.AppPortalTenantRespVO;
 import cn.iocoder.txgy.module.product.service.portal.MallPortalCatalogService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -43,6 +44,20 @@ public class AppMallPortalController {
     public CommonResult<PageResult<AppPortalProductRespVO>> getProducts(
             @Valid AppPortalProductPageReqVO request) {
         return success(portalService.getProducts(request));
+    }
+
+    @GetMapping("/portal/shops")
+    @Operation(summary = "获得平台全部公开店铺")
+    public CommonResult<List<AppPortalShopRespVO>> getShops(
+            @RequestParam(value = "keyword", required = false)
+            @jakarta.validation.constraints.Size(max = 100, message = "店铺关键字不能超过 100 个字符") String keyword) {
+        return success(portalService.getShops(keyword));
+    }
+
+    @GetMapping("/portal/shops/{shopId}")
+    @Operation(summary = "获得平台公开店铺详情")
+    public CommonResult<AppPortalShopRespVO> getShop(@PathVariable @Positive Long shopId) {
+        return success(portalService.getShop(shopId));
     }
 
     @GetMapping("/portal/products/{spuId}")

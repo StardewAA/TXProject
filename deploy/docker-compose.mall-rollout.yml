@@ -5,10 +5,10 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/$${SERVER_PORT:-48080}' || exit 1"]
   frontend:
-    image: mall-admin:section22-20260921-1
+    image: mall-admin:opening-stock-20260923-4
     pull_policy: never
   member:
-    image: mall-member:section22-20260921-2
+    image: mall-member:address-map-20260922-1
     pull_policy: never
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/$${SERVER_PORT:-48080}' || exit 1"]
@@ -26,14 +26,19 @@ services:
       MALL_TENANT_AUTH_HMAC_SECRET: "local-mall-auth-20260917-change-before-production"
       MALL_TENANT_SMS_TEMPLATE_CODE: "local-picture-registration"
   product:
-    image: mall-product:section22-20260922-1
+    image: mall-product:opening-stock-20260923-1
     pull_policy: never
     environment:
       MALL_LEGACY_MEMBER_SALES_ENABLED: "false"
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/$${SERVER_PORT:-48080}' || exit 1"]
+  pay:
+    image: mall-pay:cross-tenant-refund-20260923-2
+    pull_policy: never
+    environment:
+      TXGY_PAY_WALLET_PAY_APP_KEY: wallet
   trade:
-    image: mall-trade:section22-20260921-1
+    image: mall-trade:cross-tenant-refund-20260923-3
     pull_policy: never
     environment:
       TXGY_TRADE_COMPATIBILITY_MEMBER_SUPPLIER_WRITE_ENABLED: "false"
@@ -41,10 +46,10 @@ services:
       # 正式环境接入 XXL-JOB 后应改回 false，避免双重调度。
       TXGY_TRADE_PORTAL_SALES_FALLBACK_ENABLED: "true"
   wms:
-    image: mall-wms:section22-20260921-1
+    image: mall-wms:opening-stock-20260923-1
     pull_policy: never
   mall-pc:
-    image: mall-pc:section22-20260922-4
+    image: mall-pc:inquiry-default-platform-public-20260923-1
     pull_policy: never
     container_name: txgy-mall-web-integration
     ports:
@@ -59,7 +64,7 @@ services:
       - txgy-dev
     restart: unless-stopped
   mall-h5:
-    image: mall-h5:section22-20260921-1
+    image: mall-h5:address-recharge-fixes-20260923-2
     pull_policy: never
     container_name: deploy-mall-h5-1
     ports:
@@ -73,7 +78,7 @@ services:
       - txgy-dev
     restart: unless-stopped
   promotion:
-    image: mall-promotion:section22-20260922-4
+    image: mall-promotion:kefu-scope-auto-20260922-2
     pull_policy: never
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/$${SERVER_PORT:-48080}' || exit 1"]

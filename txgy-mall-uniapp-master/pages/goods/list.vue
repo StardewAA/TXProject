@@ -339,8 +339,8 @@
       const params = {
         pageNo: state.pagination.pageNo,
         pageSize: state.pagination.pageSize,
-        categoryId: state.categoryId,
-        keyword: state.keyword,
+        categoryId: state.categoryId || undefined,
+        keyword: state.keyword || undefined,
       };
       const response = state.portal
         ? state.tenantSlug

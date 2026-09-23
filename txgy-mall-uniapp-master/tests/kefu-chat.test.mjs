@@ -101,6 +101,30 @@ test('target strips user-controlled card snapshots and owners', () =>
 test('entry has explicit platform scope when shop missing, never guesses shop', () => {
   assert.deepEqual(chatEntry(null), { scope: 'PLATFORM', shopId: 0 });
   assert.deepEqual(chatEntry(101, 'ORDER', 8), { ...target, resourceType: 'ORDER', resourceId: 8 });
+  assert.deepEqual(chatEntry(101, 'PRODUCT', 9, 901), {
+    ...target,
+    resourceType: 'PRODUCT',
+    resourceId: 9,
+    productSkuId: 901,
+  });
+  assert.deepEqual(chatEntry(101, 'PRODUCT', 9, 901, 2024), {
+    ...target,
+    resourceType: 'PRODUCT',
+    resourceId: 9,
+    productSkuId: 901,
+    serviceTenantId: 2024,
+  });
+});
+test('service tenant route key does not impersonate a mall switch', () => {
+  assert.deepEqual(chatTarget({ ...target, resourceType: 'PRODUCT', resourceId: 9,
+    productSkuId: 901, serviceTenantId: '2024' }), {
+    ...target, resourceType: 'PRODUCT', resourceId: 9, productSkuId: 901, tenantId: 2024,
+  });
+});
+test('router tenant id is ignored for platform customer service', () => {
+  assert.deepEqual(chatTarget({ scope: 'PLATFORM', shopId: '0', tenantId: '2009' }), {
+    scope: 'PLATFORM', shopId: 0,
+  });
 });
 test('thread rejects cross-shop and foreign session responses', () => {
   assert.throws(() =>
@@ -123,6 +147,24 @@ test('thread validates restored tenant and member identity instead of cache', ()
     { tenantId: null, memberId: null },
   ])
     assert.throws(() => chatThread(value, target, 'session', owner));
+});
+test('platform product thread accepts its server-resolved seller tenant', () => {
+  const crossTenantTarget = {
+    ...target,
+    resourceType: 'PRODUCT',
+    resourceId: 9,
+    productSkuId: 901,
+    tenantId: 2024,
+  };
+  const value = thread({
+    session: { id: 'session', scope: 'SHOP', shopId: 101, version: 2, tenantId: 2024, memberId: 11 },
+  });
+  assert.equal(chatThread(value, crossTenantTarget, 'session', { tenantId: 2009, memberId: 11 }), value);
+  assert.throws(() => chatThread(value, { ...crossTenantTarget, tenantId: 2023 }, 'session', {
+    tenantId: 2009,
+    memberId: 11,
+  }));
+  assert.throws(() => chatThread(value, crossTenantTarget, 'session', { tenantId: 2009, memberId: 12 }));
 });
 test('card rejects cross-shop, unsafe ids and unexpected content shape', () => {
   const card = { type: 'ORDER', resourceId: 8, shopId: 101, title: '订单', text: '快照' };
@@ -162,6 +204,11 @@ test('initial open does not auto-send resource', async () => {
   const h = harness();
   await h.controller.open({ ...target, resourceType: 'PRODUCT', resourceId: 9 });
   assert.deepEqual(h.calls, [['open', target]]);
+});
+test('platform product consultation opens the target shop by server-verifiable SKU', async () => {
+  const h = harness();
+  await h.controller.open({ ...target, resourceType: 'PRODUCT', resourceId: 9, productSkuId: 901 });
+  assert.deepEqual(h.calls, [['open', { ...target, productSkuId: 901 }]]);
 });
 test('message sends trimmed text only, no injected tenant or identity', async () => {
   const h = harness();

@@ -100,7 +100,7 @@ button { cursor: pointer; }
 a:focus-visible, button:focus-visible { outline: 3px solid #40ac96; outline-offset: 4px; }
 .header-search:focus-within { box-shadow: 0 0 0 4px #147d6b15; }
 .header-discovery { min-width: 0; }
-.header-search select { width: 78px; border: 0; border-right: 1px solid #e0e7e3; background: #f4f7f5; color: #476559; padding: 0 10px; }
+.header-search select { flex: 0 0 120px; width: 120px; box-sizing: border-box; border: 0; border-right: 1px solid #e0e7e3; background: #f4f7f5; color: #476559; padding: 0 36px 0 14px; white-space: nowrap; }
 .header-hotwords { display: flex; gap: 16px; margin-top: 10px; font-size: 11px; color: #73827a; }
 .header-hotwords span { color: #a0aaa4; }.header-hotwords a:hover { color: var(--brand); }
 .store-detail-link { color: var(--brand); }

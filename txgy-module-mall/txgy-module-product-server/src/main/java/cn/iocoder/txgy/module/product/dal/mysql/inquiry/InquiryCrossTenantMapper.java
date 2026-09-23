@@ -82,6 +82,17 @@ public interface InquiryCrossTenantMapper {
             + " WHERE supplier_portal.tenant_id=#{viewerTenantId}"
             + " AND supplier_portal.deleted=b'0' AND supplier_portal.open_status=0)";
 
+    /**
+     * 未绑定 SKU 的询价明细允许按物料名称匹配供应商商品。询价人常把“防腐”写进
+     * 物料名称，而商品标题会把它放在分类中，因此同时使用原名称和去掉“防腐”后的
+     * 核心名称；核心名称至少两个字符，避免过宽匹配。
+     */
+    String FREE_TEXT_PRODUCT_NAME_MATCH = " (NULLIF(TRIM(requested_item.name),'') IS NOT NULL"
+            + " AND (LOCATE(BINARY LOWER(TRIM(requested_item.name)),BINARY LOWER(seller_spu.name))&gt;0"
+            + " OR (CHAR_LENGTH(TRIM(REPLACE(requested_item.name,'防腐','')))&gt;=2"
+            + " AND LOCATE(BINARY LOWER(TRIM(REPLACE(requested_item.name,'防腐',''))),"
+            + " BINARY LOWER(seller_spu.name))&gt;0)))";
+
     String CATEGORY_MATCH = " EXISTS (SELECT 1 FROM product_spu seller_spu"
             + " LEFT JOIN product_category seller_category"
             + " ON seller_category.id=seller_spu.category_id"
@@ -106,9 +117,11 @@ public interface InquiryCrossTenantMapper {
             + " AND ((requested_spu.category_id IS NOT NULL"
             + " AND requested_spu.category_id=seller_spu.category_id)"
             + " OR (requested_spu.category_id IS NULL"
-            + " AND NULLIF(TRIM(requested_item.category),'') IS NOT NULL"
+            + " AND ((NULLIF(TRIM(requested_item.category),'') IS NOT NULL"
             + " AND seller_category.id IS NOT NULL"
-            + " AND LOWER(TRIM(requested_item.category))=LOWER(TRIM(seller_category.name)))))";
+            + " AND BINARY LOWER(TRIM(requested_item.category))"
+            + "=BINARY LOWER(TRIM(seller_category.name)))"
+            + " OR " + FREE_TEXT_PRODUCT_NAME_MATCH + ")))))";
 
     /** 平台公开机会复用商品运费模板作为真实可配送范围，不从自由文本地址猜测。 */
     String DELIVERY_SCOPE_MATCH = " i.delivery_area_id IS NOT NULL"
@@ -121,17 +134,17 @@ public interface InquiryCrossTenantMapper {
             + " WHERE delivery_charge.template_id=delivery_template.id"
             + " AND delivery_charge.tenant_id=#{viewerTenantId}"
             + " AND delivery_charge.deleted=b'0'"
-            + " AND (FIND_IN_SET(CAST(i.delivery_area_id AS CHAR),delivery_charge.area_ids)&gt;0"
-            + " OR FIND_IN_SET(CAST(i.delivery_city_id AS CHAR),delivery_charge.area_ids)&gt;0"
-            + " OR FIND_IN_SET(CAST(i.delivery_province_id AS CHAR),delivery_charge.area_ids)&gt;0"
+            + " AND (FIND_IN_SET(CAST(i.delivery_area_id AS CHAR) COLLATE utf8mb4_unicode_ci,delivery_charge.area_ids)&gt;0"
+            + " OR FIND_IN_SET(CAST(i.delivery_city_id AS CHAR) COLLATE utf8mb4_unicode_ci,delivery_charge.area_ids)&gt;0"
+            + " OR FIND_IN_SET(CAST(i.delivery_province_id AS CHAR) COLLATE utf8mb4_unicode_ci,delivery_charge.area_ids)&gt;0"
             + " OR FIND_IN_SET('1',delivery_charge.area_ids)&gt;0))"
             + " OR EXISTS (SELECT 1 FROM trade_delivery_express_template_free delivery_free"
             + " WHERE delivery_free.template_id=delivery_template.id"
             + " AND delivery_free.tenant_id=#{viewerTenantId}"
             + " AND delivery_free.deleted=b'0'"
-            + " AND (FIND_IN_SET(CAST(i.delivery_area_id AS CHAR),delivery_free.area_ids)&gt;0"
-            + " OR FIND_IN_SET(CAST(i.delivery_city_id AS CHAR),delivery_free.area_ids)&gt;0"
-            + " OR FIND_IN_SET(CAST(i.delivery_province_id AS CHAR),delivery_free.area_ids)&gt;0"
+            + " AND (FIND_IN_SET(CAST(i.delivery_area_id AS CHAR) COLLATE utf8mb4_unicode_ci,delivery_free.area_ids)&gt;0"
+            + " OR FIND_IN_SET(CAST(i.delivery_city_id AS CHAR) COLLATE utf8mb4_unicode_ci,delivery_free.area_ids)&gt;0"
+            + " OR FIND_IN_SET(CAST(i.delivery_province_id AS CHAR) COLLATE utf8mb4_unicode_ci,delivery_free.area_ids)&gt;0"
             + " OR FIND_IN_SET('1',delivery_free.area_ids)&gt;0))))";
 
     String CATEGORY_AND_DELIVERY_MATCH = " EXISTS (SELECT 1"
@@ -167,11 +180,14 @@ public interface InquiryCrossTenantMapper {
             + " AND ((requested_spu.category_id IS NOT NULL AND ("
             + " (i.tenant_id=#{viewerTenantId} AND requested_spu.category_id=seller_spu.category_id)"
             + " OR (requested_category.id IS NOT NULL AND seller_category.id IS NOT NULL"
-            + " AND LOWER(TRIM(requested_category.name))=LOWER(TRIM(seller_category.name)))))"
+            + " AND BINARY LOWER(TRIM(requested_category.name))"
+            + "=BINARY LOWER(TRIM(seller_category.name)))))"
             + " OR (requested_spu.category_id IS NULL"
-            + " AND NULLIF(TRIM(requested_item.category),'') IS NOT NULL"
+            + " AND ((NULLIF(TRIM(requested_item.category),'') IS NOT NULL"
             + " AND seller_category.id IS NOT NULL"
-            + " AND LOWER(TRIM(requested_item.category))=LOWER(TRIM(seller_category.name))))))";
+            + " AND BINARY LOWER(TRIM(requested_item.category))"
+            + "=BINARY LOWER(TRIM(seller_category.name)))"
+            + " OR " + FREE_TEXT_PRODUCT_NAME_MATCH + ")))))";
 
     /**
      * 报价行必须精确对应一条询价明细。查询显式带上买卖双方租户，避免普通租户
@@ -209,11 +225,14 @@ public interface InquiryCrossTenantMapper {
             + " (#{supplierTenantId}=#{inquiryTenantId}"
             + " AND requested_spu.category_id=seller_spu.category_id)"
             + " OR (requested_category.id IS NOT NULL AND seller_category.id IS NOT NULL"
-            + " AND LOWER(TRIM(requested_category.name))=LOWER(TRIM(seller_category.name)))))"
+            + " AND BINARY LOWER(TRIM(requested_category.name))"
+            + "=BINARY LOWER(TRIM(seller_category.name)))))"
             + " OR (requested_spu.category_id IS NULL"
-            + " AND NULLIF(TRIM(requested_item.category),'') IS NOT NULL"
+            + " AND ((NULLIF(TRIM(requested_item.category),'') IS NOT NULL"
             + " AND seller_category.id IS NOT NULL"
-            + " AND LOWER(TRIM(requested_item.category))=LOWER(TRIM(seller_category.name))))";
+            + " AND BINARY LOWER(TRIM(requested_item.category))"
+            + "=BINARY LOWER(TRIM(seller_category.name)))"
+            + " OR " + FREE_TEXT_PRODUCT_NAME_MATCH + ")))";
 
     String QUOTE_ITEM_DELIVERY_SCOPE = " i.delivery_area_id IS NOT NULL"
             + " AND seller_spu.delivery_template_id IS NOT NULL"
@@ -225,17 +244,17 @@ public interface InquiryCrossTenantMapper {
             + " WHERE delivery_charge.template_id=delivery_template.id"
             + " AND delivery_charge.tenant_id=#{supplierTenantId}"
             + " AND delivery_charge.deleted=b'0'"
-            + " AND (FIND_IN_SET(CAST(i.delivery_area_id AS CHAR),delivery_charge.area_ids)&gt;0"
-            + " OR FIND_IN_SET(CAST(i.delivery_city_id AS CHAR),delivery_charge.area_ids)&gt;0"
-            + " OR FIND_IN_SET(CAST(i.delivery_province_id AS CHAR),delivery_charge.area_ids)&gt;0"
+            + " AND (FIND_IN_SET(CAST(i.delivery_area_id AS CHAR) COLLATE utf8mb4_unicode_ci,delivery_charge.area_ids)&gt;0"
+            + " OR FIND_IN_SET(CAST(i.delivery_city_id AS CHAR) COLLATE utf8mb4_unicode_ci,delivery_charge.area_ids)&gt;0"
+            + " OR FIND_IN_SET(CAST(i.delivery_province_id AS CHAR) COLLATE utf8mb4_unicode_ci,delivery_charge.area_ids)&gt;0"
             + " OR FIND_IN_SET('1',delivery_charge.area_ids)&gt;0))"
             + " OR EXISTS (SELECT 1 FROM trade_delivery_express_template_free delivery_free"
             + " WHERE delivery_free.template_id=delivery_template.id"
             + " AND delivery_free.tenant_id=#{supplierTenantId}"
             + " AND delivery_free.deleted=b'0'"
-            + " AND (FIND_IN_SET(CAST(i.delivery_area_id AS CHAR),delivery_free.area_ids)&gt;0"
-            + " OR FIND_IN_SET(CAST(i.delivery_city_id AS CHAR),delivery_free.area_ids)&gt;0"
-            + " OR FIND_IN_SET(CAST(i.delivery_province_id AS CHAR),delivery_free.area_ids)&gt;0"
+            + " AND (FIND_IN_SET(CAST(i.delivery_area_id AS CHAR) COLLATE utf8mb4_unicode_ci,delivery_free.area_ids)&gt;0"
+            + " OR FIND_IN_SET(CAST(i.delivery_city_id AS CHAR) COLLATE utf8mb4_unicode_ci,delivery_free.area_ids)&gt;0"
+            + " OR FIND_IN_SET(CAST(i.delivery_province_id AS CHAR) COLLATE utf8mb4_unicode_ci,delivery_free.area_ids)&gt;0"
             + " OR FIND_IN_SET('1',delivery_free.area_ids)&gt;0))))";
 
     String LEGACY_SAME_TENANT_INVITATION = " EXISTS (SELECT 1"
@@ -331,8 +350,8 @@ public interface InquiryCrossTenantMapper {
     long countPlatformPublicInquiries(@Param("state") String state, @Param("now") Long now,
                                       @Param("keyword") String keyword);
 
-    @Select({"SELECT i.id AS inquiryId,i.tenant_id AS inquiryTenantId,i.visibility AS visibility",
-            PLATFORM_PUBLIC_FROM, " AND i.id=#{inquiryId} LIMIT 1"})
+    @Select({"<script>", "SELECT i.id AS inquiryId,i.tenant_id AS inquiryTenantId,i.visibility AS visibility",
+            PLATFORM_PUBLIC_FROM, " AND i.id=#{inquiryId} LIMIT 1", "</script>"})
     OpportunityRef selectPlatformPublicInquiry(@Param("inquiryId") Long inquiryId);
 
     @Select({"<script>",

@@ -45,6 +45,11 @@ public interface WmsIntegrationApi {
     @Operation(summary = "MES 完工入库申请，仅创建 WMS 草稿")
     CommonResult<WmsIntegrationAcceptedRespDTO> createProductionReceipt(@Valid @RequestBody WmsOrderRequestDTO reqDTO);
 
+    @PostMapping(PREFIX + "/receipt/mall-opening")
+    @Operation(summary = "商城新商品期初库存入库申请，仅创建 WMS 草稿")
+    CommonResult<WmsIntegrationAcceptedRespDTO> createMallOpeningReceipt(
+            @Valid @RequestBody WmsOrderRequestDTO reqDTO);
+
     @PostMapping(PREFIX + "/shipment/sale")
     @Operation(summary = "ERP 销售出库申请，仅创建 WMS 草稿")
     CommonResult<WmsIntegrationAcceptedRespDTO> createSaleShipment(@Valid @RequestBody WmsOrderRequestDTO reqDTO);

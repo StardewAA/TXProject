@@ -9,9 +9,13 @@ function loadLoader() {
   return new Promise((resolve, reject) => {
     const existing = document.querySelector('script[data-amap-loader]');
     const script = existing || document.createElement('script');
-    const done = () => globalThis.AMapLoader ? resolve(globalThis.AMapLoader) : reject(new Error('高德地图加载器不可用'));
+    const timeout = setTimeout(() => reject(new Error('高德地图加载超时')), 12000);
+    const done = () => {
+      clearTimeout(timeout);
+      return globalThis.AMapLoader ? resolve(globalThis.AMapLoader) : reject(new Error('高德地图加载器不可用'));
+    };
     script.addEventListener('load', done, { once: true });
-    script.addEventListener('error', () => reject(new Error('高德地图加载失败')), { once: true });
+    script.addEventListener('error', () => { clearTimeout(timeout); reject(new Error('高德地图加载失败')); }, { once: true });
     if (!existing) {
       script.src = 'https://webapi.amap.com/loader.js';
       script.async = true;

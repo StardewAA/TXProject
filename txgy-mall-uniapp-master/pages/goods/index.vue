@@ -230,7 +230,7 @@
         <detail-comment-card v-if="!state.portal" class="detail-comment-selector" :goodsId="state.goodsId" />
         <view v-else class="detail-comment-selector portal-note detail-card">
           <view class="portal-note-title">公开目录说明</view>
-          <view>当前页面不读取其他租户会话中的收藏、优惠券和营销数据，避免跨租户串数据。</view>
+          <view>当前页面仅共享本人收藏状态，不读取其他租户会话中的优惠券和营销数据。</view>
         </view>
         <!-- 详情 -->
         <detail-content-card
@@ -266,7 +266,10 @@
         </detail-tabbar>
         <su-fixed v-else bottom placeholder bg="bg-white">
           <view class="portal-action-bar ss-flex ss-col-center">
-            <button class="ss-reset-button portal-back-button" @tap="openPlatformProducts">平台商品</button>
+            <button class="ss-reset-button portal-service-button" @tap="openPortalService">店铺客服</button>
+            <button class="ss-reset-button portal-favorite-button" :disabled="state.portalFavoriteBusy" @tap="togglePortalFavorite">
+              {{ state.goodsInfo.favorite ? '★ 已收藏' : '☆ 收藏' }}
+            </button>
             <button class="ss-reset-button portal-cart-button" @tap="openPlatformCart">购物车</button>
             <button class="ss-reset-button portal-shop-button" :disabled="state.portalCartBusy" @tap="addPortalCart">
               {{ state.portalCartBusy ? '正在加入' : '加入平台购物车' }}
@@ -329,6 +332,7 @@
     portalProductListPath,
   } from '@/sheep/helper/platform-portal.mjs';
   import { platformCartPath } from '@/sheep/helper/platform-commerce.mjs';
+  import { chatEntry } from '@/sheep/helper/kefu-chat.mjs';
 
   onPageScroll(() => {});
   import OrderApi from '@/sheep/api/trade/order';
@@ -362,6 +366,7 @@
     tenantSlug: '',
     portalQuantity: 1,
     portalCartBusy: false,
+    portalFavoriteBusy: false,
     skeletonLoading: true, // SPU 加载中
     goodsInfo: {}, // SPU 信息
     showSelectSku: false, // 是否展示 SKU 选择弹窗
@@ -408,6 +413,40 @@
     sheep.$router.go(platformCartPath());
   }
 
+  async function togglePortalFavorite() {
+    if (state.portalFavoriteBusy || !state.goodsInfo?.id) return;
+    if (!isLogin.value) {
+      showAuthModal('accountLogin');
+      return;
+    }
+    state.portalFavoriteBusy = true;
+    try {
+      const response = state.goodsInfo.favorite
+        ? await FavoriteApi.deleteFavorite(state.goodsInfo.id)
+        : await FavoriteApi.createFavorite(state.goodsInfo.id, state.tenantSlug);
+      if (response?.code !== 0) throw new Error(response?.msg || '收藏操作失败');
+      state.goodsInfo.favorite = !state.goodsInfo.favorite;
+    } catch (error) {
+      sheep.$helper.toast(error?.message || '收藏操作失败，请稍后重试');
+    } finally {
+      state.portalFavoriteBusy = false;
+    }
+  }
+
+  function openPortalService() {
+    if (!isLogin.value) {
+      showAuthModal('accountLogin');
+      return;
+    }
+    const skuId = Number(state.selectedSku?.id);
+    if (!Number.isSafeInteger(skuId) || skuId <= 0) {
+      sheep.$helper.toast('请先选择要咨询的商品规格');
+      return;
+    }
+    sheep.$router.go('/pages/chat/service',
+      chatEntry(state.goodsInfo?.shopId, 'PRODUCT', state.goodsInfo?.id, skuId, state.goodsInfo?.tenantId));
+  }
+
   async function addPortalCart() {
     if (state.portalCartBusy) return;
     if (!isLogin.value) {
@@ -442,7 +481,9 @@
   function openProductShop() {
     if (state.portal) {
       if (state.tenantSlug) {
-        sheep.$router.go(portalProductListPath({ tenantSlug: state.tenantSlug }));
+        // Keep this as an explicit platform route. The public storefront is a filtered view of
+        // the cross-tenant catalog and must never trigger the legacy tenant-entry switch guard.
+        sheep.$router.go('/pages/goods/list', { portal: 1, tenantSlug: state.tenantSlug });
       }
       return;
     }
@@ -623,11 +664,21 @@
           || (state.tenantSlug && product.tenantSlug !== state.tenantSlug)) {
         throw new Error('公开商品不可用');
       }
-      state.goodsInfo = product;
+      // normalizePortalProduct returns an immutable public catalog record. The detail page
+      // also owns UI-only state (for example favorite), so keep that state on a mutable shell.
+      state.goodsInfo = { ...product, favorite: false };
       state.tenantSlug = product.tenantSlug;
       state.selectedSku = product.skus[0] || {};
       state.settlementSku = state.selectedSku;
       state.portalQuantity = 1;
+      if (isLogin.value) {
+        try {
+          const favoriteResponse = await FavoriteApi.isFavoriteExists(state.goodsId);
+          if (favoriteResponse?.code === 0) state.goodsInfo.favorite = favoriteResponse.data === true;
+        } catch (error) {
+          state.goodsInfo.favorite = false;
+        }
+      }
     } catch (error) {
       state.goodsInfo = null;
     } finally {
@@ -1062,14 +1113,21 @@
       font-size: 27rpx;
     }
 
-    .portal-back-button {
-      width: 150rpx;
+    .portal-service-button {
+      width: 132rpx;
       color: #156b52;
       background: #e2f3eb;
     }
 
+    .portal-favorite-button {
+      width: 126rpx;
+      color: #a76410;
+      border: 1rpx solid #e8c78d;
+      background: #fff9ec;
+    }
+
     .portal-cart-button {
-      width: 150rpx;
+      width: 120rpx;
       color: #156b52;
       border: 1rpx solid #99c5b9;
       background: #fff;

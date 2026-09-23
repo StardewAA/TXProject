@@ -30,6 +30,12 @@ public interface PayOrderApi {
     @PermitAll
     CommonResult<PayOrderRespDTO> getOrder(@RequestParam("id") Long id);
 
+    @GetMapping(PREFIX + "/get-tenant-id")
+    @Operation(summary = "获得支付单所属租户（内部跨租户业务路由）")
+    @Parameter(name = "id", description = "支付单编号", required = true)
+    @PermitAll
+    CommonResult<Long> getOrderTenantId(@RequestParam("id") Long id);
+
     @PutMapping(PREFIX + "/expire")
     @Operation(summary = "核实并关闭指定已到期支付单（内部业务调用）")
     CommonResult<Boolean> expireOrder(@RequestParam("id") Long id,

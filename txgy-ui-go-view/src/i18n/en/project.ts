@@ -13,5 +13,7 @@ export default {
   // items 
   release: 'Release',
   unreleased: 'Unrelease',
-  last_edit: 'Last edit time'
+  last_edit: 'Last edit time',
+  no_preview: 'No preview',
+  no_preview_tip: 'A thumbnail is generated after saving in the designer'
 }

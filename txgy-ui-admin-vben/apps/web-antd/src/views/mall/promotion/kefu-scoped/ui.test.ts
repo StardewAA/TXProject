@@ -2,12 +2,14 @@ import { createApp, h, nextTick } from 'vue';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const api = vi.hoisted(() => ({
-  getChatCapability: vi.fn(), getScopedAgents: vi.fn(), grantScopedAgent: vi.fn(),
+  getChatCapability: vi.fn(), getScopedAgents: vi.fn(), getMyScopedScopes: vi.fn(), grantScopedAgent: vi.fn(),
   getScopedWorkbench: vi.fn(), getAgentThread: vi.fn(), getAgentMessages: vi.fn(), sendAgentMessage: vi.fn(),
   claimScopedSession: vi.fn(), closeScopedSession: vi.fn(), readAgentMessages: vi.fn(), heartbeatAgent: vi.fn(),
   getScopedFaq: vi.fn(), saveScopedFaq: vi.fn(), publishScopedFaq: vi.fn(),
 }));
 vi.mock('#/api/mall/promotion/kefu-scoped', () => api);
+const productApi = vi.hoisted(() => ({ getBusinessScopeShopList: vi.fn() }));
+vi.mock('#/api/mall/product/shop', () => productApi);
 vi.mock('@vben/stores', async () => {
   const { reactive } = await import('vue');
   const access = reactive({ accessToken: 'local-test-only', tenantId: 1, visitTenantId: null as number | null, accessCodes: [] as string[] });
@@ -56,11 +58,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   access.accessToken = 'local-test-only'; access.tenantId = 1; access.visitTenantId = null; access.accessCodes = [];
   api.getChatCapability.mockResolvedValue({ enabled: true, mode: 'FAQ_HUMAN', attachmentsEnabled: false, version: 'scoped-chat-v1', message: '' });
-  api.getScopedAgents.mockResolvedValue([agent]); api.grantScopedAgent.mockResolvedValue(true);
+  api.getScopedAgents.mockResolvedValue([agent]); api.getMyScopedScopes.mockResolvedValue([agent]); api.grantScopedAgent.mockResolvedValue(true);
   api.getScopedWorkbench.mockResolvedValue([thread]); api.getAgentThread.mockResolvedValue(thread);
   api.getAgentMessages.mockResolvedValue({ items: [], nextCursor: 0, hasMore: false });
   api.heartbeatAgent.mockResolvedValue({ online: true, expiresAt: Date.now() + 90_000 });
   api.getScopedFaq.mockResolvedValue({ scope: 'PLATFORM', shopId: 0, version: 0, publishedVersion: 0, entries: [], publishedEntries: [] });
+  productApi.getBusinessScopeShopList.mockResolvedValue([{ id: 41, name: '测试企业店铺', status: 0 }]);
 });
 afterEach(() => { dispose?.(); dispose = undefined; vi.useRealTimers(); });
 
@@ -80,6 +83,15 @@ describe('scoped admin pages fail closed', () => {
   it('does not load FAQ under agent-management permission', async () => { access.accessCodes = [MANAGE_PERMISSION]; mount(Faq); await flush(); expect(api.getScopedFaq).not.toHaveBeenCalled(); });
   it('reads FAQ draft without implicitly saving or publishing', async () => { access.accessCodes = [FAQ_PERMISSION]; const host = mount(Faq); await flush(); expect(host.textContent).toContain('暂无草稿'); expect(api.getScopedFaq).toHaveBeenCalledTimes(1); expect(api.saveScopedFaq).not.toHaveBeenCalled(); expect(api.publishScopedFaq).not.toHaveBeenCalled(); });
   it('reads a scoped queue without going online or claiming automatically', async () => { access.accessCodes = [RECEIVE_PERMISSION]; const host = mount(Workbench); await flush(); expect(host.textContent).toContain('local-session'); expect(api.heartbeatAgent).not.toHaveBeenCalled(); expect(api.claimScopedSession).not.toHaveBeenCalled(); expect(api.getAgentMessages).not.toHaveBeenCalled(); });
+  it('automatically loads the signed-in agents authorized shop queue', async () => {
+    access.accessCodes = [RECEIVE_PERMISSION];
+    const shopGrant = { ...agent, scope: 'SHOP', shopId: 202400203, actorType: 2, actorId: 71 };
+    const shopThread = { ...thread, session: { ...session, scope: 'SHOP', shopId: 202400203 } };
+    api.getMyScopedScopes.mockResolvedValue([shopGrant]); api.getScopedWorkbench.mockResolvedValue([shopThread]);
+    const host = mount(Workbench); await flush();
+    expect(api.getScopedWorkbench.mock.calls.at(-1)?.[0]).toMatchObject({ scope: 'SHOP', shopId: 202400203, state: 'WAITING' });
+    expect(host.textContent).toContain('店铺 #202400203');
+  });
   it('uses only selected session messages and does not mark read automatically', async () => { access.accessCodes = [RECEIVE_PERMISSION]; const host = mount(Workbench); await flush(); button(host, '查看会话'); await flush(); expect(api.getAgentMessages.mock.calls[0]?.[0]).toEqual({ sessionId: 'local-session', afterId: 0, limit: 50 }); expect(api.readAgentMessages).not.toHaveBeenCalled(); });
   it('opens the conversation immediately after starting service', async () => {
     access.accessCodes = [RECEIVE_PERMISSION];
@@ -113,18 +125,19 @@ describe('scoped admin pages fail closed', () => {
   });
   it('changes to shop scope without querying shop zero', async () => {
     access.accessCodes = [MANAGE_PERMISSION]; const host = mount(Agents); await flush();
+    api.getScopedAgents.mockResolvedValue([{ ...agent, scope: 'SHOP', shopId: 41 }]);
     const select = host.querySelector<HTMLSelectElement>('[aria-label="客服范围"]')!; select.value = 'SHOP'; select.dispatchEvent(new Event('change')); await flush();
-    expect(api.getScopedAgents).toHaveBeenCalledTimes(1);
-    api.getScopedAgents.mockResolvedValue([{ ...agent, scope: 'SHOP', shopId: 41 }]); input(host, '[aria-label="店铺编号"]', '41'); await flush();
-    expect(api.getScopedAgents.mock.calls[1]?.[0]).toEqual({ scope: 'SHOP', shopId: 41, page: 1, size: 20 });
+    expect(api.getScopedAgents.mock.calls.at(-1)?.[0]).toEqual({ scope: 'SHOP', shopId: 41, page: 1, size: 20 });
+    expect(api.getScopedAgents.mock.calls.some(([query]) => query.scope === 'SHOP' && query.shopId === 0)).toBe(false);
   });
   it('keeps the new capability check alive while switching between two valid shops', async () => {
     access.accessCodes = [MANAGE_PERMISSION]; const host = mount(Agents); await flush();
+    api.getScopedAgents.mockResolvedValue([{ ...agent, scope: 'SHOP', shopId: 41 }]);
     const select = host.querySelector<HTMLSelectElement>('[aria-label="客服范围"]')!; select.value = 'SHOP'; select.dispatchEvent(new Event('change')); await flush();
-    api.getScopedAgents.mockResolvedValue([{ ...agent, scope: 'SHOP', shopId: 41 }]); input(host, '[aria-label="店铺编号"]', '41'); await flush();
     let resolve!: (value: object) => void;
     api.getChatCapability.mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
-    api.getScopedAgents.mockResolvedValue([{ ...agent, scope: 'SHOP', shopId: 42 }]); input(host, '[aria-label="店铺编号"]', '42'); await flush();
+    productApi.getBusinessScopeShopList.mockResolvedValue([{ id: 42, name: '第二测试店铺', status: 0 }]);
+    api.getScopedAgents.mockResolvedValue([{ ...agent, scope: 'SHOP', shopId: 42 }]); button(host, '刷新店铺'); await flush();
     expect(host.textContent).not.toContain('商城会员 MEMBER');
     const signal = api.getChatCapability.mock.calls.at(-1)?.[0] as AbortSignal; expect(signal.aborted).toBe(false);
     resolve({ enabled: true, version: 'scoped-chat-v1', mode: 'FAQ_HUMAN', attachmentsEnabled: false }); await flush();

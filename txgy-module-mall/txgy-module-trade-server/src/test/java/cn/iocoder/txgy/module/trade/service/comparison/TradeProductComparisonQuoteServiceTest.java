@@ -6,12 +6,15 @@ import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.txgy.module.member.api.address.MemberAddressApi;
 import cn.iocoder.txgy.module.member.api.address.dto.MemberAddressRespDTO;
 import cn.iocoder.txgy.module.product.api.sku.ProductSkuApi;
+import cn.iocoder.txgy.module.product.api.sku.ProductPublicSkuApi;
+import cn.iocoder.txgy.module.product.api.sku.dto.ProductPublicSkuLogisticsRespDTO;
 import cn.iocoder.txgy.module.product.api.sku.dto.ProductSkuRespDTO;
 import cn.iocoder.txgy.module.product.api.spu.ProductSpuApi;
 import cn.iocoder.txgy.module.product.api.spu.dto.ProductSpuRespDTO;
 import cn.iocoder.txgy.module.trade.controller.app.comparison.vo.AppProductComparisonQuoteReqVO;
 import cn.iocoder.txgy.module.trade.controller.app.comparison.vo.AppProductComparisonQuoteRespVO;
 import cn.iocoder.txgy.module.trade.service.delivery.DeliveryExpressTemplateService;
+import cn.iocoder.txgy.module.trade.service.checkout.PlatformCheckoutFreightService;
 import cn.iocoder.txgy.module.trade.service.delivery.bo.DeliveryExpressTemplateRespBO;
 import cn.iocoder.txgy.module.trade.service.price.TradePriceService;
 import cn.iocoder.txgy.module.trade.service.price.bo.TradePriceCalculateReqBO;
@@ -30,7 +33,9 @@ class TradeProductComparisonQuoteServiceTest {
     MemberAddressApi addresses=mock(MemberAddressApi.class);
     DeliveryExpressTemplateService templates=mock(DeliveryExpressTemplateService.class);
     TradePriceService prices=mock(TradePriceService.class);
-    TradeProductComparisonQuoteService service=new TradeProductComparisonQuoteService(skus,spus,addresses,templates,prices);
+    ProductPublicSkuApi publicSkus=mock(ProductPublicSkuApi.class);
+    PlatformCheckoutFreightService platformFreight=mock(PlatformCheckoutFreightService.class);
+    TradeProductComparisonQuoteService service=new TradeProductComparisonQuoteService(skus,spus,addresses,templates,prices,publicSkus,platformFreight);
     ProductSkuRespDTO sku;
     ProductSpuRespDTO spu;
     MemberAddressRespDTO address;
@@ -98,6 +103,26 @@ class TradeProductComparisonQuoteServiceTest {
     @Test void crossTenantOrHiddenSpuFailsSameGenericWay(){
         when(spus.validateSpuList(any())).thenThrow(new IllegalStateException("other-tenant-hidden-title"));var item=quote();
         assertEquals("PRODUCT_UNAVAILABLE",item.getStatus());assertFalse(item.toString().contains("hidden-title"));assertNull(item.getUnitPrice());verifyNoInteractions(prices);
+    }
+    @Test void crossTenantPublicSkuShowsVerifiedGoodsAmountWithoutAddress(){
+        when(skus.getSku(201L)).thenThrow(new IllegalStateException("different tenant"));
+        when(publicSkus.getLogisticsList(List.of(201L))).thenReturn(List.of(new ProductPublicSkuLogisticsRespDTO()
+                .setTenantId(2002L).setEnterpriseId(301L).setShopId(401L).setSpuId(101L).setSkuId(201L)
+                .setPrice(1200).setStock(20).setSaleable(true)));
+        var item=service.quote(71L,request().setAddressId(null).setQuantity(2)).getItems().getFirst();
+        assertEquals("ADDRESS_REQUIRED",item.getStatus());assertEquals(Integer.valueOf(1200),item.getUnitPrice());
+        assertEquals(2400L,item.getGoodsAmount());assertNull(item.getShippingFee());assertFalse(item.isAmountsComplete());
+    }
+    @Test void crossTenantPublicSkuUsesPlatformFreightForCompleteEstimate(){
+        when(skus.getSku(201L)).thenThrow(new IllegalStateException("different tenant"));
+        var publicSku=new ProductPublicSkuLogisticsRespDTO().setTenantId(2002L).setEnterpriseId(301L)
+                .setShopId(401L).setSpuId(101L).setSkuId(201L).setPrice(1200).setStock(20).setSaleable(true);
+        when(publicSkus.getLogisticsList(List.of(201L))).thenReturn(List.of(publicSku));
+        var key=new PlatformCheckoutFreightService.ShopKey(2002L,401L);
+        when(platformFreight.quote(eq(110101L),any())).thenReturn(Map.of(key,new PlatformCheckoutFreightService.FreightQuote(true,300L,null)));
+        var item=service.quote(71L,request().setQuantity(2)).getItems().getFirst();
+        assertEquals("AVAILABLE",item.getStatus());assertEquals(2400L,item.getGoodsAmount());
+        assertEquals(0L,item.getDiscountAmount());assertEquals(300L,item.getShippingFee());assertEquals(2700L,item.getTotalAmount());
     }
     @Test void unauditedOrDisabledShopCannotQuote(){spu.setSaleable(false);assertEquals("PRODUCT_UNAVAILABLE",quote().getStatus());verifyNoInteractions(prices);}
     @Test void partialSpuResponseFailsClosed(){when(spus.validateSpuList(any())).thenReturn(CommonResult.success(List.of()));assertEquals("PRODUCT_UNAVAILABLE",quote().getStatus());verifyNoInteractions(prices);}

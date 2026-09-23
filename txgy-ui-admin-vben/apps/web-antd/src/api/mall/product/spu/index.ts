@@ -54,6 +54,8 @@ export namespace MallSpuApi {
     barCode?: string; // 商品条码
     picUrl?: string; // 图片地址
     stock?: number; // 库存
+    wmsSkuId?: number; // WMS 成品 SKU 编号
+    wmsWarehouseId?: number; // WMS 成品仓编号
     weight?: number; // 商品重量，单位：kg 千克
     volume?: number; // 商品体积，单位：m^3 平米
     firstBrokeragePrice?: number | string; // 一级分销的佣金
@@ -142,6 +144,11 @@ export function getTabsCount(params?: Record<string, any>) {
   return requestClient.get<Record<string, number>>('/product/spu/get-count', {
     params,
   });
+}
+
+/** 从 WMS 重新同步商城商品库存缓存 */
+export function syncWmsStockCache() {
+  return requestClient.put<number>('/product/spu/sync-wms-stock-cache');
 }
 
 /** 创建商品 SPU */

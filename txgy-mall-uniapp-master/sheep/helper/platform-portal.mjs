@@ -96,6 +96,63 @@ export function normalizePortalPage(value) {
   });
 }
 
+const featuredProductFamily = (product) => {
+  const introduction = String(product?.introduction ?? '').trim().toLowerCase();
+  // 跨租户模板会改商品标题中的企业前缀，但公开简介保持为真实商品类型。
+  if (introduction) return introduction;
+  let name = String(product?.spuName ?? product?.name ?? '').trim().toLowerCase();
+  for (const owner of [product?.tenantName, product?.enterpriseName, product?.shopName]) {
+    const prefix = String(owner ?? '').trim().toLowerCase();
+    if (prefix && name.startsWith(prefix)) name = name.slice(prefix.length).trim();
+  }
+  return name || String(product?.spuId ?? product?.id ?? '');
+};
+
+/**
+ * 首页精选商品优先保证图片、商品类型和租户都不同，避免跨租户目录中
+ * 同一款模板商品连续出现。候选不足时再逐级放宽，仍只返回真实商品。
+ */
+export function selectFeaturedPortalProducts(value, requestedLimit = 6) {
+  const products = Array.isArray(value) ? value.filter(Boolean) : [];
+  const limit = Math.max(0, Math.min(Number(requestedLimit) || 0, products.length));
+  const selected = [];
+  const selectedIds = new Set();
+  const visuals = new Set();
+  const families = new Set();
+  const tenants = new Set();
+
+  const add = (product) => {
+    const id = `${product.tenantId ?? ''}:${product.spuId ?? product.id ?? ''}`;
+    if (selectedIds.has(id) || selected.length >= limit) return false;
+    selected.push(product);
+    selectedIds.add(id);
+    const visual = String(product.picUrl ?? '').trim();
+    if (visual) visuals.add(visual);
+    families.add(featuredProductFamily(product));
+    tenants.add(String(product.tenantId ?? ''));
+    return true;
+  };
+
+  const passes = [
+    (product) => Boolean(String(product.picUrl ?? '').trim())
+      && !visuals.has(String(product.picUrl).trim())
+      && !tenants.has(String(product.tenantId ?? '')),
+    (product) => Boolean(String(product.picUrl ?? '').trim())
+      && !visuals.has(String(product.picUrl).trim()),
+    (product) => !families.has(featuredProductFamily(product))
+      && !tenants.has(String(product.tenantId ?? '')),
+    (product) => !families.has(featuredProductFamily(product)),
+    () => true,
+  ];
+  for (const accepts of passes) {
+    for (const product of products) {
+      if (selected.length >= limit) return Object.freeze(selected);
+      if (accepts(product)) add(product);
+    }
+  }
+  return Object.freeze(selected);
+}
+
 export function portalProductListPath({ tenantSlug, keyword, categoryId } = {}) {
   const params = new URLSearchParams({ portal: '1' });
   if (tenantSlug) params.set('tenantSlug', normalizePortalTenantSlug(tenantSlug));

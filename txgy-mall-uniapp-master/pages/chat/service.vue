@@ -43,7 +43,7 @@
                 class="secondary-button"
                 size="mini"
                 :disabled="state.busy || !!state.pending || !state.ready"
-                @tap="controller.human"
+                @tap="requestHuman"
               >{{ state.thread.humanRequested ? '查看接待状态' : '转人工 / 留言' }}</button>
               <button v-if="state.thread.mode === 'CLOSED'" class="secondary-button" size="mini" :disabled="state.busy" @tap="reload">重新咨询</button>
               <button class="history-button" size="mini" @tap="history">历史咨询</button>
@@ -170,6 +170,19 @@ import { chatTarget, chatEnabled, createChatController } from '@/sheep/helper/ke
   async function reload() {
     if (!task.current() || !target.value || state.busy) return;
     await controller.open(target.value);
+  }
+  async function requestHuman() {
+    if (!task.current() || state.busy || !state.thread) return;
+    const alreadyRequested = state.thread.humanRequested === true;
+    const succeeded = await controller.human();
+    if (!task.current() || !succeeded || !state.thread) return;
+    sheep.$helper.toast(
+      alreadyRequested
+        ? state.thread.availabilityMessage || '接待状态已刷新'
+        : state.thread.onlineAgents > 0
+          ? '已通知店铺客服，请等待接待'
+          : '已转为人工留言，客服上线后即可查看并回复',
+    );
   }
   function stop() {
     clearInterval(timer);

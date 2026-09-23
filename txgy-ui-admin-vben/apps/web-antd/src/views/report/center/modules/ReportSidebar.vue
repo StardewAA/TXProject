@@ -3,7 +3,7 @@ import type { ReportCenterApi } from '#/api/report/center';
 
 import { computed, ref } from 'vue';
 
-import { ReloadOutlined } from '@ant-design/icons-vue';
+import { IconifyIcon } from '@vben/icons';
 
 /** 系统分组：按查询次数排序，永远排最前，默认收起 */
 const FREQUENT_GROUP = '常用';
@@ -163,7 +163,9 @@ function handleSelect(code: string) {
         />
         <a-tooltip title="重新加载报表清单">
           <a-button class="rc-refresh-btn" @click="emit('refresh')">
-            <template #icon><ReloadOutlined /></template>
+            <template #icon>
+              <IconifyIcon icon="lucide:refresh-cw" />
+            </template>
           </a-button>
         </a-tooltip>
       </div>

@@ -30,7 +30,8 @@ public class ProductAdminBusinessScopeController {
             + "'product:inquiry-supplier:query', 'product:inquiry-supplier:quote', "
             + "'product:inquiry-supplier:message', 'product:business-member:query', "
             + "'product:business-member:update', 'trade:supplier-order:query', "
-            + "'trade:supplier-after-sale:query', 'trade:supplier-settlement:query')")
+            + "'trade:supplier-after-sale:query', 'trade:supplier-settlement:query', "
+            + "'promotion:kefu-agent:manage', 'promotion:kefu-faq:manage')")
     public CommonResult<List<ProductAdminAuthorizedShopRespDTO>> shops() {
         return success(scopeService.authorizedShopOptions(scopeService.currentAdminUserId()));
     }

@@ -42,7 +42,9 @@ class TradeOrderCancellationDeadlineTest {
         handler = mock(TradeOrderHandler.class);
         properties = new TradeOrderProperties();
         properties.setPayExpireTime(Duration.ofHours(2));
-        deadlines = new TradeOrderPaymentDeadlineService(properties, payApi);
+        deadlines = new TradeOrderPaymentDeadlineService(properties, payApi,
+                mock(cn.iocoder.txgy.module.trade.dal.mysql.checkout.PlatformCheckoutMapper.class),
+                mock(cn.iocoder.txgy.module.trade.dal.mysql.checkout.PlatformCheckoutOrderMapper.class));
         service = new TradeOrderUpdateServiceImpl();
         ReflectionTestUtils.setField(service, "tradeOrderMapper", orders);
         ReflectionTestUtils.setField(service, "tradeOrderItemMapper", items);

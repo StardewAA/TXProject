@@ -42,6 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @Import({WmsShipmentOrderServiceImpl.class, WmsShipmentOrderDetailServiceImpl.class,
@@ -115,6 +116,23 @@ public class WmsShipmentOrderServiceImplTest extends BaseDbUnitTest {
         verify(inventoryService, never()).changeInventory(any());
         assertEquals(WmsOrderStatusEnum.PREPARE.getStatus(),
                 shipmentOrderMapper.selectById(order.getId()).getStatus());
+    }
+
+    @Test
+    public void mallShipmentAutomaticallyCompletesWithoutBpm() {
+        WmsShipmentOrderDO order = createShipmentOrder(100L).setSourceModule("MALL").setShopId(300L);
+        shipmentOrderMapper.insert(order);
+        shipmentOrderDetailMapper.insert(createShipmentOrderDetail(order.getId(), 200L, 100L));
+
+        shipmentOrderService.autoCompleteMallShipment(order.getId());
+
+        WmsShipmentOrderDO saved = shipmentOrderMapper.selectById(order.getId());
+        assertEquals(BpmProcessInstanceStatusEnum.APPROVE.getStatus(), saved.getApprovalStatus());
+        assertEquals(WmsOrderStatusEnum.FINISHED.getStatus(), saved.getStatus());
+        assertEquals(1, saved.getExecutionStatus());
+        assertEquals("商城销售订单自动出库", saved.getApprovalReason());
+        verifyNoInteractions(processInstanceApi);
+        verify(inventoryService).changeInventory(any());
     }
 
     @Test

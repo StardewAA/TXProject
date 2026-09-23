@@ -43,6 +43,44 @@ export function makeRequestKey(prefix: 'quote-message' | 'quote-save') {
   return `${prefix}-${suffix}`;
 }
 
+function normalizedSkuText(value: unknown): string {
+  return String(value ?? '').toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+}
+
+function textBigrams(value: string): Set<string> {
+  const result = new Set<string>();
+  for (let index = 0; index < value.length - 1; index += 1) {
+    result.add(value.slice(index, index + 2));
+  }
+  return result;
+}
+
+function relatedProductName(requestedName: string, productName: string): boolean {
+  const requested = normalizedSkuText(requestedName);
+  const candidate = normalizedSkuText(productName);
+  if (!requested || !candidate) return false;
+  if (requested.includes(candidate) || candidate.includes(requested)) return true;
+  if (requested.length < 4 || candidate.length < 4) return false;
+  const requestedPairs = textBigrams(requested);
+  const candidatePairs = textBigrams(candidate);
+  let shared = 0;
+  requestedPairs.forEach((pair) => {
+    if (candidatePairs.has(pair)) shared += 1;
+  });
+  return shared >= 2
+    && (2 * shared) / (requestedPairs.size + candidatePairs.size) >= 0.45;
+}
+
+export function relatedQuoteSkus(
+  item: { code?: string; name: string; skuId?: number },
+  skus: SupplierInquiryApi.QuoteSku[],
+) {
+  const requestedCode = normalizedSkuText(item.code);
+  return skus.filter((sku) => sku.id === item.skuId
+    || Boolean(requestedCode && requestedCode === normalizedSkuText(sku.barCode))
+    || relatedProductName(item.name, sku.productName));
+}
+
 export function quoteActions(
   quote: null | SupplierInquiryApi.Quote | undefined,
   permissions: { message: boolean; quote: boolean },
@@ -76,7 +114,7 @@ export function validateQuoteSave(data: SupplierInquiryApi.QuoteSave) {
   if (!Number.isSafeInteger(data.deliveryDate) || data.deliveryDate <= Date.now()) {
     throw new Error('预计交货日期必须晚于当前时间');
   }
-  if (!data.items.length) throw new Error('询价明细不能为空');
+  if (!data.items.length) throw new Error('请至少选择一项可供应的 SKU 并填写报价');
   for (const item of data.items) {
     if (!positiveId(item.inquiryItemId) || !positiveId(item.skuId)) {
       throw new Error('每项需求都必须映射为本店铺有效 SKU');

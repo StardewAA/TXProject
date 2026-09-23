@@ -67,4 +67,10 @@ class ProductReviewWriteSafetyTest {
         assertDoesNotThrow(()->ProductSkuServiceImpl.validateNewSkuMappings(List.of(create)));
         assertEquals(15,create.getStock()); verifyNoInteractions(mapper);
     }
+    @Test void unmappedDraftCanUpdateInitialStockBeforeWmsProvisioning() {
+        existing.setWmsSkuId(null).setWmsWarehouseId(null);
+        service.updateSkuList(10L,List.of(input().setWmsSkuId(null).setWmsWarehouseId(null).setStock(15)));
+        var capture=ArgumentCaptor.forClass(ProductSkuDO.class);verify(mapper).updateById(capture.capture());
+        assertEquals(15,capture.getValue().getStock());
+    }
 }

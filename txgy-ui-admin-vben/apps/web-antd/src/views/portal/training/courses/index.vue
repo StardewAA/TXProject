@@ -185,6 +185,15 @@ function goExam() {
   router.push('/portal/training/exam');
 }
 
+/** 打开课程详情页（课程简介 / 课程视频 / 课程资料） */
+function openDetail(item: TrainingLearnerApi.PortalCourse) {
+  if (!item.id) return;
+  router.push({
+    name: 'PortalTrainingCourseDetail',
+    query: { id: String(item.id) },
+  });
+}
+
 async function startLearning(item: TrainingLearnerApi.PortalCourse) {
   if (!item.id || enrollingId.value) return;
   enrollingId.value = item.id;
@@ -307,23 +316,32 @@ onMounted(async () => {
     </div>
     <div v-else-if="!categoryError && !errorMessage && courses.length" class="course-grid">
       <article v-for="item in courses" :key="item.id" class="course-card">
-        <div class="course-cover">
+        <div class="course-cover" @click="openDetail(item)">
           <img :src="item.coverUrl || defaultCourseCover" :alt="item.title || '课程封面'" />
           <span>{{ item.isRequired ? '必修' : '自主学习' }}</span>
         </div>
         <div class="course-body">
-          <h3>{{ item.title }}</h3>
+          <h3 @click="openDetail(item)">{{ item.title }}</h3>
           <p>{{ item.code || '暂无编号' }} · {{ courseTopicName(item.categoryId) }}</p>
           <div class="course-meta"><span>{{ item.credit ?? 0 }} 学时</span><span>{{ item.lecturer || '讲师待配置' }}</span></div>
           <footer>
             <span>{{ item.isRequired ? '必修课程' : '自主学习' }}</span>
-            <button
-              type="button"
-              :disabled="Boolean(enrollingId)"
-              @click="startLearning(item)"
-            >
-              {{ enrollingId === item.id ? '正在选学…' : '开始学习' }}
-            </button>
+            <div class="foot-actions">
+              <button
+                type="button"
+                class="detail-btn"
+                @click="openDetail(item)"
+              >
+                课程详情
+              </button>
+              <button
+                type="button"
+                :disabled="Boolean(enrollingId)"
+                @click="startLearning(item)"
+              >
+                {{ enrollingId === item.id ? '正在选学…' : '开始学习' }}
+              </button>
+            </div>
           </footer>
         </div>
       </article>
@@ -545,6 +563,7 @@ input:focus {
   height: 118px;
   overflow: hidden;
   color: #fff;
+  cursor: pointer;
   background: linear-gradient(135deg, #304b66, #567991);
 }
 
@@ -602,9 +621,14 @@ input:focus {
   color: #182742;
   font-size: 15px;
   line-height: 22px;
+  cursor: pointer;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
+}
+
+.course-body h3:hover {
+  color: #2865ec;
 }
 
 .course-body p,
@@ -649,6 +673,17 @@ input:focus {
   background: #edf4ff;
   border: 0;
   border-radius: 4px;
+}
+
+.foot-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.course-body footer button.detail-btn {
+  color: #667085;
+  background: #f4f6fa;
 }
 
 .pagination {

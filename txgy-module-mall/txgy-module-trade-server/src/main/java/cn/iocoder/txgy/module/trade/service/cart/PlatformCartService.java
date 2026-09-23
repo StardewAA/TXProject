@@ -110,7 +110,7 @@ public class PlatformCartService {
         Long platformMemberId = resolvePlatformMemberId(legacyMemberId, sourceTenantId);
         LinkedHashSet<Long> ids = normalizeIds(requestedIds);
         requireOwned(ids, platformMemberId);
-        if (cartMapper.deleteByIdsAndMember(ids, platformMemberId) != ids.size()) {
+        if (cartMapper.hardDeleteByIdsAndMember(ids, platformMemberId) != ids.size()) {
             throw exception(PLATFORM_CART_ITEM_NOT_FOUND);
         }
     }

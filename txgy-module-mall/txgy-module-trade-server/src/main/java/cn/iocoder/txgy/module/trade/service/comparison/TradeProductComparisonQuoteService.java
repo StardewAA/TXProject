@@ -5,6 +5,8 @@ import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.txgy.module.member.api.address.MemberAddressApi;
 import cn.iocoder.txgy.module.member.api.address.dto.MemberAddressRespDTO;
 import cn.iocoder.txgy.module.product.api.sku.ProductSkuApi;
+import cn.iocoder.txgy.module.product.api.sku.ProductPublicSkuApi;
+import cn.iocoder.txgy.module.product.api.sku.dto.ProductPublicSkuLogisticsRespDTO;
 import cn.iocoder.txgy.module.product.api.sku.dto.ProductSkuRespDTO;
 import cn.iocoder.txgy.module.product.api.spu.ProductSpuApi;
 import cn.iocoder.txgy.module.product.api.spu.dto.ProductSpuRespDTO;
@@ -13,6 +15,7 @@ import cn.iocoder.txgy.module.trade.controller.app.comparison.vo.AppProductCompa
 import cn.iocoder.txgy.module.trade.controller.app.comparison.vo.AppProductComparisonQuoteRespVO.Item;
 import cn.iocoder.txgy.module.trade.service.delivery.DeliveryExpressTemplateService;
 import cn.iocoder.txgy.module.trade.service.delivery.bo.DeliveryExpressTemplateRespBO;
+import cn.iocoder.txgy.module.trade.service.checkout.PlatformCheckoutFreightService;
 import cn.iocoder.txgy.module.trade.service.price.TradePriceService;
 import cn.iocoder.txgy.module.trade.service.price.bo.TradePriceCalculateReqBO;
 import cn.iocoder.txgy.module.trade.service.price.bo.TradePriceCalculateRespBO;
@@ -24,13 +27,18 @@ import java.util.*;
 public class TradeProductComparisonQuoteService {
     private final ProductSkuApi skus;
     private final ProductSpuApi spus;
+    private final ProductPublicSkuApi publicSkus;
     private final MemberAddressApi addresses;
     private final DeliveryExpressTemplateService templates;
     private final TradePriceService prices;
+    private final PlatformCheckoutFreightService platformFreight;
 
     public TradeProductComparisonQuoteService(ProductSkuApi skus, ProductSpuApi spus, MemberAddressApi addresses,
-                                              DeliveryExpressTemplateService templates, TradePriceService prices) {
+                                              DeliveryExpressTemplateService templates, TradePriceService prices,
+                                              ProductPublicSkuApi publicSkus,
+                                              PlatformCheckoutFreightService platformFreight) {
         this.skus = skus; this.spus = spus; this.addresses = addresses; this.templates = templates; this.prices = prices;
+        this.publicSkus = publicSkus; this.platformFreight = platformFreight;
     }
 
     public AppProductComparisonQuoteRespVO quote(Long memberId, AppProductComparisonQuoteReqVO input) {
@@ -67,15 +75,15 @@ public class TradeProductComparisonQuoteService {
         try {
             sku = skus.getSku(skuId);
             if (sku == null || !Objects.equals(sku.getId(), skuId) || sku.getSpuId() == null) {
-                return state(item, "PRODUCT_UNAVAILABLE", "商品暂不可用，请重新选择");
+                return quotePublic(skuId, quantity, address, item);
             }
             List<ProductSpuRespDTO> visible = spus.validateSpuList(List.of(sku.getSpuId())).getCheckedData();
             if (visible == null || visible.size() != 1 || !Objects.equals(visible.getFirst().getId(), sku.getSpuId())
                     || !Boolean.TRUE.equals(visible.getFirst().getSaleable())) {
-                return state(item, "PRODUCT_UNAVAILABLE", "商品暂不可用，请重新选择");
+                return quotePublic(skuId, quantity, address, item);
             }
             spu = visible.getFirst();
-        } catch (RuntimeException unavailable) { return state(item, "PRODUCT_UNAVAILABLE", "商品暂不可用，请重新选择"); }
+        } catch (RuntimeException unavailable) { return quotePublic(skuId, quantity, address, item); }
         if (sku.getStock() == null || sku.getStock() < quantity) return state(item, "INSUFFICIENT_STOCK", "当前库存不足，调整数量后重试");
         if (sku.getPrice() == null || sku.getPrice() <= 0 || (long) sku.getPrice() * quantity > Integer.MAX_VALUE) {
             return state(item, "PRICE_UNAVAILABLE", "当前金额无法安全估算，请调整数量或联系店铺");
@@ -103,6 +111,50 @@ public class TradeProductComparisonQuoteService {
                     .setAmountsComplete(true).setDiscountAmount((long) price.getDiscountPrice() + price.getVipPrice())
                     .setShippingFee(price.getDeliveryPrice().longValue()).setTotalAmount(price.getPayPrice().longValue());
         } catch (RuntimeException unavailable) { return state(item, "PRICE_UNAVAILABLE", "当前暂不能完成计价，请稍后重试或进入结算页核实"); }
+    }
+
+    /** Cross-tenant portal products are resolved only from the controlled public SKU boundary. */
+    private Item quotePublic(Long skuId, int quantity, MemberAddressRespDTO address, Item item) {
+        ProductPublicSkuLogisticsRespDTO sku;
+        try {
+            List<ProductPublicSkuLogisticsRespDTO> rows = publicSkus.getLogisticsList(List.of(skuId));
+            if (rows == null || rows.size() != 1 || !Objects.equals(rows.getFirst().getSkuId(), skuId)) {
+                return state(item, "PRODUCT_UNAVAILABLE", "商品暂不可用，请重新选择");
+            }
+            sku = rows.getFirst();
+        } catch (RuntimeException unavailable) {
+            return state(item, "PRODUCT_UNAVAILABLE", "商品暂不可用，请重新选择");
+        }
+        if (!Boolean.TRUE.equals(sku.getSaleable()) || sku.getInvalidReason() != null
+                || sku.getTenantId() == null || sku.getEnterpriseId() == null || sku.getShopId() == null
+                || sku.getSpuId() == null || sku.getPrice() == null || sku.getPrice() <= 0) {
+            return state(item, "PRODUCT_UNAVAILABLE", "商品暂不可用，请重新选择");
+        }
+        if (sku.getStock() == null || sku.getStock() < quantity) {
+            return state(item, "INSUFFICIENT_STOCK", "当前库存不足，调整数量后重试");
+        }
+        long goods;
+        try { goods = Math.multiplyExact((long) sku.getPrice(), quantity); }
+        catch (ArithmeticException overflow) { return state(item, "PRICE_UNAVAILABLE", "当前金额无法安全估算，请调整数量或联系店铺"); }
+        if (goods > Integer.MAX_VALUE) return state(item, "PRICE_UNAVAILABLE", "当前金额无法安全估算，请调整数量或联系店铺");
+        item.setUnitPrice(sku.getPrice()).setGoodsAmount(goods);
+        if (address == null) return state(item, "ADDRESS_REQUIRED", "商品金额已核验；请选择本人的收货地址后估算运费和到手金额");
+        try {
+            var key = new PlatformCheckoutFreightService.ShopKey(sku.getTenantId(), sku.getShopId());
+            var freightItem = new PlatformCheckoutFreightService.FreightItem(sku.getTenantId(), sku.getEnterpriseId(),
+                    sku.getShopId(), skuId, sku.getSpuId(), skuId, quantity, sku.getPrice(), goods);
+            var quote = platformFreight.quote(address.getAreaId().longValue(), List.of(freightItem)).get(key);
+            if (quote == null || !quote.ready() || quote.freightAmount() == null) {
+                return state(item, "SHIPPING_UNAVAILABLE", quote == null || quote.failureReason() == null
+                        ? "配送资料不完整，暂不能确定运费" : quote.failureReason());
+            }
+            long total = Math.addExact(goods, quote.freightAmount());
+            if (total <= 0 || total > Integer.MAX_VALUE) return state(item, "PRICE_UNAVAILABLE", "当前金额无法安全估算，请调整数量或联系店铺");
+            return item.setStatus("AVAILABLE").setMessage("跨租户公开商品费用预估，下单时重新核验价格、库存与运费")
+                    .setAmountsComplete(true).setDiscountAmount(0L).setShippingFee(quote.freightAmount()).setTotalAmount(total);
+        } catch (RuntimeException unavailable) {
+            return state(item, "SHIPPING_UNAVAILABLE", "当前地址的运费暂不能核定，请稍后重试");
+        }
     }
 
     /** The shared calculator can treat a missing charge/weight as zero. Never label that as a known complete quote. */

@@ -1,6 +1,7 @@
 package cn.iocoder.txgy.module.trade.service.workbench;
 
 import cn.iocoder.txgy.module.member.api.user.MemberUserApi;
+import cn.iocoder.txgy.module.member.api.platform.MemberPlatformAccountApi;
 import cn.iocoder.txgy.module.trade.controller.admin.order.vo.TradeOrderPageReqVO;
 import cn.iocoder.txgy.module.trade.controller.admin.aftersale.vo.AfterSalePageReqVO;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -12,11 +13,29 @@ import static cn.iocoder.txgy.module.trade.service.workbench.OrderWorkbenchModel
 @Service
 class OrderWorkbenchCountService {
     private final JdbcTemplate jdbc; private final MemberUserApi members;
-    OrderWorkbenchCountService(JdbcTemplate jdbc,MemberUserApi members){this.jdbc=jdbc;this.members=members;}
+    private final MemberPlatformAccountApi platformAccounts;
+    OrderWorkbenchCountService(JdbcTemplate jdbc, MemberUserApi members,
+                               MemberPlatformAccountApi platformAccounts) {
+        this.jdbc=jdbc;this.members=members;this.platformAccounts=platformAccounts;
+    }
     record Filter(String sql,List<Object> args) {}
     Filter prepare(Scope scope,TradeOrderPageReqVO req,Boolean commentStatus) {
-        Builder f=new Builder("o.tenant_id=? AND o.deleted=0",scope.tenant());
-        if(scope.role()==Role.BUYER){f.eq("o.user_id",scope.user());f.eq("o.comment_status",commentStatus);}
+        Builder f;
+        if(scope.role()==Role.BUYER) {
+            Long platformAccountId = resolvePlatformAccountId(scope);
+            if(platformAccountId == null) {
+                f=new Builder("o.tenant_id=? AND o.deleted=0 AND o.user_id=?",scope.tenant(),scope.user());
+            } else {
+                f=new Builder("o.deleted=0 AND ((o.tenant_id=? AND o.user_id=?) OR EXISTS ("
+                        + "SELECT 1 FROM trade_platform_checkout_order r "
+                        + "JOIN trade_platform_checkout c ON c.id=r.checkout_id AND c.deleted=0 "
+                        + "WHERE r.deleted=0 AND r.order_id=o.id AND r.tenant_id=o.tenant_id "
+                        + "AND c.platform_member_id=?))",scope.tenant(),scope.user(),platformAccountId);
+            }
+            f.eq("o.comment_status",commentStatus);
+        } else {
+            f=new Builder("o.tenant_id=? AND o.deleted=0",scope.tenant());
+        }
         if(scope.role()==Role.SUPPLIER){
             f.eq("o.shop_id",scope.shop());
             f.sql.append(" AND EXISTS(SELECT 1 FROM trade_order_item i WHERE i.order_id=o.id AND i.tenant_id=o.tenant_id AND i.deleted=0)")
@@ -36,6 +55,15 @@ class OrderWorkbenchCountService {
             }
         }
         return new Filter(f.sql.toString(),f.args);
+    }
+    private Long resolvePlatformAccountId(Scope scope) {
+        try {
+            var result=platformAccounts.resolve(scope.user(),scope.tenant());
+            var account=result==null?null:result.getCheckedData();
+            return account==null?null:account.getPlatformAccountId();
+        } catch(RuntimeException unavailable) {
+            return null;
+        }
     }
     Counts count(Filter filter) {
         Map<Integer,Long> counts=new HashMap<>();

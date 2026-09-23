@@ -77,6 +77,8 @@ const price = computed(() => settlement.value?.price || {})
 const payablePrice = computed(() => price.value.payPrice !== undefined
   ? Number(price.value.payPrice)
   : 0)
+const customerFacingBlockingReasons = computed(() => (platformPreview.value?.blockingReasons || [])
+  .filter((reason) => !reason.includes('原子子订单与聚合支付尚未接通')))
 let settlementRequest = 0
 function discardStaleDraft() {
   if (isCurrentTenantEpoch(ownerEpoch)) return
@@ -174,7 +176,12 @@ async function submit() {
     submitted.value = true
     platformCheckoutDraft.clear()
     try { await cartStore.fetchCart() } catch { /* 已落库的结算不能因角标刷新失败而伪装成失败。 */ }
-    ElMessage.success(result.payable ? '平台结算单已创建' : '拆单规划已保存，暂不可支付')
+    if (result.payable && result.platformPayOrderId) {
+      ElMessage.success('订单创建成功')
+      await router.replace(`/pay/${result.platformPayOrderId}?platformCheckout=${encodeURIComponent(result.checkoutNo)}`)
+      return
+    }
+    ElMessage.success('结算信息已提交')
   } catch (error) {
     const code = Number((error as { code?: unknown })?.code)
     // Domain validation/auth rejection is definite; transport/server errors may lose a committed response.
@@ -269,16 +276,15 @@ onMounted(async () => {
 
 <template>
   <div class="container page-section checkout-page">
-    <div class="section-heading"><div><h1>{{ inquiryCheckout ? '确认询价成交订单' : '跨租户结算预览' }}</h1><p>{{ inquiryCheckout ? '按已采纳报价快照专用结算，并重新校验商品、库存与收货地址' : '服务端重新读取商品真实归属、价格与库存，并按租户和店铺拆分' }}</p></div></div>
+    <div class="section-heading"><div><h1>{{ inquiryCheckout ? '确认询价成交订单' : '确认订单' }}</h1><p>{{ inquiryCheckout ? '按已采纳报价快照专用结算，并重新校验商品、库存与收货地址' : '请核对收货地址、商品信息和订单金额' }}</p></div></div>
     <ServiceEntry label="平台结算咨询（不代表任一店铺）" :disabled="submitting || loading" />
 
     <el-result v-if="inquiryCheckout && (submitted || needsVerification)" class="panel" :icon="submitted ? 'success' : 'warning'" :title="submitted ? '订单已创建' : '订单提交结果需要核实'" :sub-title="`${recoveryError} 请先到订单列表核实结果，不要重复提交；有意新增采购请重新发起。`"><template #extra><el-button type="primary" @click="router.push('/purchase/orders')">查看我的订单</el-button></template></el-result>
-    <el-result v-else-if="!inquiryCheckout && platformResult" class="panel" :icon="platformResult.payable ? 'success' : 'warning'" :title="platformResult.planningOnly ? '拆单规划已安全保存' : '平台结算记录已返回'" :sub-title="`结算单号 ${platformResult.checkoutNo}；${platformResult.payable ? '可继续支付' : (platformResult.failureReason || '当前不可支付')}`"><template #extra><el-button type="primary" @click="router.push('/member/platform-checkouts')">查看结算记录</el-button><el-button @click="router.push('/cart')">返回购物车</el-button></template></el-result>
+    <el-result v-else-if="!inquiryCheckout && platformResult" class="panel" icon="success" title="结算信息已提交" :sub-title="`结算单号 ${platformResult.checkoutNo}`"><template #extra><el-button type="primary" @click="router.push('/member/orders')">查看我的订单</el-button><el-button @click="router.push('/member/platform-checkouts')">查看结算记录</el-button><el-button @click="router.push('/cart')">返回购物车</el-button></template></el-result>
     <EmptyState v-else-if="!inquiryCheckout && !cartItemIds.length" class="panel" title="没有可结算的商品" description="请返回购物车重新选择"><el-button type="primary" @click="router.push('/cart')">返回购物车</el-button></EmptyState>
 
     <template v-else>
       <el-alert v-if="inquiryCheckout" class="inquiry-notice" title="这是已采纳报价的专用成交入口，不读取购物车结算草稿，也不会调用普通订单创建接口。" type="success" :closable="false" />
-      <el-alert v-else class="inquiry-notice" title="当前可保存经服务端复核的不可支付拆单规划；分店运费、真实子订单和聚合支付接通前，不会创建订单、扣库存或清理购物车。" type="warning" :closable="false" />
 
       <section class="panel checkout-section"><div class="checkout-section__title"><h2>收货地址</h2><el-button type="primary" plain @click="openAddressDialog">新增地址</el-button></div><div v-if="addresses.length" class="address-list"><button v-for="address in addresses" :key="address.id" :class="{ active: address.id === addressId }" @click="addressId = address.id"><strong>{{ address.name }}　{{ address.mobile }}</strong><span>{{ address.areaName }} {{ address.detailAddress }}</span><i v-if="address.defaultStatus">默认地址</i></button></div><EmptyState v-else title="暂无收货地址" description="新增地址后即可继续校验结算"><el-button type="primary" @click="openAddressDialog">新增地址</el-button></EmptyState></section>
 
@@ -313,9 +319,9 @@ onMounted(async () => {
         <div><span>商品金额</span><b>¥{{ formatMoney(price.totalPrice) }}</b></div><div><span>运费</span><b>+ ¥{{ formatMoney(price.deliveryPrice) }}</b></div><div class="checkout-total"><span>应付金额</span><strong>{{ price.payPrice === undefined ? '待结算' : `¥${formatMoney(payablePrice)}` }}</strong></div><el-button type="primary" size="large" :loading="submitting" :disabled="loading || price.payPrice === undefined" @click="submit">按采纳报价创建订单</el-button>
       </section>
       <section v-else class="panel checkout-summary">
-        <el-alert v-if="platformSubmitError" class="submit-error" type="error" :closable="false" title="平台结算未创建任何订单" :description="platformSubmitError" />
-        <el-alert v-if="platformPreview?.blockingReasons?.length" class="submit-error" type="warning" :closable="false" title="当前提交限制"><ul><li v-for="reason in platformPreview.blockingReasons" :key="reason">{{ reason }}</li></ul></el-alert>
-        <div><span>商品金额</span><b>¥{{ formatMoney(platformPreview?.goodsAmount) }}</b></div><div><span>运费</span><b>{{ platformPreview ? `+ ¥${formatMoney(platformPreview.freightAmount)}` : '待核算' }}</b></div><div><span>优惠</span><b>- ¥{{ formatMoney(platformPreview?.discountAmount) }}</b></div><div class="checkout-total"><span>预览应付</span><strong>{{ platformPreview ? `¥${formatMoney(platformPreview.payAmount)}` : '待结算' }}</strong></div><el-button type="primary" size="large" :loading="submitting" :disabled="loading || !addressId || !platformPreview?.validationPassed" @click="submit">{{ platformPreview?.submittable ? '提交跨租户订单' : '保存不可支付拆单规划' }}</el-button>
+        <el-alert v-if="platformSubmitError" class="submit-error" type="error" :closable="false" title="结算提交失败" :description="platformSubmitError" />
+        <el-alert v-if="customerFacingBlockingReasons.length" class="submit-error" type="warning" :closable="false" title="请处理以下问题"><ul><li v-for="reason in customerFacingBlockingReasons" :key="reason">{{ reason }}</li></ul></el-alert>
+        <div><span>商品金额</span><b>¥{{ formatMoney(platformPreview?.goodsAmount) }}</b></div><div><span>运费</span><b>{{ platformPreview ? `+ ¥${formatMoney(platformPreview.freightAmount)}` : '待核算' }}</b></div><div><span>优惠</span><b>- ¥{{ formatMoney(platformPreview?.discountAmount) }}</b></div><div class="checkout-total"><span>应付金额</span><strong>{{ platformPreview ? `¥${formatMoney(platformPreview.payAmount)}` : '待结算' }}</strong></div><el-button type="primary" size="large" :loading="submitting" :disabled="loading || !addressId || !platformPreview?.validationPassed" @click="submit">确认结算</el-button>
       </section>
 
       <el-dialog v-model="addressDialog" title="新增收货地址" width="560px"><el-form label-position="top"><div class="form-row"><el-form-item label="收货人"><el-input v-model="addressForm.name" /></el-form-item><el-form-item label="手机号"><el-input v-model="addressForm.mobile" maxlength="11" /></el-form-item></div><el-form-item label="省/市/区"><el-cascader v-model="addressForm.areaId" :options="areaTree" :props="{ value: 'id', label: 'name', emitPath: false }" filterable clearable style="width:100%" /></el-form-item><el-form-item label="详细地址"><el-input v-model="addressForm.detailAddress" type="textarea" maxlength="120" /></el-form-item><el-form-item label="地图点位（可选）"><div><el-button @click="addressMapDialog = true">地图选点</el-button><p class="address-location">{{ addressLocationText(addressForm) }}</p></div></el-form-item><el-checkbox v-model="addressForm.defaultStatus">设为默认地址</el-checkbox></el-form><template #footer><el-button @click="addressDialog = false">取消</el-button><el-button type="primary" :loading="savingAddress" @click="saveAddress">保存并使用</el-button></template></el-dialog>

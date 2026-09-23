@@ -5,6 +5,8 @@ import cn.iocoder.txgy.module.member.api.level.MemberLevelApi;
 import cn.iocoder.txgy.module.member.api.point.MemberPointApi;
 import cn.iocoder.txgy.module.member.enums.MemberExperienceBizTypeEnum;
 import cn.iocoder.txgy.module.member.enums.point.MemberPointBizTypeEnum;
+import cn.iocoder.txgy.module.pay.api.order.PayOrderApi;
+import cn.iocoder.txgy.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.txgy.module.trade.dal.dataobject.aftersale.AfterSaleDO;
 import cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderDO;
 import cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderItemDO;
@@ -28,6 +30,8 @@ public class TradeMemberPointOrderHandler implements TradeOrderHandler {
     private MemberPointApi memberPointApi;
     @Resource
     private MemberLevelApi memberLevelApi;
+    @Resource
+    private PayOrderApi payOrderApi;
 
     @Resource
     private AfterSaleService afterSaleService;
@@ -40,13 +44,14 @@ public class TradeMemberPointOrderHandler implements TradeOrderHandler {
 
     @Override
     public void afterPayOrder(TradeOrderDO order, List<TradeOrderItemDO> orderItems) {
-        // 增加用户积分（订单赠送）
-        addPoint(order.getUserId(), order.getGivePoint(), MemberPointBizTypeEnum.ORDER_GIVE,
-                order.getId());
-
-        // 增加用户经验
-        memberLevelApi.addExperience(order.getUserId(), order.getPayPrice(),
-                MemberExperienceBizTypeEnum.ORDER_GIVE.getType(), String.valueOf(order.getId())).checkError();
+        executeInMemberTenant(order, () -> {
+            // 增加用户积分（订单赠送）
+            addPoint(order.getUserId(), order.getGivePoint(), MemberPointBizTypeEnum.ORDER_GIVE,
+                    order.getId());
+            // 增加用户经验
+            memberLevelApi.addExperience(order.getUserId(), order.getPayPrice(),
+                    MemberExperienceBizTypeEnum.ORDER_GIVE.getType(), String.valueOf(order.getId())).checkError();
+        });
     }
 
     @Override
@@ -78,15 +83,34 @@ public class TradeMemberPointOrderHandler implements TradeOrderHandler {
 
     @Override
     public void afterCancelOrderItem(TradeOrderDO order, TradeOrderItemDO orderItem) {
-        // 增加（回滚）积分（订单抵扣）
-        addPoint(order.getUserId(), orderItem.getUsePoint(), MemberPointBizTypeEnum.ORDER_USE_CANCEL_ITEM, orderItem.getId());
-        // 扣减（回滚）积分（订单赠送）
-        reducePoint(order.getUserId(), orderItem.getGivePoint(), MemberPointBizTypeEnum.ORDER_GIVE_CANCEL_ITEM, orderItem.getId());
-
-        // 扣减（回滚）用户经验
+        // 售后单属于店铺租户，必须在切换到会员租户前读取。
         AfterSaleDO afterSale = afterSaleService.getAfterSale(orderItem.getAfterSaleId());
-        memberLevelApi.reduceExperience(order.getUserId(), afterSale.getRefundPrice(),
-                MemberExperienceBizTypeEnum.ORDER_GIVE_CANCEL_ITEM.getType(), String.valueOf(orderItem.getId())).checkError();
+        executeInMemberTenant(order, () -> {
+            // 增加（回滚）积分（订单抵扣）
+            addPoint(order.getUserId(), orderItem.getUsePoint(), MemberPointBizTypeEnum.ORDER_USE_CANCEL_ITEM, orderItem.getId());
+            // 扣减（回滚）积分（订单赠送）
+            reducePoint(order.getUserId(), orderItem.getGivePoint(), MemberPointBizTypeEnum.ORDER_GIVE_CANCEL_ITEM, orderItem.getId());
+
+            // 扣减（回滚）用户经验
+            memberLevelApi.reduceExperience(order.getUserId(), afterSale.getRefundPrice(),
+                    MemberExperienceBizTypeEnum.ORDER_GIVE_CANCEL_ITEM.getType(), String.valueOf(orderItem.getId())).checkError();
+        });
+    }
+
+    /**
+     * 跨租户商城的卖家订单保存在店铺租户，但会员资产属于原支付租户。
+     */
+    private void executeInMemberTenant(TradeOrderDO order, Runnable action) {
+        if (payOrderApi == null || order.getPayOrderId() == null) {
+            action.run();
+            return;
+        }
+        Long memberTenantId = payOrderApi.getOrderTenantId(order.getPayOrderId()).getCheckedData();
+        if (memberTenantId == null) {
+            action.run();
+            return;
+        }
+        TenantUtils.execute(memberTenantId, action);
     }
 
     /**

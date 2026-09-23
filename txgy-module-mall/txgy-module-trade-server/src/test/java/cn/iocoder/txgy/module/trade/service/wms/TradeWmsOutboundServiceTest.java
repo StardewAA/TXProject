@@ -103,6 +103,28 @@ class TradeWmsOutboundServiceTest {
     }
 
     @Test
+    void completedWmsResponseMakesOrderImmediatelyDeliverable() {
+        ProductSkuRespDTO sku = productSku(1L, 101L, 201L, "件");
+        when(productSkuApi.getSkuMap(any())).thenReturn(Map.of(1L, sku));
+        when(stockReadApi.getSkuOptions()).thenReturn(success(List.of(
+                wmsSku(101L, "MAT-1", "SKU-1", "件"))));
+        when(stockReadApi.getWarehouses()).thenReturn(success(List.of(warehouse(201L, "FG-A"))));
+        doAnswer(invocation -> {
+            WmsOrderRequestDTO request = invocation.getArgument(0);
+            return success(new WmsIntegrationAcceptedRespDTO().setAccepted(true)
+                    .setRequestId(request.getRequestId()).setTargetOrderNo("WMS-" + request.getSourceOrderNo())
+                    .setBusinessStatus("COMPLETED"));
+        }).when(integrationApi).createMallShipment(any());
+
+        service.createForPaidOrder(new TradeOrderDO().setId(500L).setNo("o500").setShopId(10L),
+                List.of(item(11L, 1L, 10L, 1, 1200)));
+
+        ArgumentCaptor<TradeWmsShipmentDO> record = ArgumentCaptor.forClass(TradeWmsShipmentDO.class);
+        verify(shipmentMapper).updateById(record.capture());
+        assertEquals(TradeWmsOutboundService.COMPLETED, record.getValue().getStatus());
+    }
+
+    @Test
     void missingOrMixedShopOwnershipIsManualReviewAndNeverSubmitted() {
         ProductSkuRespDTO first = productSku(1L, 101L, 201L, "件");
         ProductSkuRespDTO second = productSku(2L, 102L, 201L, "件");

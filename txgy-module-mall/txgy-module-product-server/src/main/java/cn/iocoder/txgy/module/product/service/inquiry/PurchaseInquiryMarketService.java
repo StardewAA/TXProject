@@ -1330,15 +1330,16 @@ public class PurchaseInquiryMarketService {
     private ValidatedQuote validateQuoteItems(Long supplierTenantId, Long inquiryTenantId, Long inquiryId,
                                               Long shopId, List<InquiryItemDO> requested,
                                               List<InquiryQuoteSaveReqVO.Item> inputs) {
-        if (requested.isEmpty() || inputs == null || inputs.size() != requested.size()) {
-            throw invalid("报价必须逐项覆盖询价明细");
+        if (requested.isEmpty() || inputs == null || inputs.isEmpty()) {
+            throw invalid("报价至少需要包含一项询价明细");
         }
         Map<Long, InquiryItemDO> requestedById = requested.stream()
                 .collect(Collectors.toMap(InquiryItemDO::getId, Function.identity()));
-        if (inputs.stream().map(InquiryQuoteSaveReqVO.Item::getInquiryItemId).distinct().count() != inputs.size()
-                || !requestedById.keySet().equals(inputs.stream().map(InquiryQuoteSaveReqVO.Item::getInquiryItemId)
-                .collect(Collectors.toSet()))) {
-            throw invalid("报价必须逐项且不重复覆盖询价明细");
+        Set<Long> quotedInquiryItemIds = inputs.stream().map(InquiryQuoteSaveReqVO.Item::getInquiryItemId)
+                .collect(Collectors.toSet());
+        if (quotedInquiryItemIds.size() != inputs.size()
+                || !requestedById.keySet().containsAll(quotedInquiryItemIds)) {
+            throw invalid("报价明细必须属于当前询价且不能重复");
         }
         if (inputs.stream().map(InquiryQuoteSaveReqVO.Item::getSkuId).distinct().count() != inputs.size()) {
             throw invalid("每项询价明细必须映射不同的商品 SKU");

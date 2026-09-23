@@ -40,6 +40,7 @@ class MallPortalCatalogServiceTest {
         request.setPageSize(10);
         request.setKeyword("  coating  ");
         request.setCategoryId(88L);
+        request.setCategoryName("  Protective Materials  ");
 
         MallPortalCatalogMapper.PortalProductRow row = productRow();
         MallPortalCatalogMapper.PortalSkuRow sku = new MallPortalCatalogMapper.PortalSkuRow();
@@ -48,8 +49,9 @@ class MallPortalCatalogServiceTest {
         sku.setSpuName("Protective Coating");
         sku.setPicUrl("sku.png");
         sku.setPrice(1299);
-        when(mapper.countProducts(null, "coating", 88L)).thenReturn(1L);
-        when(mapper.selectProducts(null, "coating", 88L, 10L, 10)).thenReturn(List.of(row));
+        request.setShopId(401L);
+        when(mapper.countProducts(null, "coating", 88L, "Protective Materials", 401L)).thenReturn(1L);
+        when(mapper.selectProducts(null, "coating", 88L, "Protective Materials", 401L, null, null, 10L, 10)).thenReturn(List.of(row));
         when(mapper.selectPublicSkus(List.of(501L))).thenReturn(List.of(sku));
 
         PageResult<AppPortalProductRespVO> result = service.getProducts(request);
@@ -71,7 +73,7 @@ class MallPortalCatalogServiceTest {
         AppPortalProductPageReqVO request = new AppPortalProductPageReqVO();
         MallPortalCatalogMapper.PortalTenantRow tenant = tenantRow();
         when(mapper.selectTenantBySlug("alpha-mall")).thenReturn(tenant);
-        when(mapper.countProducts("alpha-mall", null, null)).thenReturn(0L);
+        when(mapper.countProducts("alpha-mall", null, null, null, null)).thenReturn(0L);
 
         PageResult<AppPortalProductRespVO> result = service.getTenantProducts(" Alpha-Mall ", request);
 
@@ -147,6 +149,21 @@ class MallPortalCatalogServiceTest {
         ServiceException limit = assertThrows(ServiceException.class,
                 () -> service.getHotTenants("7d", 101));
         assertEquals(400, limit.getCode());
+    }
+
+    @Test
+    void getShopsReturnsAllPublicShopsAndRejectsHiddenDetail() {
+        MallPortalCatalogMapper.PortalShopRow row = new MallPortalCatalogMapper.PortalShopRow();
+        row.setTenantId(2001L); row.setTenantSlug("alpha-mall"); row.setTenantName("Alpha Mall");
+        row.setEnterpriseId(301L); row.setEnterpriseName("Alpha Enterprise");
+        row.setShopId(401L); row.setShopName("Alpha Shop"); row.setProductCount(35L);
+        when(mapper.selectShops("coating")).thenReturn(List.of(row));
+        when(mapper.selectShopById(401L)).thenReturn(row);
+
+        assertEquals(1, service.getShops("  coating  ").size());
+        assertEquals(35L, service.getShop(401L).getProductCount());
+        ServiceException hidden = assertThrows(ServiceException.class, () -> service.getShop(999L));
+        assertEquals(404, hidden.getCode());
     }
 
     private static MallPortalCatalogMapper.PortalProductRow productRow() {

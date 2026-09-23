@@ -67,6 +67,7 @@ class PlatformCheckoutServiceTest {
     private PlatformCheckoutPlanItemMapper planItemMapper;
     private TradeNoRedisDAO tradeNoRedisDAO;
     private PlatformCheckoutFreightService freightService;
+    private PlatformCheckoutOrderService orderService;
     private PlatformCheckoutService service;
 
     @BeforeEach
@@ -81,9 +82,11 @@ class PlatformCheckoutServiceTest {
         planItemMapper = mock(PlatformCheckoutPlanItemMapper.class);
         tradeNoRedisDAO = mock(TradeNoRedisDAO.class);
         freightService = mock(PlatformCheckoutFreightService.class);
+        orderService = mock(PlatformCheckoutOrderService.class);
         service = new PlatformCheckoutService(cartMapper, productApi, accountApi,
                 checkoutMapper, checkoutOrderMapper, allocationMapper, planMapper, planItemMapper, tradeNoRedisDAO,
-                freightService);
+                freightService, orderService);
+        when(orderService.formalize(any(), any(), any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(freightService.quote(any(), any())).thenAnswer(invocation -> {
             Collection<PlatformCheckoutFreightService.FreightItem> items = invocation.getArgument(1);
             Map<PlatformCheckoutFreightService.ShopKey, PlatformCheckoutFreightService.FreightQuote> quotes =
@@ -121,12 +124,12 @@ class PlatformCheckoutServiceTest {
         assertEquals(3, result.getValidItemCount());
         assertEquals(6, result.getTotalQuantity());
         assertTrue(result.getValidationPassed());
-        assertFalse(result.getSubmittable());
+        assertTrue(result.getSubmittable());
         assertEquals(2, result.getTenantGroups().size());
         assertEquals(99L, result.getAddress().getAddressId());
         assertEquals(2, result.getTenantGroups().getFirst().getShops().size());
         assertEquals(2400L, result.getTenantGroups().getFirst().getShops().getFirst().getGoodsAmount());
-        assertTrue(result.getBlockingReasons().contains(PlatformCheckoutService.SUBMIT_BLOCK_REASON));
+        assertTrue(result.getBlockingReasons().isEmpty());
     }
 
     @Test
@@ -198,6 +201,22 @@ class PlatformCheckoutServiceTest {
         assertFalse(result.getList().getFirst().getPayable());
         assertEquals("等待聚合支付接通", result.getList().getFirst().getFailureReason());
         verify(checkoutMapper).selectPageByMember(pageParam, 9001L);
+    }
+
+    @Test
+    void pageDerivesPartiallyDeliveredFromCurrentChildOrderStatuses() {
+        PlatformCheckoutDO checkout = completedCheckout(0L).setAggregateStatus("ALL_UNDELIVERED");
+        PageParam pageParam = new PageParam().setPageNo(1).setPageSize(10);
+        when(checkoutMapper.selectPageByMember(pageParam, 9001L))
+                .thenReturn(new PageResult<>(List.of(checkout), 1L));
+        when(checkoutOrderMapper.selectListByCheckout(checkout.getId(), checkout.getCheckoutNo()))
+                .thenReturn(List.of(
+                        childOrder(11L, 21L, 2001L, 401L, 1000L, 0L).setOrderStatus(20),
+                        childOrder(12L, 22L, 2002L, 402L, 2000L, 0L).setOrderStatus(10)));
+
+        var result = service.page(316L, 2009L, pageParam);
+
+        assertEquals("PARTIALLY_DELIVERED", result.getList().getFirst().getAggregateStatus());
     }
 
     @Test
@@ -287,7 +306,7 @@ class PlatformCheckoutServiceTest {
         verify(planItemMapper, times(1)).insert(any(PlatformCheckoutPlanItemDO.class));
         verify(checkoutOrderMapper, never()).insert(any(PlatformCheckoutOrderDO.class));
         verify(allocationMapper, never()).insert(any(PlatformFundAllocationDO.class));
-        verify(cartMapper, never()).deleteByIdsAndMember(any(), any());
+        verify(cartMapper, never()).hardDeleteByIdsAndMember(any(), any());
     }
 
     @Test
@@ -310,7 +329,7 @@ class PlatformCheckoutServiceTest {
         verify(planItemMapper, never()).insert(any(PlatformCheckoutPlanItemDO.class));
         verify(checkoutOrderMapper, never()).insert(any(PlatformCheckoutOrderDO.class));
         verify(allocationMapper, never()).insert(any(PlatformFundAllocationDO.class));
-        verify(cartMapper, never()).deleteByIdsAndMember(any(), any());
+        verify(cartMapper, never()).hardDeleteByIdsAndMember(any(), any());
     }
 
     @Test
@@ -346,7 +365,7 @@ class PlatformCheckoutServiceTest {
         assertTrue(List.of(transactional.rollbackFor()).contains(Exception.class));
         verify(checkoutOrderMapper, never()).insert(any(PlatformCheckoutOrderDO.class));
         verify(allocationMapper, never()).insert(any(PlatformFundAllocationDO.class));
-        verify(cartMapper, never()).deleteByIdsAndMember(any(), any());
+        verify(cartMapper, never()).hardDeleteByIdsAndMember(any(), any());
     }
 
     @Test

@@ -15,6 +15,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'tenants/:tenantSlug', name: 'tenant-mall', meta: { platform: true }, component: () => import('@/views/PlatformPortalView.vue') },
       { path: 'tenants/:tenantSlug/products/:spuId', name: 'tenant-product-detail', meta: { platform: true }, component: () => import('@/views/PlatformProductDetailView.vue') },
       { path: 'tenant-home', name: 'legacy-tenant-home', component: () => import('@/views/HomeView.vue') },
+      { path: 'companies', name: 'companies', meta: { platform: true }, component: () => import('@/views/CompaniesView.vue') },
       { path: 'shops', name: 'shops', component: () => import('@/views/ShopsView.vue') },
       { path: 'shops/:id', name: 'shop-detail', component: () => import('@/views/ShopDetailView.vue') },
       { path: 'categories', name: 'categories', component: () => import('@/views/CategoriesView.vue') },

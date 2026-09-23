@@ -309,7 +309,8 @@ def platform_put(path, token, tenant_id, body: dict | None = None):
 def current_user(authorization: str = Header(""), tenant_id: int = Header(...)):
     if not authorization.startswith("Bearer ") or len(authorization)<10:
         raise HTTPException(401, "请先登录平台")
-    if tenant_id <= 0: raise HTTPException(403, "企业信息无效")
+    # 平台中存在 tenant_id=0 的超级管理员/系统账号，不再强制 tenant_id>0
+    if tenant_id < 0: raise HTTPException(403, "企业信息无效")
     info = platform_get("/system/auth/get-permission-info", authorization, tenant_id)
     user = info.get("user") or {}
     if not user.get("id"): raise HTTPException(401, "无法确认用户身份")
@@ -754,8 +755,43 @@ def list_papers(db: Session = Depends(db_session), actor: Actor = Depends(requir
     return ok([paper_view(p) for p in db.scalars(select(Paper).order_by(Paper.id.desc()))])
 
 
+@app.get("/api/courses")
+def list_courses(actor: Actor = Depends(require("admin", "teacher", "reviewer", "viewer"))):
+    """课程管理（模块二）的课程列表，供试卷「关联课程」下拉选择。"""
+    items: list[dict] = []
+    for page in (1, 2, 3):
+        data = platform_get(f"/training/course/page?pageNo={page}&pageSize=200", actor.token, actor.tenant_id) or {}
+        batch = data.get("list") or []
+        items += [{"id": x.get("id"), "name": str(x.get("title") or x.get("name") or "")}
+                  for x in batch if isinstance(x, dict) and x.get("id")]
+        if len(batch) < 200:
+            break
+    return ok(items)
+
+
+@app.get("/api/work-types")
+def list_work_types(actor: Actor = Depends(require("admin", "teacher", "reviewer", "viewer"))):
+    """资源中心标签管理的工种标签，供试卷「适用工种」下拉选择。"""
+    return ok(platform_tag_options(actor, "work_type"))
+
+
+@app.get("/api/job-certs")
+def list_job_certs(actor: Actor = Depends(require("admin", "teacher", "reviewer", "viewer"))):
+    """基础数据的工种资格证列表，供试卷「考试通过发放工种资格证」下拉选择。"""
+    data = platform_get("/training/job-cert/page?pageNo=1&pageSize=200", actor.token, actor.tenant_id) or {}
+    return ok([{"id": x.get("id"), "name": str(x.get("certName") or "")}
+               for x in (data.get("list") or []) if isinstance(x, dict) and x.get("id")])
+
+
+def ensure_course_exam_course(exam_type: str, course_id: int | None):
+    """结课考试必须关联系统中的课程（课程学习完成情况将作为参考资格）。"""
+    if exam_type == "course_exam" and not course_id:
+        raise HTTPException(422, "结课考试必须关联系统中的课程——请在「关联课程」中选择一门课程")
+
+
 @app.post("/api/papers")
 def create_paper(body: PaperIn, db: Session = Depends(db_session), actor: Actor = Depends(require("admin", "teacher"))):
+    ensure_course_exam_course(body.exam_type, body.course_id)
     data = body.model_dump()
     data["work_types"] = json.dumps(name_list(body.work_types), ensure_ascii=False)
     data["cert_names"] = json.dumps(name_list(body.cert_names), ensure_ascii=False)
@@ -788,6 +824,7 @@ def tag_match(qtags: dict, wanted: dict) -> bool:
 
 @app.post("/api/papers/auto-generate")
 def auto_paper(body: AutoPaperIn, db: Session = Depends(db_session), actor: Actor = Depends(require("admin", "teacher"))):
+    ensure_course_exam_course(body.exam_type, body.course_id)
     selected: list[tuple[dict, float]] = []
     shortages = []
     if not body.sections: raise HTTPException(422,"至少选择一种题型")
@@ -817,6 +854,12 @@ def auto_paper(body: AutoPaperIn, db: Session = Depends(db_session), actor: Acto
                 if wanted else "请调低各题型数量，或先在资源中心补充题库。")
         raise HTTPException(422, detail={"message": f"随机组卷失败：{scope}题库数量不足（{detail_txt}）。{hint}", "shortages": shortages})
     total = round(sum(score for _, score in selected), 2)
+    # 分值整数化：每题 = floor(100/N)，余数分摊到前几题，保证总分恰为 100 且无小数分
+    n = len(selected)
+    if n:
+        base, rem = divmod(100, n)
+        selected = [(row, base + (1 if i < rem else 0)) for i, (row, _) in enumerate(selected)]
+        total = 100.0
     if total > PAPER_TOTAL_LIMIT: raise HTTPException(422, f"试卷总分不能超过 {PAPER_TOTAL_LIMIT} 分，当前规则合计 {total:g} 分")
     if body.pass_score > total: raise HTTPException(422, "及格分不能高于总分")
     data = body.model_dump(exclude={"sections", "tags", "difficulty"})
@@ -928,6 +971,15 @@ def start_exam(task_id: int, db: Session = Depends(db_session), actor: Actor = D
     if not (s.start_at <= moment <= s.end_at): raise HTTPException(409, "当前不在可进入考试的时间窗口")
     if db.scalar(select(ExamAttempt).where(ExamAttempt.task_id==t.id,ExamAttempt.status=="submitted")): raise HTTPException(409,"上次答卷尚待阅卷，暂不能重考")
     if t.attempt_used >= p.retry_limit + 1: raise HTTPException(409, "考试次数已用完")
+    if p.exam_type == "course_exam" and p.course_id:
+        # 结课考试资格门禁：必须已完成关联课程的学习（学习中心状态=已完成）
+        try:
+            my = platform_get("/training/portal/learner/course/my-list", actor.token, actor.tenant_id) or {}
+        except HTTPException:
+            raise HTTPException(503, "暂时无法核验课程学习状态，请稍后重试再进入考试")
+        done = {int(c.get("courseId") or 0) for c in (my.get("completedCourses") or []) if isinstance(c, dict)}
+        if int(p.course_id) not in done:
+            raise HTTPException(403, "结课考试需先完成关联课程的学习——请到学习中心完成该课程后，再参加考试")
     deadline = min(moment + timedelta(minutes=parse(s.scope_detail,{}).get("duration_min",p.duration_min)), s.end_at)
     attempt = ExamAttempt(task_id=t.id, user_id=actor.id, schedule_id=s.id, deadline_at=deadline)
     db.add(attempt); t.attempt_used += 1; t.status = "doing"; db.commit()

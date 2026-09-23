@@ -6,14 +6,72 @@ import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.txgy.module.trade.controller.admin.aftersale.vo.AfterSalePageReqVO;
 import cn.iocoder.txgy.module.trade.controller.app.aftersale.vo.AppAfterSalePageReqVO;
 import cn.iocoder.txgy.module.trade.dal.dataobject.aftersale.AfterSaleDO;
+import cn.iocoder.txgy.module.trade.dal.mysql.order.TradeOrderMapper;
+import com.baomidou.mybatisplus.annotation.InterceptorIgnore;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 
 import java.util.Collection;
 import java.util.List;
 
 @Mapper
 public interface AfterSaleMapper extends BaseMapperX<AfterSaleDO> {
+
+    @InterceptorIgnore(tenantLine = "true")
+    @Select("SELECT tenant_id FROM trade_after_sale WHERE id=#{afterSaleId} AND deleted=0 LIMIT 1")
+    Long selectTenantIdByIdCrossTenant(@Param("afterSaleId") Long afterSaleId);
+
+    @InterceptorIgnore(tenantLine = "true")
+    @Select("<script>SELECT a.* FROM trade_after_sale a "
+            + "JOIN trade_order o ON o.id=a.order_id AND o.tenant_id=a.tenant_id "
+            + "AND o.user_id=a.user_id AND o.deleted=0 "
+            + "WHERE a.deleted=0 AND " + TradeOrderMapper.APP_BUYER_OWNERSHIP
+            + " <if test='statuses != null and !statuses.isEmpty()'>AND a.status IN "
+            + "<foreach collection='statuses' item='status' open='(' separator=',' close=')'>#{status}</foreach></if>"
+            + " ORDER BY a.id DESC LIMIT #{offset},#{pageSize}</script>")
+    List<AfterSaleDO> selectAppBuyerPage(@Param("legacyMemberId") Long legacyMemberId,
+                                          @Param("sourceTenantId") Long sourceTenantId,
+                                          @Param("platformAccountId") Long platformAccountId,
+                                          @Param("statuses") Collection<Integer> statuses,
+                                          @Param("offset") long offset,
+                                          @Param("pageSize") int pageSize);
+
+    @InterceptorIgnore(tenantLine = "true")
+    @Select("<script>SELECT COUNT(*) FROM trade_after_sale a "
+            + "JOIN trade_order o ON o.id=a.order_id AND o.tenant_id=a.tenant_id "
+            + "AND o.user_id=a.user_id AND o.deleted=0 "
+            + "WHERE a.deleted=0 AND " + TradeOrderMapper.APP_BUYER_OWNERSHIP
+            + " <if test='statuses != null and !statuses.isEmpty()'>AND a.status IN "
+            + "<foreach collection='statuses' item='status' open='(' separator=',' close=')'>#{status}</foreach></if>"
+            + "</script>")
+    Long selectAppBuyerCount(@Param("legacyMemberId") Long legacyMemberId,
+                             @Param("sourceTenantId") Long sourceTenantId,
+                             @Param("platformAccountId") Long platformAccountId,
+                             @Param("statuses") Collection<Integer> statuses);
+
+    @InterceptorIgnore(tenantLine = "true")
+    @Select("<script>SELECT a.* FROM trade_after_sale a "
+            + "JOIN trade_order o ON o.id=a.order_id AND o.tenant_id=a.tenant_id "
+            + "AND o.user_id=a.user_id AND o.deleted=0 "
+            + "WHERE a.deleted=0 AND a.id=#{afterSaleId} AND " + TradeOrderMapper.APP_BUYER_OWNERSHIP
+            + " LIMIT 1</script>")
+    AfterSaleDO selectAppBuyerOwnedAfterSale(@Param("afterSaleId") Long afterSaleId,
+                                              @Param("legacyMemberId") Long legacyMemberId,
+                                              @Param("sourceTenantId") Long sourceTenantId,
+                                              @Param("platformAccountId") Long platformAccountId);
+
+    @InterceptorIgnore(tenantLine = "true")
+    @Select("<script>SELECT a.tenant_id FROM trade_after_sale a "
+            + "JOIN trade_order o ON o.id=a.order_id AND o.tenant_id=a.tenant_id "
+            + "AND o.user_id=a.user_id AND o.deleted=0 "
+            + "WHERE a.deleted=0 AND a.id=#{afterSaleId} AND " + TradeOrderMapper.APP_BUYER_OWNERSHIP
+            + " LIMIT 1</script>")
+    Long selectAppBuyerOwnedAfterSaleTenantId(@Param("afterSaleId") Long afterSaleId,
+                                               @Param("legacyMemberId") Long legacyMemberId,
+                                               @Param("sourceTenantId") Long sourceTenantId,
+                                               @Param("platformAccountId") Long platformAccountId);
 
     default PageResult<AfterSaleDO> selectPage(AfterSalePageReqVO reqVO) {
         return selectPage(reqVO, new LambdaQueryWrapperX<AfterSaleDO>()

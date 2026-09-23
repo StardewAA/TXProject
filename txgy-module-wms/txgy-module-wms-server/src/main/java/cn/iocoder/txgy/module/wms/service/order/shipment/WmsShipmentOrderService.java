@@ -43,6 +43,16 @@ public interface WmsShipmentOrderService {
     void completeShipmentOrder(Long id);
 
     /**
+     * 自动完成商城销售出库。
+     *
+     * <p>仅允许来源为 MALL 的出库单调用。商城订单已经完成支付和服务端库存校验，
+     * WMS 仍负责最终库存扣减与流水落库，但不再要求仓库人员重复提交 BPM 审批。</p>
+     *
+     * @param id 出库单编号
+     */
+    void autoCompleteMallShipment(Long id);
+
+    /**
      * 提交出库单审批
      *
      * @param userId 发起人用户编号

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isPlatformPortalAddress, platformNavigationTarget, scopeLocalPath, safeReturnPath, stripPlatformTenantHints, tenantShareLink } from '../sheep/helper/tenant-navigation.mjs';
+import { isPlatformAccountAddress, isPlatformPortalAddress, platformNavigationTarget, platformPublicPath, scopeLocalPath, safeReturnPath, stripPlatformTenantHints, tenantShareLink } from '../sheep/helper/tenant-navigation.mjs';
 import { entryHint } from '../sheep/helper/tenant-entry.mjs';
 for (const tenant of ['1', '9001']) {
   for (const path of ['/goods/7','/shops/7','/member/orders/7','/purchase/inquiries/7','/sales/shops/7/orders','/pages/goods/index?id=7']) {
@@ -30,6 +30,10 @@ test('platform home and tenant-slug catalog routes never inherit a tenant id', (
   assert.equal(scopeLocalPath('/pages/index/index?tenantId=9001', '9001'), '/pages/index/index');
   assert.equal(scopeLocalPath('/pages/goods/list?portal=1&tenantSlug=kedun&tenant_id=9001', '9001'),
     '/pages/goods/list?portal=1&tenantSlug=kedun');
+  assert.equal(platformPublicPath('/pages/goods/list?portal=1&tenantSlug=kedun&tenantId=2024'),
+    '/pages/goods/list?portal=1&tenantSlug=kedun');
+  assert.equal(scopeLocalPath('/pages/goods/list?portal=1&tenantSlug=kedun&tenantId=2024', '2009'),
+    '/pages/goods/list?portal=1&tenantSlug=kedun');
   assert.equal(isPlatformPortalAddress('https://mall/#/pages/goods/list?tenantSlug=kedun&tenantId=1'), true);
   assert.equal(stripPlatformTenantHints('https://mall/#/pages/goods/list?tenantSlug=kedun&tenantId=1'),
     'https://mall/#/pages/goods/list?tenantSlug=kedun');
@@ -39,6 +43,9 @@ test('platform home and tenant-slug catalog routes never inherit a tenant id', (
   assert.equal(stripPlatformTenantHints('https://mall/#/pages/goods/index?tenantSlug=kedun&id=7&tenantId=1'),
     'https://mall/#/pages/goods/index?tenantSlug=kedun&id=7');
   assert.equal(isPlatformPortalAddress('https://mall/#/pages/order/list?tenantId=1'), false);
+  assert.equal(isPlatformAccountAddress('https://mall/pages/index/user?tenantId=1', '1'), true);
+  assert.equal(isPlatformAccountAddress('https://mall/#/pages/order/list?tenantId=1', '1'), true);
+  assert.equal(isPlatformAccountAddress('https://mall/pages/index/user?tenantId=2009', '1'), false);
   assert.equal(scopeLocalPath('/pages/order/list?tenantId=9001', '9001'), '/pages/order/list?tenantId=9001');
   assert.equal(scopeLocalPath('/pages/index/user?tenant_id=9001', '9001'), '/pages/index/user?tenantId=9001');
 });
@@ -51,8 +58,8 @@ test('platform cart and checkout routes never inherit a tenant id', () => {
   assert.equal(isPlatformPortalAddress('https://mall/#/pages/platform/checkout?cartItemIds=11%2C12'), true);
   assert.equal(platformNavigationTarget('/pages/index/cart', 'https://mall/#/pages/index/index'), '/pages/platform/cart');
   assert.equal(platformNavigationTarget('/pages/index/cart', 'https://mall/#/pages/index/user?tenantId=1'), '/pages/platform/cart');
-  assert.equal(platformNavigationTarget('/pages/index/category', 'https://mall/#/pages/index/user?tenantId=1'), '/pages/goods/list?portal=1');
-  assert.equal(platformNavigationTarget('/pages/index/search', 'https://mall/#/pages/index/index'), '/pages/goods/list?portal=1');
+  assert.equal(platformNavigationTarget('/pages/index/category', 'https://mall/#/pages/index/user?tenantId=1'), '/pages/index/category');
+  assert.equal(platformNavigationTarget('/pages/index/search', 'https://mall/#/pages/index/index'), '/pages/index/search');
 });
 test('conflicting aliases, duplicate hints, malformed hints and hash hints fail closed', () => {
   for (const path of ['/goods/7?tenantId=1','/goods/7?tenant_id=bad','/goods/7?tenantId=9001&tenantId=1',

@@ -38,8 +38,9 @@ async function renderMap() {
   const current = generation
   const queries = logisticsMapQueries(props.events)
   const originAddress = props.dispatchOriginAddress?.trim()
-  if (!queries.length && !originAddress) {
-    message.value = '店铺未登记发货地址，暂不能绘制预计物流路线。'
+  const hasReceiver = hasAddressLocation(props.receiverLocation) || Boolean(props.receiverAddress?.trim())
+  if (!queries.length && !originAddress && !hasReceiver) {
+    message.value = '暂无可用的物流或收货点位。'
     return
   }
   if (!isAmapConfigured()) { message.value = '地图服务未配置，文字物流轨迹不受影响。'; return }
@@ -65,8 +66,8 @@ async function renderMap() {
       if (position && current === generation && !points.some(point => point.position[0] === position[0] && point.position[1] === position[1])) points.push({ position, label: '收货地址（文字定位）' })
     }
     if (current !== generation) return
-    if (points.length < 2) {
-      message.value = '暂未获得完整的发货地和收货地坐标，已停止地图加载；文字地址和物流轨迹不受影响。'
+    if (!points.length) {
+      message.value = '暂未解析到可展示的点位；文字地址和物流轨迹不受影响。'
       renderedSignature = signature
       return
     }
@@ -82,7 +83,7 @@ async function renderMap() {
     renderedSignature = signature
     message.value = points.length > 1
       ? (queries.length ? `已展示 ${points.length} 个可定位节点。虚线仅表示节点先后，不代表车辆实际行驶路线。` : '已展示店铺发货地至收货地址的预计路线，不代表承运商实际行驶轨迹。')
-      : '仅识别到一个点位，暂不能形成物流线路。'
+      : '已展示收货点位；暂无完整发货地或承运商轨迹，不绘制物流路线。'
   } catch { if (current === generation) message.value = '物流地图加载失败，文字轨迹仍可正常查看。' }
 }
 

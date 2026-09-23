@@ -2,6 +2,9 @@ package cn.iocoder.txgy.module.product.dal.mysql.inquiry;
 
 import com.baomidou.mybatisplus.annotation.InterceptorIgnore;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.mapping.SqlSource;
+import org.apache.ibatis.scripting.xmltags.XMLLanguageDriver;
+import org.apache.ibatis.session.Configuration;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -10,6 +13,28 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class InquiryCrossTenantMapperContractTest {
+
+    @Test
+    void everyAnnotatedQueryCanBeParsedByMyBatis() {
+        Configuration configuration = new Configuration();
+        XMLLanguageDriver languageDriver = new XMLLanguageDriver();
+        Arrays.stream(InquiryCrossTenantMapper.class.getMethods())
+                .filter(method -> method.isAnnotationPresent(Select.class))
+                .forEach(method -> {
+                    Select select = method.getAnnotation(Select.class);
+                    SqlSource ignored = languageDriver.createSqlSource(configuration,
+                            String.join(" ", select.value()), Object.class);
+                });
+    }
+
+    @Test
+    void opportunityStatementsAreRegisteredByMyBatis() {
+        Configuration configuration = new Configuration();
+        configuration.addMapper(InquiryCrossTenantMapper.class);
+        String namespace = InquiryCrossTenantMapper.class.getName() + ".";
+        assertTrue(configuration.hasStatement(namespace + "selectVisibleOpportunities"));
+        assertTrue(configuration.hasStatement(namespace + "countVisibleOpportunities"));
+    }
 
     @Test
     void tenantInterceptorBypassIsLimitedByExplicitActiveAndVisibilityGuards() {
@@ -72,6 +97,16 @@ class InquiryCrossTenantMapperContractTest {
     }
 
     @Test
+    void platformPublicDetailUsesTheXmlLanguageDriverForEscapedComparisonOperators() throws Exception {
+        Select select = InquiryCrossTenantMapper.class.getMethod("selectPlatformPublicInquiry",
+                Long.class).getAnnotation(Select.class);
+        String sql = String.join(" ", Arrays.asList(select.value())).toLowerCase();
+        assertTrue(sql.contains("<script>"));
+        assertTrue(sql.contains("</script>"));
+        assertTrue(InquiryCrossTenantMapper.PLATFORM_PUBLIC_FROM.contains("&lt;&gt;"));
+    }
+
+    @Test
     void opportunityRequiresEveryInquiryLineToHaveAnApprovedOnSaleDeliverableProduct() {
         String categoryAndDelivery = InquiryCrossTenantMapper.CATEGORY_AND_DELIVERY_MATCH;
         assertTrue(categoryAndDelivery.contains("NOT EXISTS (SELECT 1 FROM product_purchase_inquiry_item requested_item"));
@@ -81,6 +116,9 @@ class InquiryCrossTenantMapperContractTest {
         assertTrue(categoryAndDelivery.contains("seller_spu.review_status=20"));
         assertTrue(categoryAndDelivery.contains("seller_spu.approved_version=seller_spu.content_version"));
         assertTrue(categoryAndDelivery.contains("requested_item.category"));
+        assertTrue(categoryAndDelivery.contains(InquiryCrossTenantMapper.FREE_TEXT_PRODUCT_NAME_MATCH));
+        assertTrue(InquiryCrossTenantMapper.FREE_TEXT_PRODUCT_NAME_MATCH.contains("requested_item.name"));
+        assertTrue(InquiryCrossTenantMapper.FREE_TEXT_PRODUCT_NAME_MATCH.contains("REPLACE(requested_item.name,'防腐','')"));
         assertFalse(categoryAndDelivery.contains("LIKE CONCAT"));
 
         String delivery = InquiryCrossTenantMapper.DELIVERY_SCOPE_MATCH;
@@ -89,7 +127,10 @@ class InquiryCrossTenantMapperContractTest {
         assertTrue(delivery.contains("i.delivery_area_id"));
         assertTrue(delivery.contains("i.delivery_city_id"));
         assertTrue(delivery.contains("i.delivery_province_id"));
+        assertTrue(delivery.contains("COLLATE utf8mb4_unicode_ci"));
+        assertTrue(hasBalancedParentheses(InquiryCrossTenantMapper.CATEGORY_MATCH));
         assertTrue(hasBalancedParentheses(categoryAndDelivery));
+        assertTrue(hasBalancedParentheses(InquiryCrossTenantMapper.VISIBILITY_WHITELIST));
         assertTrue(hasBalancedParentheses(delivery));
     }
 
@@ -102,6 +143,7 @@ class InquiryCrossTenantMapperContractTest {
         assertTrue(eligibility.contains("seller_spu.status=1"));
         assertTrue(eligibility.contains("seller_spu.review_status=20"));
         assertTrue(eligibility.contains("requested_spu.category_id"));
+        assertTrue(eligibility.contains(InquiryCrossTenantMapper.FREE_TEXT_PRODUCT_NAME_MATCH));
         assertFalse(eligibility.contains("LIKE CONCAT"));
 
         String delivery = InquiryCrossTenantMapper.QUOTE_ITEM_DELIVERY_SCOPE;
@@ -110,6 +152,7 @@ class InquiryCrossTenantMapperContractTest {
         assertTrue(delivery.contains("i.delivery_area_id"));
         assertTrue(delivery.contains("i.delivery_city_id"));
         assertTrue(delivery.contains("i.delivery_province_id"));
+        assertTrue(delivery.contains("COLLATE utf8mb4_unicode_ci"));
         assertTrue(hasBalancedParentheses(eligibility));
         assertTrue(hasBalancedParentheses(delivery));
     }

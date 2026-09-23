@@ -12,6 +12,9 @@ import cn.iocoder.txgy.module.trade.enums.delivery.DeliveryTypeEnum;
 import cn.iocoder.txgy.module.trade.enums.order.TradeOrderStatusEnum;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
+import com.baomidou.mybatisplus.annotation.InterceptorIgnore;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -20,6 +23,63 @@ import java.util.Set;
 
 @Mapper
 public interface TradeOrderMapper extends BaseMapperX<TradeOrderDO> {
+
+    String APP_BUYER_OWNERSHIP = "((o.tenant_id=#{sourceTenantId} AND o.user_id=#{legacyMemberId}) "
+            + "<if test='platformAccountId != null'> OR EXISTS (SELECT 1 FROM trade_platform_checkout_order r "
+            + "JOIN trade_platform_checkout c ON c.id=r.checkout_id AND c.deleted=0 "
+            + "WHERE r.deleted=0 AND r.order_id=o.id AND r.tenant_id=o.tenant_id "
+            + "AND c.platform_member_id=#{platformAccountId})</if>)";
+
+    /** Buyer-visible orders across tenants. Platform checkout ownership is the cross-tenant authorization boundary. */
+    @InterceptorIgnore(tenantLine = "true")
+    @Select("<script>SELECT o.* FROM trade_order o WHERE o.deleted=0 AND " + APP_BUYER_OWNERSHIP
+            + " <if test='status != null'>AND o.status=#{status}</if>"
+            + " <if test='commentStatus != null'>AND o.comment_status=#{commentStatus}</if>"
+            + " ORDER BY o.id DESC LIMIT #{offset},#{pageSize}</script>")
+    List<TradeOrderDO> selectAppBuyerPage(@Param("legacyMemberId") Long legacyMemberId,
+                                           @Param("sourceTenantId") Long sourceTenantId,
+                                           @Param("platformAccountId") Long platformAccountId,
+                                           @Param("status") Integer status,
+                                           @Param("commentStatus") Boolean commentStatus,
+                                           @Param("offset") long offset,
+                                           @Param("pageSize") int pageSize);
+
+    @InterceptorIgnore(tenantLine = "true")
+    @Select("<script>SELECT COUNT(*) FROM trade_order o WHERE o.deleted=0 AND " + APP_BUYER_OWNERSHIP
+            + " <if test='status != null'>AND o.status=#{status}</if>"
+            + " <if test='commentStatus != null'>AND o.comment_status=#{commentStatus}</if></script>")
+    Long selectAppBuyerCount(@Param("legacyMemberId") Long legacyMemberId,
+                             @Param("sourceTenantId") Long sourceTenantId,
+                             @Param("platformAccountId") Long platformAccountId,
+                             @Param("status") Integer status,
+                             @Param("commentStatus") Boolean commentStatus);
+
+    @InterceptorIgnore(tenantLine = "true")
+    @Select("<script>SELECT o.* FROM trade_order o WHERE o.deleted=0 AND o.id=#{orderId} AND "
+            + APP_BUYER_OWNERSHIP + " LIMIT 1</script>")
+    TradeOrderDO selectAppBuyerOwnedOrder(@Param("orderId") Long orderId,
+                                           @Param("legacyMemberId") Long legacyMemberId,
+                                           @Param("sourceTenantId") Long sourceTenantId,
+                                           @Param("platformAccountId") Long platformAccountId);
+
+    @InterceptorIgnore(tenantLine = "true")
+    @Select("<script>SELECT o.tenant_id FROM trade_order o WHERE o.deleted=0 AND o.id=#{orderId} AND "
+            + APP_BUYER_OWNERSHIP + " LIMIT 1</script>")
+    Long selectAppBuyerOwnedOrderTenantId(@Param("orderId") Long orderId,
+                                           @Param("legacyMemberId") Long legacyMemberId,
+                                           @Param("sourceTenantId") Long sourceTenantId,
+                                           @Param("platformAccountId") Long platformAccountId);
+
+    @InterceptorIgnore(tenantLine = "true")
+    @Select("<script>SELECT o.tenant_id FROM trade_order o "
+            + "JOIN trade_order_item i ON i.order_id=o.id AND i.tenant_id=o.tenant_id "
+            + "AND i.user_id=o.user_id AND i.deleted=0 "
+            + "WHERE o.deleted=0 AND i.id=#{orderItemId} AND " + APP_BUYER_OWNERSHIP
+            + " LIMIT 1</script>")
+    Long selectAppBuyerOwnedOrderTenantIdByItem(@Param("orderItemId") Long orderItemId,
+                                                 @Param("legacyMemberId") Long legacyMemberId,
+                                                 @Param("sourceTenantId") Long sourceTenantId,
+                                                 @Param("platformAccountId") Long platformAccountId);
 
     default int updateAddressAndClearLocation(TradeOrderDO update, Integer expectedStatus) {
         return update(update, new LambdaUpdateWrapper<TradeOrderDO>()

@@ -39,6 +39,7 @@ public class ProductSpuReviewService {
     @Resource private cn.iocoder.txgy.module.trade.api.delivery.DeliveryTemplateApi deliveryApi;
     @Resource private ProductBusinessOperationAuditService operationAuditService;
     @Resource private ProductWmsListingValidator wmsListingValidator;
+    @Resource private ProductWmsListingProvisioner wmsListingProvisioner;
 
     public record Policy(boolean adminWriteEnabled, String legacyStrategy, boolean reviewEnabled, List<Long> adminWriteLockedShopIds) {}
     public Policy policy() { return new Policy(properties.isAdminWriteEnabled(), properties.getLegacyStrategy(), properties.isReviewEnabled(),
@@ -162,6 +163,7 @@ public class ProductSpuReviewService {
     private void submitLocked(ProductSpuDO p, Long expected) {
         expect(p, expected);
         requireOperatingShop(p);
+        wmsListingProvisioner.provision(p, skuMapper.selectListBySpuId(p.getId()));
         validateListingMetadata(p);
         if (Objects.equals(p.getReviewStatus(), PENDING)) return;
         if (Objects.equals(p.getReviewStatus(), APPROVED)) throw invalid("当前版本已审核通过，无须重复送审");

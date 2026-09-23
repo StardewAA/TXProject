@@ -14,5 +14,7 @@ export default {
   // items 
   release: '已发布',
   unreleased: '未发布',
-  last_edit: '最后编辑'
+  last_edit: '最后编辑',
+  no_preview: '暂无预览',
+  no_preview_tip: '在设计器中保存后自动生成缩略图'
 }

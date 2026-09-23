@@ -18,8 +18,8 @@ describe('platform commerce ui boundaries', () => {
     expect(checkout).toContain('platformCheckoutApi.preview')
     expect(checkout).toContain('platformPreview.tenantGroups')
     expect(checkout).toContain('platformCheckoutApi.submit')
-    expect(checkout).toContain('平台结算未创建任何订单')
-    expect(checkout).toContain("router.push('/member/platform-checkouts')")
+    expect(checkout).toContain("result.payable && result.platformPayOrderId")
+    expect(checkout).toContain('platformCheckout=${encodeURIComponent(result.checkoutNo)}')
     expect(checkout).not.toContain('tradeApi.createOrder')
   })
 
@@ -35,15 +35,15 @@ describe('platform commerce ui boundaries', () => {
     expect(detail).toContain('resourceId: String(product.spuId)')
   })
 
-  it('makes saved checkout planning discoverable without presenting it as a payable order', () => {
+  it('makes formalized checkout orders discoverable and allows unpaid checkout to continue', () => {
     expect(history).toContain('platformCheckoutApi.page')
     expect(history).toContain('platformCheckoutApi.get')
-    expect(history).toContain('当前仅保存不可支付的拆单规划')
-    expect(history).toContain('不代表订单已经创建')
+    expect(history).toContain('按店铺生成正式订单')
+    expect(history).toContain('detail.payable && detail.platformPayOrderId')
+    expect(history).toContain('继续支付')
     expect(history).toContain("PARTIALLY_DELIVERED: '部分已发货'")
     expect(history).toContain("ALL_COMPLETED: '全部完成'")
     expect(history).toContain("PARTIALLY_REFUNDED: '部分退款'")
-    expect(history).not.toContain('支付结算单')
     expect(history).not.toContain('receiverMobile')
     expect(history).not.toContain('receiverDetailAddress')
   })

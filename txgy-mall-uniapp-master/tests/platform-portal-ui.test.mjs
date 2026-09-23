@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const root = new URL('../', import.meta.url);
 const home = readFileSync(new URL('pages/index/index.vue', root), 'utf8');
+const search = readFileSync(new URL('pages/index/search.vue', root), 'utf8');
 const list = readFileSync(new URL('pages/goods/list.vue', root), 'utf8');
 const detail = readFileSync(new URL('pages/goods/index.vue', root), 'utf8');
 const api = readFileSync(new URL('sheep/api/product/portal.js', root), 'utf8');
@@ -23,6 +24,17 @@ test('H5 home is a platform portal without the retired tenant switch or anonymou
   assert.match(home, /product\.enterpriseName/);
   assert.match(home, /product\.shopName/);
   assert.match(home, /portalProductDetailPath/);
+  assert.match(home, /selectFeaturedPortalProducts\(products\.value, 6\)/);
+  assert.match(home, /pageNo: 2, pageSize: 60/);
+  assert.doesNotMatch(home, /class="product-code"/);
+  assert.doesNotMatch(home, /class="product-mark"/);
+  assert.match(home, /class="product-meta-row"/);
+  assert.match(home, /sheep\.\$router\.go\('\/pages\/index\/search'\)/);
+});
+
+test('mobile search keeps the keyword in the cross-tenant platform catalog', () => {
+  assert.match(search, /portalProductListPath\(\{ keyword: String\(keyword\)\.trim\(\) \}\)/);
+  assert.doesNotMatch(search, /sheep\.\$router\.go\('\/pages\/goods\/list', \{ keyword \}\)/);
 });
 
 test('product list uses portal endpoints only for explicit platform or tenant-slug routes', () => {
@@ -45,8 +57,12 @@ test('platform detail loads by tenant slug and never falls through to legacy ten
   assert.match(detail, /PortalApi\.getProduct\(state\.goodsId\)/);
   assert.match(detail, /if \(state\.portal\) \{\s*loadPortalProduct\(\);\s*return;/);
   assert.match(detail, /normalizePortalTenantSlug\(options\.tenantSlug\)/);
+  assert.match(detail, /state\.goodsInfo = \{ \.\.\.product, favorite: false \}/);
   assert.match(detail, /v-if="!state\.portal" class="detail-comment-selector"/);
   assert.match(detail, /公开可售规格/);
+  assert.match(detail, />店铺客服<\/button>/);
+  assert.match(detail, /chatEntry\(state\.goodsInfo\?\.shopId, 'PRODUCT', state\.goodsInfo\?\.id, skuId, state\.goodsInfo\?\.tenantId\)/);
+  assert.doesNotMatch(detail, />平台商品<\/button>/);
 });
 
 test('every portal API call declares the platform request scope', () => {

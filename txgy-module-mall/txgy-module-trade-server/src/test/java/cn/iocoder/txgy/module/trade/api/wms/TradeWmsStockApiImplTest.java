@@ -6,6 +6,7 @@ import cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderItemDO;
 import cn.iocoder.txgy.module.trade.dal.mysql.order.TradeOrderItemMapper;
 import cn.iocoder.txgy.module.trade.dal.mysql.order.TradeOrderMapper;
 import cn.iocoder.txgy.module.trade.service.wms.TradeWmsStockService;
+import cn.iocoder.txgy.module.trade.service.checkout.PlatformCheckoutOrderService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -20,6 +21,7 @@ class TradeWmsStockApiImplTest {
     private TradeOrderMapper orderMapper;
     private TradeOrderItemMapper orderItemMapper;
     private TradeWmsStockService stockService;
+    private PlatformCheckoutOrderService platformCheckoutOrderService;
     private TradeWmsStockApiImpl api;
 
     @BeforeEach
@@ -27,7 +29,8 @@ class TradeWmsStockApiImplTest {
         orderMapper = mock(TradeOrderMapper.class);
         orderItemMapper = mock(TradeOrderItemMapper.class);
         stockService = mock(TradeWmsStockService.class);
-        api = new TradeWmsStockApiImpl(orderMapper, orderItemMapper, stockService);
+        platformCheckoutOrderService = mock(PlatformCheckoutOrderService.class);
+        api = new TradeWmsStockApiImpl(orderMapper, orderItemMapper, stockService, platformCheckoutOrderService);
     }
 
     @Test

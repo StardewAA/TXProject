@@ -13,14 +13,18 @@
         </div>
         <!-- 中间 -->
         <div class="list-content-img" @click="resizeHandle">
-          <n-image
-            object-fit="contain"
-            height="180"
-            preview-disabled
-            :src="`${cardData.image}?time=${new Date().getTime()}`"
+          <img
+            v-if="previewSrc"
+            :src="previewSrc"
             :alt="cardData.title"
-            :fallback-src="requireErrorImg()"
-         ></n-image>
+            @error="previewError = true"
+          />
+          <n-text v-else depth="3" class="list-content-empty">
+            <n-icon :size="30">
+              <component :is="ImageIcon"></component>
+            </n-icon>
+            <span>{{ $t('project.no_preview') }}</span>
+          </n-text>
         </div>
       </div>
       <template #action>
@@ -82,13 +86,13 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, PropType } from 'vue'
-import { renderIcon, renderLang,  requireErrorImg } from '@/utils'
+import { computed, reactive, ref, PropType, watch } from 'vue'
+import { renderIcon, renderLang } from '@/utils'
 import { icon } from '@/plugins'
 import { MacOsControlBtn } from '@/components/Tips/MacOsControlBtn'
 import { Chartype } from '../../index.d'
-import { log } from 'console'
 const {
+  ImageIcon,
   EllipsisHorizontalCircleSharpIcon,
   CopyIcon,
   TrashIcon,
@@ -104,6 +108,24 @@ const emit = defineEmits(['preview', 'delete', 'resize', 'edit', 'release'])
 const props = defineProps({
   cardData: Object as PropType<Chartype>
 })
+
+// 缩略图地址：为空（项目还没保存过）或图片加载失败时返回空串，由模板展示占位，避免出现破图
+// 缩略图文件名固定为 go-view/<id>_index_preview.png，重新保存后地址不变，
+// 所以带一个「本次进入页面」的固定时间戳做缓存失效；不能写在模板里，否则每次渲染都会重新请求
+const previewTime = Date.now()
+const previewError = ref(false)
+const previewSrc = computed(() => {
+  if (previewError.value) return ''
+  const url = String(props.cardData?.image || '').trim()
+  return url ? `${url}?time=${previewTime}` : ''
+})
+
+watch(
+  () => props.cardData?.image,
+  () => {
+    previewError.value = false
+  }
+)
 
 const fnBtnList = reactive([
   {
@@ -234,9 +256,19 @@ $contentHeight: 180px;
       height: $contentHeight;
       @extend .go-flex-center;
       @extend .go-border-radius;
-      @include deep() {
-        img {
-          @extend .go-border-radius;
+      img {
+        max-width: 100%;
+        max-height: $contentHeight;
+        object-fit: contain;
+        @extend .go-border-radius;
+      }
+      .list-content-empty {
+        @extend .go-flex-center;
+        height: 100%;
+        flex-direction: column;
+        gap: 8px;
+        span {
+          font-size: 13px;
         }
       }
     }

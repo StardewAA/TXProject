@@ -108,8 +108,12 @@ public class ProductSpuServiceImpl implements ProductSpuService {
         productSkuService.validateSkuList(skuSaveReqList, updateReqVO.getSpecType());
 
         // 更新 SPU
+        boolean initialStockEditable = productSkuService.getSkuListBySpuId(spu.getId()).stream()
+                .allMatch(sku -> sku.getWmsSkuId() == null && sku.getWmsWarehouseId() == null);
         ProductSpuDO updateObj = BeanUtils.toBean(updateReqVO, ProductSpuDO.class).setStatus(null)
-                .setSalesCount(null).setBrowseCount(null).setStock(null);
+                .setSalesCount(null).setBrowseCount(null)
+                .setStock(initialStockEditable
+                        ? getSumValue(skuSaveReqList, ProductSkuSaveReqVO::getStock, Math::addExact) : null);
         updateObj.setPrice(getMinValue(skuSaveReqList, ProductSkuSaveReqVO::getPrice))
                 .setMarketPrice(getMinValue(skuSaveReqList, ProductSkuSaveReqVO::getMarketPrice))
                 .setCostPrice(getMinValue(skuSaveReqList, ProductSkuSaveReqVO::getCostPrice));

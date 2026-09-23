@@ -25,6 +25,8 @@ public interface MallPortalCatalogMapper {
     String PUBLIC_PRODUCT_FROM = " FROM mall_portal_tenant pt"
             + " JOIN system_tenant st ON st.id = pt.tenant_id"
             + " JOIN product_spu spu ON spu.tenant_id = pt.tenant_id"
+            + " JOIN product_category pc ON pc.id = spu.category_id AND pc.tenant_id = spu.tenant_id"
+            + " LEFT JOIN product_category ppc ON ppc.id = pc.parent_id AND ppc.tenant_id = pc.tenant_id"
             + " JOIN product_shop ps ON ps.id = spu.shop_id AND ps.tenant_id = spu.tenant_id"
             + " JOIN product_enterprise pe ON pe.id = ps.enterprise_id AND pe.tenant_id = ps.tenant_id";
 
@@ -48,7 +50,8 @@ public interface MallPortalCatalogMapper {
             " pe.id AS enterpriseId, pe.name AS enterpriseName,",
             " ps.id AS shopId, ps.name AS shopName,",
             " spu.id AS spuId, spu.name AS spuName, spu.introduction AS introduction,",
-            " spu.pic_url AS picUrl, spu.category_id AS categoryId, spu.price AS price,",
+            " spu.pic_url AS picUrl, spu.category_id AS categoryId, pc.name AS categoryName,",
+            " COALESCE(ppc.name, pc.name) AS categoryGroupName, spu.price AS price,",
             " (COALESCE(spu.sales_count, 0) + COALESCE(spu.virtual_sales_count, 0)) AS salesCount",
             PUBLIC_PRODUCT_FROM, PUBLIC_PRODUCT_WHERE,
             "<if test='tenantSlug != null'> AND pt.tenant_slug = #{tenantSlug}</if>",
@@ -56,12 +59,24 @@ public interface MallPortalCatalogMapper {
             " OR ps.name LIKE CONCAT('%', #{keyword}, '%')",
             " OR pe.name LIKE CONCAT('%', #{keyword}, '%'))</if>",
             "<if test='categoryId != null'> AND spu.category_id = #{categoryId}</if>",
-            " ORDER BY spu.sort DESC, spu.id DESC",
+            "<if test='categoryName != null'> AND (pc.name = #{categoryName} OR ppc.name = #{categoryName})</if>",
+            "<if test='shopId != null'> AND ps.id = #{shopId}</if>",
+            "<choose>",
+            "<when test=\"sortField == 'price' and sortAsc == true\"> ORDER BY spu.price ASC, spu.id DESC</when>",
+            "<when test=\"sortField == 'price'\"> ORDER BY spu.price DESC, spu.id DESC</when>",
+            "<when test=\"sortField == 'sales' and sortAsc == true\"> ORDER BY salesCount ASC, spu.id DESC</when>",
+            "<when test=\"sortField == 'sales'\"> ORDER BY salesCount DESC, spu.id DESC</when>",
+            "<otherwise> ORDER BY spu.sort DESC, spu.id DESC</otherwise>",
+            "</choose>",
             " LIMIT #{pageSize} OFFSET #{offset}",
             "</script>"})
     List<PortalProductRow> selectProducts(@Param("tenantSlug") String tenantSlug,
                                           @Param("keyword") String keyword,
                                           @Param("categoryId") Long categoryId,
+                                          @Param("categoryName") String categoryName,
+                                          @Param("shopId") Long shopId,
+                                          @Param("sortField") String sortField,
+                                          @Param("sortAsc") Boolean sortAsc,
                                           @Param("offset") long offset,
                                           @Param("pageSize") int pageSize);
 
@@ -72,7 +87,8 @@ public interface MallPortalCatalogMapper {
             " ps.id AS shopId, ps.name AS shopName,",
             " spu.id AS spuId, spu.name AS spuName, spu.introduction AS introduction,",
             " spu.description AS description, spu.pic_url AS picUrl,",
-            " spu.category_id AS categoryId, spu.price AS price,",
+            " spu.category_id AS categoryId, pc.name AS categoryName,",
+            " COALESCE(ppc.name, pc.name) AS categoryGroupName, spu.price AS price,",
             " (COALESCE(spu.sales_count, 0) + COALESCE(spu.virtual_sales_count, 0)) AS salesCount",
             PUBLIC_PRODUCT_FROM, PUBLIC_PRODUCT_WHERE,
             " AND spu.id = #{spuId}",
@@ -88,10 +104,55 @@ public interface MallPortalCatalogMapper {
             " OR ps.name LIKE CONCAT('%', #{keyword}, '%')",
             " OR pe.name LIKE CONCAT('%', #{keyword}, '%'))</if>",
             "<if test='categoryId != null'> AND spu.category_id = #{categoryId}</if>",
+            "<if test='categoryName != null'> AND (pc.name = #{categoryName} OR ppc.name = #{categoryName})</if>",
+            "<if test='shopId != null'> AND ps.id = #{shopId}</if>",
             "</script>"})
     long countProducts(@Param("tenantSlug") String tenantSlug,
                        @Param("keyword") String keyword,
-                       @Param("categoryId") Long categoryId);
+                       @Param("categoryId") Long categoryId,
+                       @Param("categoryName") String categoryName,
+                       @Param("shopId") Long shopId);
+
+    String PUBLIC_SHOP_FROM = " FROM mall_portal_tenant pt"
+            + " JOIN system_tenant st ON st.id = pt.tenant_id"
+            + " JOIN product_shop ps ON ps.tenant_id = pt.tenant_id"
+            + " JOIN product_enterprise pe ON pe.id = ps.enterprise_id AND pe.tenant_id = ps.tenant_id";
+
+    String PUBLIC_SHOP_WHERE = " WHERE pt.deleted = 0 AND pt.open_status = 0 AND pt.tenant_id &lt;&gt; 3000"
+            + " AND st.deleted = 0 AND st.status = 0 AND (st.expire_time IS NULL OR st.expire_time &gt; NOW())"
+            + " AND pe.deleted = 0 AND pe.audit_status = 1 AND ps.deleted = 0 AND ps.status = 0"
+            + " AND EXISTS (SELECT 1 FROM product_spu spu JOIN product_sku sku"
+            + " ON sku.spu_id = spu.id AND sku.tenant_id = spu.tenant_id"
+            + " WHERE spu.shop_id = ps.id AND spu.tenant_id = ps.tenant_id"
+            + " AND spu.deleted = 0 AND spu.status = 1 AND spu.review_status = 20"
+            + " AND spu.approved_version IS NOT NULL AND spu.approved_version = spu.content_version"
+            + " AND sku.deleted = 0 AND sku.stock &gt; 0 AND sku.price &gt; 0)";
+
+    @Select({"<script>", "SELECT pt.tenant_id AS tenantId, pt.tenant_slug AS tenantSlug,",
+            " pt.tenant_name AS tenantName, pt.tenant_logo AS tenantLogo, pe.id AS enterpriseId,",
+            " pe.name AS enterpriseName, ps.id AS shopId, ps.name AS shopName, ps.logo_url AS logoUrl,",
+            " ps.introduction AS introduction, (SELECT COUNT(1) FROM product_spu cspu WHERE cspu.shop_id = ps.id",
+            " AND cspu.tenant_id = ps.tenant_id AND cspu.deleted = 0 AND cspu.status = 1",
+            " AND cspu.review_status = 20 AND cspu.approved_version IS NOT NULL",
+            " AND cspu.approved_version = cspu.content_version AND EXISTS (SELECT 1 FROM product_sku csku",
+            " WHERE csku.spu_id = cspu.id AND csku.tenant_id = cspu.tenant_id AND csku.deleted = 0",
+            " AND csku.stock &gt; 0 AND csku.price &gt; 0)) AS productCount", PUBLIC_SHOP_FROM, PUBLIC_SHOP_WHERE,
+            "<if test='keyword != null'> AND (ps.name LIKE CONCAT('%', #{keyword}, '%')",
+            " OR pe.name LIKE CONCAT('%', #{keyword}, '%') OR pt.tenant_name LIKE CONCAT('%', #{keyword}, '%'))</if>",
+            " ORDER BY pt.tenant_id ASC, pe.id ASC, ps.id ASC", "</script>"})
+    List<PortalShopRow> selectShops(@Param("keyword") String keyword);
+
+    @Select({"<script>", "SELECT pt.tenant_id AS tenantId, pt.tenant_slug AS tenantSlug,",
+            " pt.tenant_name AS tenantName, pt.tenant_logo AS tenantLogo, pe.id AS enterpriseId,",
+            " pe.name AS enterpriseName, ps.id AS shopId, ps.name AS shopName, ps.logo_url AS logoUrl,",
+            " ps.introduction AS introduction, (SELECT COUNT(1) FROM product_spu cspu WHERE cspu.shop_id = ps.id",
+            " AND cspu.tenant_id = ps.tenant_id AND cspu.deleted = 0 AND cspu.status = 1",
+            " AND cspu.review_status = 20 AND cspu.approved_version IS NOT NULL",
+            " AND cspu.approved_version = cspu.content_version AND EXISTS (SELECT 1 FROM product_sku csku",
+            " WHERE csku.spu_id = cspu.id AND csku.tenant_id = cspu.tenant_id AND csku.deleted = 0",
+            " AND csku.stock &gt; 0 AND csku.price &gt; 0)) AS productCount", PUBLIC_SHOP_FROM, PUBLIC_SHOP_WHERE,
+            " AND ps.id = #{shopId} LIMIT 1", "</script>"})
+    PortalShopRow selectShopById(@Param("shopId") Long shopId);
 
     @Select("SELECT pt.tenant_id AS tenantId, pt.tenant_slug AS tenantSlug,"
             + " pt.tenant_name AS tenantName, pt.tenant_logo AS tenantLogo,"
@@ -108,10 +169,12 @@ public interface MallPortalCatalogMapper {
     @Select("SELECT pt.tenant_id AS tenantId, pt.tenant_slug AS tenantSlug,"
             + " pt.tenant_name AS tenantName, pt.tenant_logo AS tenantLogo,"
             + " pt.main_categories AS mainCategories,"
-            + " SUM(ts.valid_quantity) AS validQuantity"
+            + " COALESCE(SUM(ts.valid_quantity), 0) AS validQuantity"
             + " FROM mall_portal_tenant pt"
             + " JOIN system_tenant st ON st.id = pt.tenant_id"
-            + " JOIN mall_tenant_sales_daily ts ON ts.tenant_id = pt.tenant_id"
+            + " LEFT JOIN mall_tenant_sales_daily ts ON ts.tenant_id = pt.tenant_id"
+            + " AND ts.deleted = 0"
+            + " AND ts.statistic_date BETWEEN #{fromDate} AND #{toDate}"
             + " WHERE pt.deleted = 0 AND pt.open_status = 0 AND pt.tenant_id <> 3000"
             + " AND st.deleted = 0 AND st.status = 0"
             + " AND (st.expire_time IS NULL OR st.expire_time > NOW())"
@@ -126,11 +189,10 @@ public interface MallPortalCatalogMapper {
             + " AND EXISTS (SELECT 1 FROM product_sku sale_sku"
             + " WHERE sale_sku.spu_id = spu.id AND sale_sku.tenant_id = spu.tenant_id"
             + " AND sale_sku.deleted = 0 AND sale_sku.stock > 0 AND sale_sku.price > 0))"
-            + " AND ts.statistic_date BETWEEN #{fromDate} AND #{toDate}"
             + " GROUP BY pt.tenant_id, pt.tenant_slug, pt.tenant_name, pt.tenant_logo, pt.main_categories"
-            + " HAVING SUM(ts.valid_quantity) > 0"
-            + " ORDER BY SUM(ts.valid_quantity) DESC, SUM(ts.paid_amount) DESC,"
-            + " SUM(ts.paid_order_count) DESC, pt.tenant_id ASC"
+            + " ORDER BY COALESCE(SUM(ts.valid_quantity), 0) DESC,"
+            + " COALESCE(SUM(ts.paid_amount), 0) DESC,"
+            + " COALESCE(SUM(ts.paid_order_count), 0) DESC, pt.tenant_id ASC"
             + " LIMIT #{limit}")
     List<PortalHotTenantRow> selectHotTenants(@Param("fromDate") LocalDate fromDate,
                                                @Param("toDate") LocalDate toDate,
@@ -177,6 +239,8 @@ public interface MallPortalCatalogMapper {
         private String description;
         private String picUrl;
         private Long categoryId;
+        private String categoryName;
+        private String categoryGroupName;
         private Integer price;
         private Integer salesCount;
     }
@@ -203,5 +267,20 @@ public interface MallPortalCatalogMapper {
     @Data
     class PortalHotTenantRow extends PortalTenantRow {
         private Long validQuantity;
+    }
+
+    @Data
+    class PortalShopRow {
+        private Long tenantId;
+        private String tenantSlug;
+        private String tenantName;
+        private String tenantLogo;
+        private Long enterpriseId;
+        private String enterpriseName;
+        private Long shopId;
+        private String shopName;
+        private String logoUrl;
+        private String introduction;
+        private Long productCount;
     }
 }

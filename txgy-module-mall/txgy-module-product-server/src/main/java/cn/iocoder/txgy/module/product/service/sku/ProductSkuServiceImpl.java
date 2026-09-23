@@ -251,6 +251,9 @@ public class ProductSkuServiceImpl implements ProductSkuService {
                     .setMarketPrice(input.getMarketPrice()).setCostPrice(input.getCostPrice()).setBarCode(input.getBarCode())
                     .setPicUrl(input.getPicUrl()).setWeight(input.getWeight()).setVolume(input.getVolume())
                     .setFirstBrokeragePrice(input.getFirstBrokeragePrice()).setSecondBrokeragePrice(input.getSecondBrokeragePrice());
+            if (original.getWmsSkuId() == null && original.getWmsWarehouseId() == null) {
+                patch.setStock(input.getStock());
+            }
             if (productSkuMapper.updateById(patch) != 1) throw new IllegalStateException("商品SKU保存失败");
         }
     }

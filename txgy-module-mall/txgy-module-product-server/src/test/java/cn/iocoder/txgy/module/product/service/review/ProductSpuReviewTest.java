@@ -56,6 +56,7 @@ class ProductSpuReviewTest {
     ProductReviewProperties policy;
     ProductAdminBusinessScopeService businessScope;
     ProductWmsListingValidator wmsListingValidator;
+    ProductWmsListingProvisioner wmsListingProvisioner;
     TransactionTemplate tx;
     DataSourceTransactionManager transactionManager;
 
@@ -109,6 +110,8 @@ class ProductSpuReviewTest {
         ReflectionTestUtils.setField(target,"operationAuditService",mock(ProductBusinessOperationAuditService.class));
         wmsListingValidator = mock(ProductWmsListingValidator.class);
         ReflectionTestUtils.setField(target,"wmsListingValidator",wmsListingValidator);
+        wmsListingProvisioner = mock(ProductWmsListingProvisioner.class);
+        ReflectionTestUtils.setField(target,"wmsListingProvisioner",wmsListingProvisioner);
         ReflectionTestUtils.setField(target,"enterpriseMapper",enterprises); ReflectionTestUtils.setField(target,"deliveryApi",delivery);
         ReflectionTestUtils.setField(target,"categoryService",mock(ProductCategoryService.class)); ReflectionTestUtils.setField(target,"brandService",mock(ProductBrandService.class));
         var manager = new DataSourceTransactionManager(source); transactionManager=manager; tx = new TransactionTemplate(manager);
@@ -134,6 +137,7 @@ class ProductSpuReviewTest {
         verify(wmsListingValidator, atLeastOnce()).validate(argThat(rows -> rows.size() == 1
                 && Objects.equals(rows.getFirst().getWmsSkuId(), 999L)
                 && Objects.equals(rows.getFirst().getWmsWarehouseId(), 888L)));
+        verify(wmsListingProvisioner).provision(any(ProductSpuDO.class), argThat(rows -> rows.size() == 1));
     }
     @Test void wmsMasterDataFailurePreventsSubmissionWithoutChangingReviewState() {
         doThrow(new ServiceException(503,"WMS 主数据暂时无法核验"))
