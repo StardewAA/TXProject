@@ -56,6 +56,14 @@ function isActive(path: string) {
 async function handleLogout() {
   await authStore.logout(false);
 }
+
+function navigateToNavItem(item: (typeof navItems)[number]) {
+  if (item.path === '/portal/recruit') {
+    window.open(router.resolve(item.path).href, '_blank', 'noopener,noreferrer');
+    return;
+  }
+  void router.push(item.path);
+}
 </script>
 
 <template>
@@ -66,7 +74,7 @@ async function handleLogout() {
       'portal-shell--training': isTrainingPortal,
     }"
   >
-    <header class="portal-header">
+    <header v-if="!isRecruitPortal" class="portal-header">
       <div class="portal-brand" @click="router.push('/portal/home')">
         <img :src="txgyLogo" alt="天信管业" class="portal-brand-logo" />
         <span>防腐保温智慧平台</span>
@@ -78,7 +86,7 @@ async function handleLogout() {
           :key="item.path"
           :class="{ active: isActive(item.path) }"
           type="button"
-          @click="router.push(item.path)"
+          @click="navigateToNavItem(item)"
         >
           {{ item.label }}
         </button>
