@@ -501,6 +501,8 @@ const visibleAttachments = computed(() => [...attachments.value].sort((left, rig
   const rightTime = right.createTime ? new Date(right.createTime).getTime() : 0;
   return rightTime - leftTime;
 }));
+const uploadedAttachments = computed(() => visibleAttachments.value.filter((item) => item.sourceType !== 2));
+const generatedAttachments = computed(() => visibleAttachments.value.filter((item) => item.sourceType === 2));
 
 function getAttachmentExtension(resume: HrmPortalResumeApi.Resume) {
   return resume.fileName?.split('.').pop()?.toLowerCase() || 'file';
@@ -719,6 +721,27 @@ function resetUploadForm() {
   clearSelectedFile();
 }
 
+async function extractResumeText(file: File) {
+  const extension = file.name.split('.').pop()?.toLowerCase();
+  if (extension === 'docx') {
+    const mammoth = await import('mammoth');
+    const result = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
+    return result.value.trim();
+  }
+  if (extension === 'pdf') {
+    const pdfjs = await import('pdfjs-dist');
+    const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+    const pages: string[] = [];
+    for (let pageNo = 1; pageNo <= pdf.numPages; pageNo += 1) {
+      const page = await pdf.getPage(pageNo);
+      const text = await page.getTextContent();
+      pages.push(text.items.map((item: any) => item.str || '').join(' '));
+    }
+    return pages.join('\n').trim();
+  }
+  return (await file.text()).trim();
+}
+
 function cancelUpload() {
   if (!uploadSubmitting.value) {
     uploadModalOpen.value = false;
@@ -739,11 +762,13 @@ async function handleUploadResume() {
   uploadSubmitting.value = true;
   try {
     const fileUrl = (await uploadFile({ file, directory: 'hrm/personal/resume' })) as string;
+    const content = await extractResumeText(file);
     await uploadPortalResume({
       title: uploadForm.title.trim(),
       fileName: file.name,
       fileUrl,
       remark: uploadForm.remark.trim() || undefined,
+      content: content || undefined,
     });
     message.success('简历附件已保存');
     uploadModalOpen.value = false;
@@ -1066,7 +1091,7 @@ onUnmounted(() => {
       v-model:open="attachmentsModalOpen"
       title="附件管理"
       :footer="null"
-      width="640px"
+      width="860px"
       wrap-class-name="resume-attachments-modal"
     >
       <div class="attachments-modal-body">
@@ -1076,17 +1101,13 @@ onUnmounted(() => {
           <small>支持常见文档格式 · 单个不超过 10 兆</small>
         </div>
 
-        <div v-if="loading" class="attachments-loading">
-          <a-skeleton v-for="item in 2" :key="item" active :paragraph="{ rows: 2 }" />
-        </div>
-        <div v-else-if="!visibleAttachments.length" class="attachments-empty">
-          <span><IconifyIcon icon="lucide:file-plus-2" /></span>
-          <strong>还没有附件简历</strong>
-          <p>上传文档或扫描件简历，投递时即可直接使用。</p>
-          <a-button type="primary" ghost @click="openUploadModal">上传第一份简历</a-button>
-        </div>
-        <div v-else class="attachments-list">
-          <article v-for="resume in visibleAttachments" :key="resume.id" class="attachment-item">
+        <div v-if="loading" class="attachments-loading"><a-skeleton active :paragraph="{ rows: 4 }" /></div>
+        <div v-else class="attachments-columns">
+          <section class="attachments-column">
+            <header><strong>已上传附件</strong><small>{{ uploadedAttachments.length }}/5</small></header>
+            <div v-if="!uploadedAttachments.length" class="attachments-empty"><span><IconifyIcon icon="lucide:file-plus-2" /></span><p>还没有上传附件简历</p><a-button type="primary" ghost @click="openUploadModal">上传附件</a-button></div>
+            <div v-else class="attachments-list">
+            <article v-for="resume in uploadedAttachments" :key="resume.id" class="attachment-item">
             <span :class="['attachment-file-icon', `is-${getAttachmentExtension(resume)}`]"><IconifyIcon icon="lucide:file-text" /></span>
             <div class="attachment-copy">
               <strong :title="resume.title">{{ resume.title }}</strong>
@@ -1104,7 +1125,20 @@ onUnmounted(() => {
                 </a-menu>
               </template>
             </a-dropdown>
-          </article>
+            </article>
+            </div>
+          </section>
+          <section class="attachments-column">
+            <header><strong>制作生成附件</strong><small>{{ generatedAttachments.length }}/5</small></header>
+            <div v-if="!generatedAttachments.length" class="attachments-empty"><span><IconifyIcon icon="lucide:sparkles" /></span><p>在附件简历制作中生成后会显示在这里</p></div>
+            <div v-else class="attachments-list">
+              <article v-for="resume in generatedAttachments" :key="resume.id" class="attachment-item">
+                <span :class="['attachment-file-icon', `is-${getAttachmentExtension(resume)}`]"><IconifyIcon icon="lucide:file-check-2" /></span>
+                <div class="attachment-copy"><strong :title="resume.title">{{ resume.title }}</strong><small>{{ resume.fileName || '制作生成附件' }}</small><small>{{ formatAttachmentDate(resume.createTime) }}</small></div>
+                <a-button class="attachment-preview" type="text" aria-label="删除" @click="deleteAttachment(resume)"><IconifyIcon icon="lucide:trash-2" /></a-button>
+              </article>
+            </div>
+          </section>
         </div>
 
         <button class="attachment-upload-cta" type="button" @click="openUploadModal">
@@ -1292,7 +1326,11 @@ onUnmounted(() => {
   .resume-bottom-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 3px 4px 14px; color: #111827; font-size: 14px; }
  .resume-bottom-actions > span { display: inline-flex; align-items: center; gap: 5px; }
  .resume-bottom-actions :deep(svg) { color: #75a184; font-size: 14px; }
- .attachments-modal-body { display: grid; gap: 16px; min-width: 0; }
+.attachments-modal-body { display: grid; gap: 16px; min-width: 0; }
+.attachments-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.attachments-column { min-width: 0; padding: 14px; border: 1px solid var(--resume-line); border-radius: 10px; background: #fff; }
+.attachments-column > header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; color: #123f49; }
+.attachments-column > header small { color: #8497a3; }
  .attachments-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 0 4px 14px; border-bottom: 1px solid #f5eae2; }
   .attachments-header h2 { margin: 0; color: #111827; font-size: 22px; }
  .attachments-add { display: grid; width: 32px; height: 32px; place-items: center; padding: 0; border-radius: 8px; color: var(--resume-orange-deep); }

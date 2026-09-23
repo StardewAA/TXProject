@@ -45,6 +45,9 @@ public class HrmRecruitPostSaveReqVO {
     @Schema(description = "工作城市地区编号", example = "310115")
     @DiffLogField(name = "工作城市", function = HrmAreaParseFunction.NAME)
     private Integer areaId;
+    private String workAddress;
+    private BigDecimal longitude;
+    private BigDecimal latitude;
 
     @Schema(description = "招聘人数", example = "3")
     @Min(value = 0, message = "招聘人数不能小于 0")

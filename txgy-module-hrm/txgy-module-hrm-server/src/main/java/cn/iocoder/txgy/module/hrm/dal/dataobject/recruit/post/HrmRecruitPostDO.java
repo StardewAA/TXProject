@@ -77,6 +77,10 @@ public class HrmRecruitPostDO extends TenantBaseDO {
      * 关联 {@link cn.iocoder.txgy.framework.ip.core.Area#getId()}
      */
     private Integer areaId;
+    /** 具体工作地址及地图坐标 */
+    private String workAddress;
+    private BigDecimal longitude;
+    private BigDecimal latitude;
     /**
      * 招聘人数
      */

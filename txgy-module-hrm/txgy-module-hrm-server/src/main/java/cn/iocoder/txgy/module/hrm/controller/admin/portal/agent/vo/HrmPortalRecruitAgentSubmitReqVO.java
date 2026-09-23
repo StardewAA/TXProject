@@ -11,8 +11,10 @@ import lombok.Data;
 public class HrmPortalRecruitAgentSubmitReqVO {
 
     @Schema(description = "本人已固化的个人简历版本编号")
-    @NotNull(message = "简历版本编号不能为空")
     private Long resumeVersionId;
+
+    @Schema(description = "个人简历编号；可为在线简历或附件简历")
+    private Long resumeId;
 
     @Schema(description = "目标职位编号，必须是已发布且招聘中的职位")
     @NotNull(message = "目标职位编号不能为空")

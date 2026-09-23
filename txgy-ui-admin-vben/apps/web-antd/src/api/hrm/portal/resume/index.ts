@@ -5,8 +5,10 @@ export namespace HrmPortalResumeApi {
     id: number;
     title: string;
     resumeType: number;
+    sourceType?: number;
     fileName?: string;
     fileUrl?: string;
+    avatarUrl?: string;
     content?: string;
     remark?: string;
     createTime?: string;
@@ -17,6 +19,8 @@ export namespace HrmPortalResumeApi {
     fileName: string;
     fileUrl: string;
     remark?: string;
+    content?: string;
+    avatarUrl?: string;
   }
 
   export interface CreateReq {
@@ -35,6 +39,29 @@ export function getPortalResumeList() {
 
 export function uploadPortalResume(data: HrmPortalResumeApi.UploadReq) {
   return requestClient.post<number>('/hrm/portal/resume/upload', data);
+}
+
+export function uploadGeneratedResume(data: HrmPortalResumeApi.UploadReq) {
+  return requestClient.post<number>('/hrm/portal/resume/upload-generated', data);
+}
+
+export const RESUME_SOURCE_UPLOAD = 1;
+export const RESUME_SOURCE_GENERATED = 2;
+
+export function isGeneratedResume(resume: HrmPortalResumeApi.Resume) {
+  return resume.resumeType === 1 && resume.sourceType === RESUME_SOURCE_GENERATED;
+}
+
+export function isUploadedResume(resume: HrmPortalResumeApi.Resume) {
+  return resume.resumeType === 1 && !isGeneratedResume(resume);
+}
+
+export function isOnlineResume(resume: HrmPortalResumeApi.Resume) {
+  return resume.resumeType === 2 && resume.title === RECRUIT_PROFILE_TITLE;
+}
+
+export function findOnlineResume(resumes: HrmPortalResumeApi.Resume[]) {
+  return resumes.find(isOnlineResume);
 }
 
 export function createPortalResume(data: HrmPortalResumeApi.CreateReq) {

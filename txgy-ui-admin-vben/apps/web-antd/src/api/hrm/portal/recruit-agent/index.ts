@@ -103,7 +103,8 @@ export namespace HrmPortalRecruitAgentApi {
     | PreCheckResult;
 
   export interface AnalyzeReq {
-    resumeVersionId: number;
+    resumeVersionId?: number;
+    resumeId?: number;
     postId: number;
     idempotencyKey: string;
   }

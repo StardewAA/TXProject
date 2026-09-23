@@ -54,9 +54,19 @@ function splitContent(value?: string) {
 
 function formatLocation(current: HrmPortalRecruitApi.Post) {
   return (
+    current.workAddress ||
     current.areaName ||
     (current.areaId ? `地区 ${current.areaId}` : '工作地点待确认')
   );
+}
+
+function openMap() {
+  const current = post.value;
+  if (!current) return;
+  const query = current.longitude && current.latitude
+    ? `${current.latitude},${current.longitude}`
+    : encodeURIComponent(formatLocation(current));
+  window.open(`https://uri.amap.com/marker?position=${query}&name=${encodeURIComponent(current.postName)}`, '_blank', 'noopener');
 }
 
 function formatSalary(current: HrmPortalRecruitApi.Post) {
@@ -269,7 +279,7 @@ onMounted(async () => {
             </div>
             <div>
               <dt>工作地点</dt>
-              <dd>{{ formatLocation(post) }}</dd>
+              <dd class="location-value">{{ formatLocation(post) }} <a-button v-if="post.workAddress || post.longitude" type="link" size="small" @click="openMap"><IconifyIcon icon="lucide:map" /> 地图导航</a-button></dd>
             </div>
             <div>
               <dt>招聘人数</dt>

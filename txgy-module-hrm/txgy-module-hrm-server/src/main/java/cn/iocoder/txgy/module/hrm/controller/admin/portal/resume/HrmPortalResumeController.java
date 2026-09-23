@@ -42,6 +42,12 @@ public class HrmPortalResumeController {
         return success(resumeService.createUploadResume(getLoginUserId(), reqVO));
     }
 
+    @PostMapping("/upload-generated")
+    @Operation(summary = "保存附件简历制作生成的简历")
+    public CommonResult<Long> uploadGeneratedResume(@Valid @RequestBody HrmPortalResumeUploadReqVO reqVO) {
+        return success(resumeService.createGeneratedResume(getLoginUserId(), reqVO));
+    }
+
     @PostMapping("/create")
     @Operation(summary = "在线创建我的简历")
     public CommonResult<Long> createResume(@Valid @RequestBody HrmPortalResumeCreateReqVO reqVO) {

@@ -233,12 +233,29 @@ async function handleResumeUpload(event: Event) {
   resumeUploading.value = true;
   try {
     const fileUrl = (await uploadFile({ file, directory: 'hrm/personal/resume' })) as string;
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    let content = '';
+    if (extension === 'docx') {
+      const mammoth = await import('mammoth');
+      content = (await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() })).value.trim();
+    } else if (extension === 'pdf') {
+      const pdfjs = await import('pdfjs-dist');
+      const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+      const pages: string[] = [];
+      for (let pageNo = 1; pageNo <= pdf.numPages; pageNo += 1) {
+        const page = await pdf.getPage(pageNo);
+        const text = await page.getTextContent();
+        pages.push(text.items.map((item: any) => item.str || '').join(' '));
+      }
+      content = pages.join('\n').trim();
+    }
     const title = file.name.replace(/\.[^/.]+$/, '').slice(0, 100) || '附件简历';
     await uploadPortalResume({
       title,
       fileName: file.name,
       fileUrl,
       remark: '职业档案引导上传',
+      content: content || undefined,
     });
     uploadedResumeName.value = file.name;
     message.success('简历附件上传成功');

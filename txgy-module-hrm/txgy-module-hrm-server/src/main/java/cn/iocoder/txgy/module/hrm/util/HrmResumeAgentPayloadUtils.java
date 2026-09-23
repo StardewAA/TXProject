@@ -20,6 +20,9 @@ import java.util.Set;
  */
 public final class HrmResumeAgentPayloadUtils {
 
+    private static final int MIN_RESUME_TEXT_LENGTH = 50;
+    private static final int MAX_RESUME_TEXT_LENGTH = 8000;
+
     /**
      * 明确禁止进入模型的属性字段。
      *
@@ -77,6 +80,7 @@ public final class HrmResumeAgentPayloadUtils {
         // 与数组元素同义的通用字段名，便于模型引用单条经历
         names.addAll(List.of("company", "position", "department", "start", "end",
                 "name", "role", "degree", "school", "major", "schoolType", "experience"));
+        names.add("resumeText");
         return java.util.Collections.unmodifiableSet(names);
     }
 
@@ -109,6 +113,13 @@ public final class HrmResumeAgentPayloadUtils {
     public static JSONObject buildAgentSafePayload(String contentJson) {
         JSONObject payload = new JSONObject();
         if (StrUtil.isBlank(contentJson)) {
+            return payload;
+        }
+        if (!contentJson.trim().startsWith("{")) {
+            String text = HrmSensitiveTextMasker.maskResumeText(contentJson.trim());
+            if (text.length() < MIN_RESUME_TEXT_LENGTH) return payload;
+            payload.set("resumeText", text.substring(0, Math.min(MAX_RESUME_TEXT_LENGTH, text.length())));
+            if (containsSensitive(payload)) throw new SensitiveMaskFailedException();
             return payload;
         }
         JSONObject source;

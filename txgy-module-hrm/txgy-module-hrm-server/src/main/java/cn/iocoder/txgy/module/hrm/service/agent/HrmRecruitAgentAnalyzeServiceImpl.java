@@ -9,6 +9,7 @@ import cn.iocoder.txgy.module.hrm.controller.admin.portal.agent.vo.HrmPortalResu
 import cn.iocoder.txgy.module.hrm.dal.dataobject.agent.HrmRecruitAgentAnalysisDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.agent.HrmRecruitAgentTaskDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.personal.resume.HrmPersonalResumeVersionDO;
+import cn.iocoder.txgy.module.hrm.dal.dataobject.personal.resume.HrmPersonalResumeDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.post.HrmRecruitPostDO;
 import cn.iocoder.txgy.module.hrm.enums.agent.HrmRecruitAgentSceneEnum;
 import cn.iocoder.txgy.module.hrm.framework.agent.core.HrmJobMatchResultValidator;
@@ -17,6 +18,7 @@ import cn.iocoder.txgy.module.hrm.framework.agent.core.HrmRecruitAgentPromptTemp
 import cn.iocoder.txgy.module.hrm.framework.agent.core.HrmResumeAnalyzeResultValidator;
 import cn.iocoder.txgy.module.hrm.framework.agent.core.HrmResumeOptimizeResultValidator;
 import cn.iocoder.txgy.module.hrm.service.personal.resume.HrmPersonalResumeVersionService;
+import cn.iocoder.txgy.module.hrm.service.personal.resume.HrmPersonalResumeService;
 import cn.iocoder.txgy.module.hrm.service.recruit.post.HrmRecruitPostService;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -42,6 +44,8 @@ public class HrmRecruitAgentAnalyzeServiceImpl implements HrmRecruitAgentAnalyze
     private HrmRecruitAgentTaskService taskService;
     @Resource
     private HrmPersonalResumeVersionService personalResumeVersionService;
+    @Resource
+    private HrmPersonalResumeService personalResumeService;
     @Resource
     private HrmRecruitPostService postService;
 
@@ -74,7 +78,7 @@ public class HrmRecruitAgentAnalyzeServiceImpl implements HrmRecruitAgentAnalyze
 
     @Override
     public Long submitResumeOptimize(Long userId, HrmPortalResumeOptimizeReqVO reqVO) {
-        HrmPersonalResumeVersionDO version = loadOwnedVersion(userId, reqVO.getResumeVersionId());
+        HrmPersonalResumeVersionDO version = resolveResume(userId, reqVO.getResumeVersionId(), null);
         HrmRecruitPostDO post = postService.getPortalRecruitPostPublished(reqVO.getPostId());
         return sceneRunner.run(buildRunBO(userId, version, post)
                 .setScene(HrmRecruitAgentSceneEnum.RESUME_OPTIMIZE)
@@ -91,7 +95,7 @@ public class HrmRecruitAgentAnalyzeServiceImpl implements HrmRecruitAgentAnalyze
     private Long runPersonalScene(Long userId, HrmPortalRecruitAgentSubmitReqVO reqVO,
                                   HrmRecruitAgentSceneEnum scene, String promptVersion, String systemPrompt,
                                   BiFunction<String, String, JSONObject> validator) {
-        HrmPersonalResumeVersionDO version = loadOwnedVersion(userId, reqVO.getResumeVersionId());
+        HrmPersonalResumeVersionDO version = resolveResume(userId, reqVO.getResumeVersionId(), reqVO.getResumeId());
         HrmRecruitPostDO post = postService.getPortalRecruitPostPublished(reqVO.getPostId());
         return sceneRunner.run(buildRunBO(userId, version, post)
                 .setScene(scene)
@@ -115,6 +119,19 @@ public class HrmRecruitAgentAnalyzeServiceImpl implements HrmRecruitAgentAnalyze
     /** 归属校验：版本必须是本人的；非本人与不存在一律按「不存在」处理 */
     private HrmPersonalResumeVersionDO loadOwnedVersion(Long userId, Long resumeVersionId) {
         return personalResumeVersionService.getVersion(userId, resumeVersionId);
+    }
+
+    private HrmPersonalResumeVersionDO resolveResume(Long userId, Long versionId, Long resumeId) {
+        if (resumeId == null) return loadOwnedVersion(userId, versionId);
+        HrmPersonalResumeDO resume = personalResumeService.getResume(userId, resumeId);
+        if (resume == null || StrUtil.isBlank(resume.getContent())) {
+            throw new IllegalArgumentException("简历内容为空或不存在");
+        }
+        HrmPersonalResumeVersionDO version = new HrmPersonalResumeVersionDO();
+        version.setId(resume.getId());
+        version.setUserId(userId);
+        version.setContent(resume.getContent());
+        return version;
     }
 
     @Override

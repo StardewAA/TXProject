@@ -10,6 +10,8 @@ public interface HrmPersonalResumeService {
 
     Long createUploadResume(Long userId, HrmPortalResumeUploadReqVO reqVO);
 
+    Long createGeneratedResume(Long userId, HrmPortalResumeUploadReqVO reqVO);
+
     Long createOnlineResume(Long userId, HrmPortalResumeCreateReqVO reqVO);
 
     List<HrmPersonalResumeDO> getResumeList(Long userId);

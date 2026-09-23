@@ -153,6 +153,12 @@ const coreRoutes: RouteRecordRaw[] = [
         meta: { title: '职位详情', hideInMenu: true },
       },
       {
+        name: 'PortalRecruitCompany',
+        path: 'recruit/company',
+        component: () => import('#/views/portal/recruit/company.vue'),
+        meta: { title: '企业主页', hideInMenu: true },
+      },
+      {
         name: 'PortalRecruitMessages',
         path: 'recruit/messages',
         redirect: { name: 'PortalRecruit', query: { section: 'messages' } },

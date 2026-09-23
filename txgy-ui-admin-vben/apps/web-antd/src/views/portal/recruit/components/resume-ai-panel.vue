@@ -28,6 +28,13 @@ import {
   type HrmPortalRecruitAgentApi,
 } from '#/api/hrm/portal/recruit-agent';
 import {
+  getPortalResumeList,
+  isGeneratedResume,
+  isOnlineResume,
+  isUploadedResume,
+  type HrmPortalResumeApi,
+} from '#/api/hrm/portal/resume';
+import {
   getPortalResumeVersionList,
   type HrmPortalResumeVersionApi,
 } from '#/api/hrm/portal/resume-version';
@@ -89,8 +96,11 @@ const scene = ref<Scene>('analyze');
 const phase = ref<Phase>('idle');
 const loadingOptions = ref(false);
 const versions = ref<HrmPortalResumeVersionApi.Version[]>([]);
+const resumes = ref<HrmPortalResumeApi.Resume[]>([]);
 const posts = ref<Array<{ id: number; postName: string }>>([]);
 const selectedVersionId = ref<number>();
+const selectedResumeId = ref<number>();
+const sourceKind = ref<'online' | 'uploaded' | 'generated'>('online');
 const selectedPostId = ref<number>();
 const optimizeStyle =
   ref<HrmPortalRecruitAgentApi.OptimizeStyle>('PROFESSIONAL');
@@ -127,9 +137,13 @@ const suggestionModuleLabels: Record<string, string> = {
 
 const canSubmit = computed(
   () =>
-    Boolean(selectedVersionId.value && selectedPostId.value) &&
+    Boolean((scene.value === 'optimize' ? selectedVersionId.value : selectedResumeId.value) && selectedPostId.value) &&
     phase.value !== 'running',
 );
+const sourceResumes = computed(() => resumes.value.filter((resume) =>
+  sourceKind.value === 'online' ? isOnlineResume(resume) : sourceKind.value === 'uploaded' ? isUploadedResume(resume) : isGeneratedResume(resume),
+));
+const selectedResume = computed(() => resumes.value.find((item) => item.id === selectedResumeId.value));
 
 /** 诊断结果（含优势/缺失/风险/建议） */
 const analyzeResult = computed(() =>
@@ -246,11 +260,13 @@ function scoreTone(score?: number) {
 async function loadOptions() {
   loadingOptions.value = true;
   try {
-    const [versionList, postPage] = await Promise.all([
+    const [versionList, resumeList, postPage] = await Promise.all([
       getPortalResumeVersionList(),
+      getPortalResumeList(),
       getPortalRecruitPostPage({ pageNo: 1, pageSize: 100 }),
     ]);
     versions.value = (versionList || []).filter((item) => item.status === 0);
+    resumes.value = resumeList || [];
     posts.value = (postPage?.list || []).map((item) => ({
       id: item.id,
       postName: item.postName,
@@ -258,12 +274,14 @@ async function loadOptions() {
     if (!selectedVersionId.value && versions.value.length > 0) {
       selectedVersionId.value = versions.value[0]!.id;
     }
+    if (!selectedResumeId.value) selectedResumeId.value = sourceResumes.value[0]?.id;
     if (!selectedPostId.value && posts.value.length > 0) {
       selectedPostId.value = posts.value[0]!.id;
     }
   } catch (error) {
     console.warn('[RecruitAgent] 加载选项失败', error);
     versions.value = [];
+    resumes.value = [];
     posts.value = [];
   } finally {
     loadingOptions.value = false;
@@ -277,7 +295,9 @@ async function submit() {
   taskResult.value = undefined;
   currentIdempotencyKey = buildAnalyzeIdempotencyKey();
   const base = {
-    resumeVersionId: selectedVersionId.value!,
+    ...(scene.value === 'optimize'
+      ? { resumeVersionId: selectedVersionId.value! }
+      : { resumeId: selectedResumeId.value! }),
     postId: selectedPostId.value!,
     idempotencyKey: currentIdempotencyKey,
   };
@@ -387,8 +407,20 @@ watch(
       <!-- 选择分析对象 -->
       <section v-if="phase === 'idle' || phase === 'running'" class="ai-form">
         <label class="ai-field">
-          <span>用于分析的简历版本</span>
+          <span>{{ scene === 'optimize' ? '用于优化的简历版本' : '分析来源' }}</span>
+          <a-segmented
+            v-if="scene !== 'optimize'"
+            v-model:value="sourceKind"
+            :options="[
+              { label: '在线简历', value: 'online' },
+              { label: '已上传附件', value: 'uploaded' },
+              { label: '制作生成附件', value: 'generated' },
+            ]"
+            :disabled="phase === 'running'"
+            @change="() => { selectedResumeId = sourceResumes[0]?.id; }"
+          />
           <a-select
+            v-if="scene === 'optimize'"
             v-model:value="selectedVersionId"
             :loading="loadingOptions"
             placeholder="请先保存一个简历版本"
@@ -398,6 +430,18 @@ watch(
               V{{ item.versionNo }}（{{ item.changeSummary || '未填写修改摘要' }}）
             </a-select-option>
           </a-select>
+          <a-select
+            v-else
+            v-model:value="selectedResumeId"
+            :loading="loadingOptions"
+            placeholder="请选择简历来源"
+            :disabled="phase === 'running'"
+          >
+            <a-select-option v-for="item in sourceResumes" :key="item.id" :value="item.id">
+              {{ item.title || item.fileName || '未命名简历' }}
+            </a-select-option>
+          </a-select>
+          <small v-if="scene !== 'optimize' && selectedResume && !selectedResume.content" class="ai-hint warn">该附件尚未提取文本，暂不能进行分析。</small>
         </label>
 
         <label class="ai-field">
@@ -454,13 +498,14 @@ watch(
           </label>
         </template>
 
-        <p v-if="!loadingOptions && versions.length === 0" class="ai-hint warn">
+        <p v-if="!loadingOptions && scene === 'optimize' && versions.length === 0" class="ai-hint warn">
           还没有可用的简历版本。请先
           <button type="button" class="ai-hint-link" @click="emit('openVersions')">
             打开「简历版本」
           </button>
           把当前简历保存为版本，再回来分析。
         </p>
+        <p v-else-if="!loadingOptions && scene !== 'optimize' && sourceResumes.length === 0" class="ai-hint warn">当前来源暂无可分析简历，请先上传或制作附件。</p>
         <p v-else-if="!loadingOptions && posts.length === 0" class="ai-hint warn">
           暂时没有可选的已发布职位。
         </p>

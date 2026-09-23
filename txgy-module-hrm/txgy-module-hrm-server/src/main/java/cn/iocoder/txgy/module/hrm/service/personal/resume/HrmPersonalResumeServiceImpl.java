@@ -34,6 +34,9 @@ public class HrmPersonalResumeServiceImpl implements HrmPersonalResumeService {
     private static final int UPLOAD_RESUME_TYPE = 1;
     private static final int ONLINE_RESUME_TYPE = 2;
     private static final String RECRUIT_PROFILE_TITLE = "求职资料（系统）";
+    private static final int UPLOAD_SOURCE = 1;
+    private static final int GENERATED_SOURCE = 2;
+    private static final int MAX_ATTACHMENT_RESUME_COUNT = 5;
 
     @Resource
     private HrmPersonalResumeMapper resumeMapper;
@@ -50,9 +53,30 @@ public class HrmPersonalResumeServiceImpl implements HrmPersonalResumeService {
     public Long createUploadResume(Long userId, HrmPortalResumeUploadReqVO reqVO) {
         // 服务端兜底校验简历附件类型与大小
         resumeFileValidator.validate(reqVO.getFileName(), reqVO.getFileUrl());
+        return insertAttachment(userId, reqVO, UPLOAD_SOURCE);
+    }
+
+    @Override
+    public Long createGeneratedResume(Long userId, HrmPortalResumeUploadReqVO reqVO) {
+        resumeFileValidator.validate(reqVO.getFileName(), reqVO.getFileUrl());
+        return insertAttachment(userId, reqVO, GENERATED_SOURCE);
+    }
+
+    private Long insertAttachment(Long userId, HrmPortalResumeUploadReqVO reqVO, int sourceType) {
         HrmPersonalResumeDO resume = BeanUtils.toBean(reqVO, HrmPersonalResumeDO.class)
-                .setUserId(userId).setResumeType(UPLOAD_RESUME_TYPE);
-        return insertInCurrentTenant(resume);
+                .setUserId(userId).setResumeType(UPLOAD_RESUME_TYPE).setSourceType(sourceType);
+        Long id = insertInCurrentTenant(resume);
+        evictOldestAttachmentsWhenExceeded(userId, sourceType);
+        return id;
+    }
+
+    private void evictOldestAttachmentsWhenExceeded(Long userId, int sourceType) {
+        List<HrmPersonalResumeDO> attachments = TenantUtils.executeIgnore(() -> resumeMapper
+                .selectUploadListAscByUserIdAndSourceType(userId, sourceType));
+        while (attachments.size() > MAX_ATTACHMENT_RESUME_COUNT) {
+            HrmPersonalResumeDO oldest = attachments.remove(0);
+            TenantUtils.executeIgnore(() -> resumeMapper.deleteUploadByIdAndUserId(oldest.getId(), userId));
+        }
     }
 
     @Override

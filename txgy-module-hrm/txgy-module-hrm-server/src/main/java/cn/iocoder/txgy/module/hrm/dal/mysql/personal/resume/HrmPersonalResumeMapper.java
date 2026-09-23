@@ -18,6 +18,15 @@ public interface HrmPersonalResumeMapper extends BaseMapperX<HrmPersonalResumeDO
                 .orderByDesc(HrmPersonalResumeDO::getId));
     }
 
+    default List<HrmPersonalResumeDO> selectUploadListAscByUserIdAndSourceType(Long userId, Integer sourceType) {
+        return selectList(new LambdaQueryWrapperX<HrmPersonalResumeDO>()
+                .eq(HrmPersonalResumeDO::getUserId, userId)
+                .eq(HrmPersonalResumeDO::getResumeType, 1)
+                .eq(HrmPersonalResumeDO::getSourceType, sourceType)
+                .orderByAsc(HrmPersonalResumeDO::getCreateTime)
+                .orderByAsc(HrmPersonalResumeDO::getId));
+    }
+
     default HrmPersonalResumeDO selectByIdAndUserId(Long id, Long userId) {
         return selectOne(new LambdaQueryWrapperX<HrmPersonalResumeDO>()
                 .eq(HrmPersonalResumeDO::getId, id)

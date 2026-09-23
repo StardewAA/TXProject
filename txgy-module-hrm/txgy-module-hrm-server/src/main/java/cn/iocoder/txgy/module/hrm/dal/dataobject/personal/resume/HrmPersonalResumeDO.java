@@ -26,10 +26,14 @@ public class HrmPersonalResumeDO extends TenantBaseDO {
     private String title;
     /** 1 附件简历，2 在线简历 */
     private Integer resumeType;
+    /** 1 用户上传，2 附件简历制作生成 */
+    private Integer sourceType;
     /** 附件名称 */
     private String fileName;
     /** 附件地址 */
     private String fileUrl;
+    /** 仅用于前端预览，不进入模型 */
+    private String avatarUrl;
     /** 在线填写内容，当前作为占位文本保存 */
     private String content;
     /** 备注 */

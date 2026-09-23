@@ -17,6 +17,9 @@ public class HrmPortalRecruitPostRespVO {
     private Integer jobNature;
     private Integer areaId;
     private String areaName;
+    private String workAddress;
+    private BigDecimal longitude;
+    private BigDecimal latitude;
     private Long deptId;
     private String deptName;
     private Integer recruitNum;

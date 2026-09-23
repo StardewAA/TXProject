@@ -21,6 +21,12 @@ public class HrmPortalResumeUploadReqVO {
     @Size(max = 1024, message = "附件地址长度不能超过 1024 个字符")
     private String fileUrl;
 
+    @Size(max = 1024, message = "头像地址长度不能超过 1024 个字符")
+    private String avatarUrl;
+
+    @Size(max = 2000000, message = "简历正文不能超过 2000000 个字符")
+    private String content;
+
     @Size(max = 500, message = "备注长度不能超过 500 个字符")
     private String remark;
 }

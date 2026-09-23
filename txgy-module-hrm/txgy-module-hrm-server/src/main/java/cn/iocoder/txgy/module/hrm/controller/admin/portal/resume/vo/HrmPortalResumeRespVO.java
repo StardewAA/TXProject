@@ -12,8 +12,10 @@ public class HrmPortalResumeRespVO {
     private Long id;
     private String title;
     private Integer resumeType;
+    private Integer sourceType;
     private String fileName;
     private String fileUrl;
+    private String avatarUrl;
     private String content;
     private String remark;
     private LocalDateTime createTime;

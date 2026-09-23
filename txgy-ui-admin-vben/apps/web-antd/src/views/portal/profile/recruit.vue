@@ -480,7 +480,7 @@ onUnmounted(() => {
       <div class="profile-avatar"><img v-if="profileAvatarUrl" :src="profileAvatarUrl" alt="个人头像" /><IconifyIcon v-else icon="lucide:user-round" /></div>
       <div class="profile-identity"><p class="section-eyebrow">职业资料</p><h1>{{ profileName }}</h1><p>{{ profileMeta }}</p><span>{{ careerProfile.employmentStatus || '求职状态待确认' }}</span></div>
       <div class="profile-expectation"><small>期望职位</small><strong>{{ careerProfile.postTypeName || '暂未设置' }}</strong><p>{{ careerProfile.city || '工作城市待确认' }}</p></div>
-      <div class="profile-summary-actions"><a-button class="profile-online-resume-button" @click="router.push({ name: 'PortalRecruit', query: { section: 'resume' } })">在线简历</a-button></div>
+      <div class="profile-summary-actions"><a-button class="profile-online-resume-button" @click="router.push({ name: 'PortalRecruit', query: { section: 'resume' } })">在线简历 / 附件管理</a-button></div>
     </section>
 
     <section class="recruit-workspace-hero">

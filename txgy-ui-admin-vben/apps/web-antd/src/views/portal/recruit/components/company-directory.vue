@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import { RouterLink } from 'vue-router';
+import { RouterLink, useRouter } from 'vue-router';
 
 import { IconifyIcon } from '@vben/icons';
 
@@ -18,6 +18,7 @@ interface CompanyEntry extends HrmPortalRecruitApi.Company {
 }
 
 const companies = ref<CompanyEntry[]>([]);
+const router = useRouter();
 const loading = ref(true);
 const loadFailed = ref(false);
 const keyword = ref('');
@@ -129,9 +130,7 @@ function resetFilters() {
 }
 
 function openCompany(company: CompanyEntry) {
-  selectedCompany.value = company;
-  detailPage.value = 1;
-  detailOpen.value = true;
+  void router.push({ name: 'PortalRecruitCompany', query: { id: String(company.id) } });
 }
 
 function formatSalary(post: HrmPortalRecruitApi.Post) {

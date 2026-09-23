@@ -17,6 +17,9 @@ export namespace HrmPortalRecruitApi {
     jobNature?: number;
     areaId?: number;
     areaName?: string;
+    workAddress?: string;
+    longitude?: number;
+    latitude?: number;
     deptId?: number;
     deptName?: string;
     companyName?: string;

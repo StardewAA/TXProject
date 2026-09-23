@@ -29,6 +29,9 @@ public final class HrmSensitiveTextMasker {
     /** 15 位身份证 */
     private static final Pattern ID_CARD_15 = Pattern.compile("(?<!\\d)\\d{6}\\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\\d|3[01])\\d{3}(?!\\d)");
 
+    private static final Pattern SENSITIVE_LABEL = Pattern.compile(
+            "(?m)(性别|年龄|民族|宗教|婚姻状况|婚育|户籍|政治面貌|身高|体重)\\s*[:：]\\s*[^\\r\\n，,；;]{1,24}");
+
     /**
      * 门牌级详细地址。
      *
@@ -58,6 +61,13 @@ public final class HrmSensitiveTextMasker {
         result = replaceAll(EMAIL, result, HrmSensitiveTextMasker::maskEmail);
         result = replaceAll(DETAILED_ADDRESS, result, HrmSensitiveTextMasker::maskAddress);
         return result;
+    }
+
+    /** 对上传简历提取出的纯文本做二次字段级脱敏。 */
+    public static String maskResumeText(String text) {
+        if (StrUtil.isBlank(text)) return text;
+        String result = mask(text);
+        return SENSITIVE_LABEL.matcher(result).replaceAll("$1：****");
     }
 
     /**
