@@ -7,7 +7,6 @@ import { Empty, Tag } from 'ant-design-vue';
 
 import { getTenantSimpleList } from '#/api/core/auth';
 import { getPortalRecruitCompanyProfile, type HrmRecruitCompanyApi } from '#/api/hrm/recruit/company';
-import type { HrmPortalRecruitApi } from '#/api/hrm/portal/recruit';
 import { getPortalRecruitPostPage, type HrmPortalRecruitApi } from '#/api/hrm/portal/recruit';
 import { loadBaiduMapSdk } from '#/components/map';
 

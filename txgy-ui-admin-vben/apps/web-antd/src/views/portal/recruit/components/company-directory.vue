@@ -37,6 +37,8 @@ const selectedCompany = ref<CompanyEntry>();
 const selectedProfile = ref<Record<string, string | undefined> & HrmRecruitCompanyApi.Profile>({});
 const detailOpen = ref(false);
 const detailPage = ref(1);
+/** 从招聘首页「热招企业」跳转过来时，待打开的企业 id（companies 加载完成后消费） */
+const pendingOpenCompanyId = ref<number>();
 const detailPageSize = 6;
 
 const hiringCompanyCount = computed(() => companies.value.filter((company) => company.posts.length > 0).length);
@@ -146,7 +148,13 @@ function openCompany(company: CompanyEntry) {
 
 function openCompanyById(id: number) {
   const company = companies.value.find((item) => item.id === id);
-  if (company) openCompany(company);
+  if (company) {
+    openCompany(company);
+    return;
+  }
+  // 从招聘首页点击「热招企业」跳转过来时，本组件刚挂载、companies 仍在异步加载，
+  // 此时直接查找必然落空。先记下目标 id，等 loadCompanies 完成后自动打开。
+  pendingOpenCompanyId.value = id;
 }
 
 defineExpose({ openCompanyById });
@@ -190,6 +198,13 @@ async function loadCompanies() {
         .sort((left, right) => right.id - left.id),
       logo: [...(postsByCompany.get(company.id)?.values() || [])].find((post) => post.companyLogo)?.companyLogo,
     }));
+    // 消费「从招聘首页热招企业跳转过来」的待打开请求
+    if (pendingOpenCompanyId.value != null) {
+      const targetId = pendingOpenCompanyId.value;
+      pendingOpenCompanyId.value = undefined;
+      const target = companies.value.find((item) => item.id === targetId);
+      if (target) openCompany(target);
+    }
   } catch {
     companies.value = [];
     loadFailed.value = true;
