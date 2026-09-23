@@ -139,6 +139,15 @@ deploy/backend/bpm-app.jar
 deploy/backend/wms-app.jar
 /deploy/jars/**/app.jar
 
+# 报表后端构建产物（仅本地部署用，禁止入库）
+deploy/backend/report-app.jar
+
+# 前端 Playwright CLI 本地缓存（工具生成，不入库）
+.playwright-cli/
+
+# 误生成的空文件
+/$null
+
 # 本地构建与运行时产物（独立编排的 jar / 前端产物 / 补丁 / 备份，不入库）
 .docker-local/
 # 独立编排初始化用的整库 dump（本地生成，不入库）
