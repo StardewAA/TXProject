@@ -1,0 +1,61 @@
+{
+  "_source": "https://23330.o.apispace.com/project-info-upgrade/project-list (2026-09-09 真实调用第1次, 额度保护后仅用此样本)",
+  "data": {
+    "costTime": null,
+    "total": 22812,
+    "pageId": 1,
+    "pageNumber": 5,
+    "startDate": "2026-08-01 00:00:01",
+    "endDate": "2026-09-08 23:59:59",
+    "hasNext": true,
+    "data": [
+      {
+        "id": 349984779,
+        "newsTypeID": 1,
+        "title": "济南工程职业技术学院城市轨道交通数字资源制作项目公开招标招标公告",
+        "publishTime": "2026-09-08 23:58:19",
+        "content": null,
+        "proviceCode": "370000",
+        "cityCode": "370100",
+        "countyCode": null,
+        "hasFile": 1,
+        "score": 3.4779034,
+        "projectMoney": "55万",
+        "projectClassID": "1",
+        "purchaseTypeID": "1",
+        "industryCodeList": [
+          "P824"
+        ],
+        "subMatCodeList": [
+          "J461",
+          "A019"
+        ],
+        "partANameList": [
+          "济南工程职业技术学院"
+        ],
+        "partBNameList": [],
+        "contractEndDate": null
+      },
+      {
+        "id": 349982383,
+        "newsTypeID": 1,
+        "title": "安多县扎仁镇集中供暖清洁能源改造项目（EPC+O）工程…",
+        "publishTime": "2026-09-08 22:10:00",
+        "content": null,
+        "proviceCode": "540000",
+        "cityCode": null,
+        "countyCode": null,
+        "hasFile": 1,
+        "score": 3.1,
+        "projectMoney": null,
+        "projectClassID": "1",
+        "purchaseTypeID": "2",
+        "industryCodeList": [],
+        "subMatCodeList": [],
+        "partANameList": [],
+        "partBNameList": [],
+        "contractEndDate": null
+      }
+    ]
+  }
+}

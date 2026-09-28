@@ -1,0 +1,25 @@
+<script setup lang="ts">
+import { onMounted, ref } from 'vue'
+import { enterpriseApi, type EnterpriseApplication } from '@/api/enterprise'
+import BusinessSummary from '@/components/BusinessSummary.vue'
+const row=ref<EnterpriseApplication|null>(null), loaded=ref(false)
+onMounted(async()=>{try{row.value=await enterpriseApi.mine();loaded.value=true}catch{/*接口层提示，不展示假成功*/}})
+</script>
+<template>
+ <div class="container business-center purchase-center">
+  <main class="panel"><section class="center-hero"><div><small>PROCUREMENT OPERATIONS</small><h1>企业采购工作台</h1><p>{{row?.name||'请先完善企业资料'}}</p></div><span :class="{ready:loaded&&row?.status===1}">{{!loaded?'身份核验中':row?.status===1?'企业认证通过':'等待企业认证'}}</span></section>
+   <el-alert v-if="!loaded" title="正在加载企业身份，加载失败请刷新重试" :closable="false"/>
+   <el-alert v-else-if="row?.status!==1" title="企业尚未审核通过，请完善资料或等待后台审核" type="warning" :closable="false"/>
+   <template v-else><BusinessSummary/><el-alert title="企业注册与资质认证成功，当前账号可按授权使用企业采购服务" type="success" :closable="false"/><div class="shortcuts"><MallLink to="/purchase/inquiries/new">发布询价单 / Excel 导入</MallLink><MallLink to="/purchase/inquiries">管理询价单</MallLink><MallLink to="/purchase/inquiry-quotes">收到的报价</MallLink><MallLink to="/goods">选购商品</MallLink><MallLink to="/cart">采购清单</MallLink><MallLink to="/purchase/orders">采购订单与收货</MallLink><MallLink to="/purchase/after-sales">退款售后</MallLink></div></template>
+   <p>询价提交后可在采购中心继续查看报价、沟通、采纳结果和采购订单。供应经营统一使用后台管理端，不在商城会员端办理。</p>
+  </main>
+ </div>
+</template>
+<style scoped>
+.business-center{display:block;margin:28px auto 42px;min-height:620px;--sidebar:#133942;--active:#167664;--accent:#167664;--soft:#eef8f5}
+aside{position:sticky;top:20px;overflow:hidden;align-self:start;border:1px solid #ffffff14;border-radius:20px;background:radial-gradient(circle at 92% 0,color-mix(in srgb,var(--active) 55%,transparent) 0,transparent 34%),linear-gradient(160deg,var(--sidebar),color-mix(in srgb,var(--sidebar) 84%,#08141e));box-shadow:0 18px 42px #152f4026;color:white}
+.sidebar-heading{padding:25px 22px 20px;border-bottom:1px solid #ffffff18}.sidebar-heading span{color:#adc6d2;font-size:9px;font-weight:700;letter-spacing:1.7px}.sidebar-heading h2{margin:8px 0 0;font-size:25px}
+nav{padding:14px}aside a,.unavailable{display:flex;align-items:center;justify-content:space-between;min-height:42px;padding:9px 12px;border:1px solid transparent;border-radius:10px;font-size:13px;line-height:1.5;transition:.2s ease}aside a:hover{transform:translateX(2px);background:#ffffff10}.current{border-color:#ffffff20;background:linear-gradient(90deg,var(--active),color-mix(in srgb,var(--active) 72%,#142f3c));box-shadow:0 8px 20px #081b2a30;font-weight:700}.menu-group{margin:20px 12px 7px;color:#9fb5c3;font-size:10px;font-weight:700;letter-spacing:1.2px}.unavailable{color:#9eacb7;cursor:not-allowed}.unavailable small{padding:1px 5px;border:1px solid #ffffff25;border-radius:99px;font-size:9px}.shop-name{margin:4px 8px;padding:8px 10px;border-left:2px solid color-mix(in srgb,var(--active) 80%,#fff);color:#d5e2e8;font-size:12px;overflow-wrap:anywhere}.center-switch{padding:12px 14px 18px;border-top:1px solid #ffffff18}.center-switch:empty{display:none}
+main{padding:28px;border:1px solid #e1e8e8;border-radius:20px;box-shadow:0 16px 40px #1c3d4810}.center-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin:-28px -28px 24px;padding:28px 30px 24px;border-bottom:1px solid #e4ebe9;border-radius:20px 20px 0 0;background:linear-gradient(115deg,#f7fbfa 0%,#fff 72%)}.sales-center .center-hero{background:linear-gradient(115deg,#f2f6fb 0%,#fff 72%)}.center-hero small{color:var(--accent);font-size:9px;font-weight:800;letter-spacing:1.7px}.center-hero h1{margin:8px 0 5px;color:#172f38;font-size:30px}.center-hero p{margin:0}.center-hero>span{padding:7px 12px;border-radius:99px;background:#fff4e9;color:#a25a16;font-size:11px;font-weight:700}.center-hero>span.ready{background:#eaf7f1;color:#14755f}p{color:#64748b;line-height:1.75}.shortcuts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:24px 0}.shortcuts a{position:relative;min-height:86px;padding:20px 42px 20px 20px;border:1px solid #d8e8e3;border-radius:13px;background:linear-gradient(145deg,#fff,var(--soft));box-shadow:0 8px 20px #173e4608;color:var(--accent);font-weight:700}.shortcuts a::after{position:absolute;right:17px;top:50%;transform:translateY(-50%);content:'›';font-size:24px;font-weight:400}.shortcuts a:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--accent) 45%,#d8e8e3);box-shadow:0 12px 25px #173e4612}.shop{margin:18px 0;padding:22px;border:1px solid #dbe7e5;border-radius:16px;background:linear-gradient(145deg,#fff,var(--soft))}.shop h3{margin:0;color:#203d46}.sales-center .shop{border-color:#dbe4f0}.el-alert{border-radius:11px}
+@media(max-width:1000px){.business-center{grid-template-columns:230px minmax(0,1fr);gap:18px}.shortcuts{grid-template-columns:repeat(2,minmax(0,1fr))}main{padding:22px}.center-hero{margin:-22px -22px 22px;padding:24px}.center-hero h1{font-size:26px}}
+</style>

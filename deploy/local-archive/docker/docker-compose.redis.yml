@@ -1,0 +1,24 @@
+name: txgy-local
+
+services:
+  redis:
+    image: redis:7.4-alpine
+    container_name: txgy-redis
+    command:
+      - redis-server
+      - --appendonly
+      - "no"
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - allkeys-lru
+    ports:
+      - "16379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+

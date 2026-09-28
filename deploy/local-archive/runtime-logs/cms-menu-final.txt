@@ -1,0 +1,25 @@
+70029	70000	智能检索	search	cms/home/index
+70040	70000	内容管理	content	NULL
+70007	70000	审查管理	review	NULL
+70030	70000	发布管理	publish	NULL
+70000	0	CMS系统	/cms	NULL
+70050	70007	审查任务分配	task	cms/review/task/index
+70009	70007	审查复核	record	cms/review/parts/record/index
+70010	70007	审查报告	report	cms/review/parts/report/index
+70036	70009	修改并重新提交		NULL
+70037	70010	核验官方来源与效力		NULL
+70038	70010	修改并重新提交		NULL
+70032	70030	下架已发内容		NULL
+70033	70030	重建检索索引		NULL
+70034	70030	提交发布内容		NULL
+70031	70030	发布决策	decision	cms/publish/index
+70008	70030	提交审查	submit	cms/review/parts/submit/index
+70046	70040	栏目树	category	cms/content/category/index
+70041	70040	标准规范	standard	cms/content/standard/index
+70042	70040	材料参数	material	cms/content/material/index
+70043	70040	工艺案例	process	cms/content/process/index
+70044	70040	定额资料	quota	cms/content/quota/index
+70045	70040	政策法规	policy	cms/content/policy/index
+70047	70040	素材库	asset	cms/content/asset/index
+70048	70040	推荐位	recommend	cms/content/recommend/index
+70049	70040	SEO 设置	seo	cms/content/seo/index

@@ -1,0 +1,65 @@
+/*
+ * 标书审查 · 管理端页面公共样式
+ *
+ * 口径（用户 2026-09-17 明确要求）：所有搜索/筛选用输入框、下拉框统一白底。
+ * 为什么放在公共文件而不是各页面重复写：改造前只有 ReportPanel / RulePanel 的 extra 区加了
+ * 行内 `background:#fff`，TaskPanel 的表单内输入框没有 → 同一模块内两种观感。
+ *
+ * 用法：页面根节点加 class="br-page"（本文件为全局样式，靠 .br-page 前缀限定作用域；
+ * 弹窗/Drawer 挂在 body 下，不受影响）。
+ */
+
+.br-page {
+  padding: 12px 16px;
+}
+
+.br-page .ant-input,
+.br-page .ant-input-affix-wrapper,
+.br-page .ant-input-number,
+.br-page .ant-select:not(.ant-select-customize-input) .ant-select-selector {
+  background: #fff !important;
+}
+
+/* 筛选用表单：紧凑一行，换行时保持行距，不出现"贴边" */
+.br-page .br-query {
+  margin-bottom: 12px;
+  row-gap: 8px;
+}
+
+.br-page .br-query .ant-form-item {
+  margin-bottom: 8px;
+}
+
+/* 卡片式指标条：与招投标其他模块保持一致的白底卡片 */
+.br-page .br-stats {
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  background: #fff;
+  border: 1px solid #eef2f7;
+  border-radius: 4px;
+}
+
+.br-page .br-line {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 13px;
+  color: #434343;
+}
+
+.br-page .br-line__label {
+  min-width: 110px;
+}
+
+.br-page .br-sub {
+  font-size: 12px;
+  color: #8a94a6;
+}
+
+.br-page .br-hint {
+  margin-left: 8px;
+  font-size: 12px;
+  color: #8a94a6;
+}

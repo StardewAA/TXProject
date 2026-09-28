@@ -1,0 +1,13 @@
+# 通用补丁镜像：以"当前正在运行的镜像"为基底，仅替换应用 jar（jar 位于 /app/app.jar）。
+#
+# 用途：源码已在本机完成 Maven 构建（Reactor 多模块，infra-api 改动会被正确打进
+#      各服务的 fat jar），无需在容器内重跑整条构建。
+# 约束：BASE_IMAGE 必须是该服务**当前运行**的镜像 tag，以保证 JVM 参数、工作目录、
+#      健康检查与 entrypoint 与线上完全一致。
+#
+# 用法：
+#   docker build --build-arg BASE_IMAGE=<running-image> \
+#     -t <new-tag> -f deploy/patch-image/Dockerfile.patch-app <staging-dir>
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+COPY app.jar /app/app.jar

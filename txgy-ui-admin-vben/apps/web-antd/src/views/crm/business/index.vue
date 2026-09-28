@@ -1,0 +1,288 @@
+<script lang="ts" setup>
+import type { VxeTableGridOptions } from '#/adapter/vxe-table';
+import type { CrmBusinessApi } from '#/api/crm/business';
+
+import { onActivated, onMounted, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+
+import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
+import { downloadFileFromBlobPart } from '@vben/utils';
+
+import { Button, message, Tabs } from 'ant-design-vue';
+
+import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
+import {
+  deleteBusiness,
+  exportBusiness,
+  getBusinessPage,
+} from '#/api/crm/business';
+import { $t } from '#/locales';
+
+import { isBusinessClosed, useGridColumns, useGridFormSchema } from './data';
+import Form from './modules/form.vue';
+import LoseForm from './modules/lose-form.vue';
+import StageForm from './modules/stage-form.vue';
+import WinForm from './modules/win-form.vue';
+
+const { push } = useRouter();
+const sceneType = ref('1');
+
+const [FormModal, formModalApi] = useVbenModal({
+  connectedComponent: Form,
+  destroyOnClose: true,
+});
+
+const [StageModal, stageModalApi] = useVbenModal({
+  connectedComponent: StageForm,
+  destroyOnClose: true,
+});
+
+/** 赢单弹窗：签约日期、签约金额必填 */
+const [WinModal, winModalApi] = useVbenModal({
+  connectedComponent: WinForm,
+  destroyOnClose: true,
+});
+
+/** 输单弹窗：丢单原因必填、丢单备注选填 */
+const [LoseModal, loseModalApi] = useVbenModal({
+  connectedComponent: LoseForm,
+  destroyOnClose: true,
+});
+
+/** 刷新表格 */
+function handleRefresh() {
+  gridApi.query();
+}
+
+/** 处理场景类型的切换 */
+function handleChangeSceneType(key: number | string) {
+  sceneType.value = key.toString();
+  gridApi.query();
+}
+
+/** 导出表格 */
+async function handleExport() {
+  const formValues = await gridApi.formApi.getValues();
+  const data = await exportBusiness({
+    sceneType: sceneType.value,
+    ...formValues,
+  });
+  downloadFileFromBlobPart({ fileName: '商机.xls', source: data });
+}
+
+/** 创建商机 */
+function handleCreate() {
+  formModalApi.setData(null).open();
+}
+
+/**
+ * 支持从 CRM 首页快捷入口跳转过来时自动打开「新建」弹窗（?action=create）
+ *
+ * 首页的「新建商机」不再自己弹表单，而是进入商机模块并自动打开本页的新建弹窗，
+ * 用户能同时获得商机列表的上下文。
+ *
+ * 用 onMounted + onActivated 而非 watch：列表页被 keep-alive 缓存，
+ * 二次进入时组件不会重新 setup，只有在 onActivated 里检查才生效。
+ * 打开后立即清掉 query，避免刷新 / 返回时反复弹出。
+ */
+const route = useRoute();
+
+function checkCreateAction() {
+  if (route.query.action !== 'create') {
+    return;
+  }
+  // 清掉 URL 上的标记：用原生 history 改写地址栏，**不能**用 router.replace ——
+  // 那会触发一次路由导航，把紧接着要打开的弹窗重置掉。
+  const url = new URL(window.location.href);
+  url.searchParams.delete('action');
+  window.history.replaceState(window.history.state, '', url.toString());
+  // 弹窗容器需在本页挂载完成后才能渲染，稍等一拍再打开
+  setTimeout(() => {
+    handleCreate();
+  }, 300);
+}
+
+onMounted(checkCreateAction);
+onActivated(checkCreateAction);
+
+/** 编辑商机 */
+function handleEdit(row: CrmBusinessApi.Business) {
+  formModalApi.setData(row).open();
+}
+
+/** 更改商机阶段 */
+function handleChangeStage(row: CrmBusinessApi.Business) {
+  stageModalApi.setData(row).open();
+}
+
+/** 商机赢单 */
+function handleWin(row: CrmBusinessApi.Business) {
+  winModalApi.setData(row).open();
+}
+
+/** 商机输单 */
+function handleLose(row: CrmBusinessApi.Business) {
+  loseModalApi.setData(row).open();
+}
+
+/** 删除商机 */
+async function handleDelete(row: CrmBusinessApi.Business) {
+  const hideLoading = message.loading({
+    content: $t('ui.actionMessage.deleting', [row.name]),
+    duration: 0,
+  });
+  try {
+    await deleteBusiness(row.id!);
+    message.success($t('ui.actionMessage.deleteSuccess', [row.name]));
+    handleRefresh();
+  } finally {
+    hideLoading();
+  }
+}
+
+/** 查看商机详情 */
+function handleDetail(row: CrmBusinessApi.Business) {
+  push({ name: 'CrmBusinessDetail', params: { id: row.id } });
+}
+
+/** 查看客户详情 */
+function handleCustomerDetail(row: CrmBusinessApi.Business) {
+  push({ name: 'CrmCustomerDetail', params: { id: row.customerId } });
+}
+
+const [Grid, gridApi] = useVbenVxeGrid({
+  formOptions: {
+    schema: useGridFormSchema(),
+  },
+  gridOptions: {
+    columns: useGridColumns(),
+    height: 'auto',
+    keepSource: true,
+    proxyConfig: {
+      ajax: {
+        query: async ({ page }, formValues) => {
+          return await getBusinessPage({
+            pageNo: page.currentPage,
+            pageSize: page.pageSize,
+            sceneType: sceneType.value,
+            ...formValues,
+          });
+        },
+      },
+    },
+    rowConfig: {
+      keyField: 'id',
+      isHover: true,
+    },
+    toolbarConfig: {
+      refresh: true,
+      search: true,
+    },
+  } as VxeTableGridOptions<CrmBusinessApi.Business>,
+});
+</script>
+
+<template>
+  <Page auto-content-height>
+    <template #doc>
+      <DocAlert
+        title="【商机】商机管理、商机状态"
+        url="https://doc.iocoder.cn/crm/business/"
+      />
+      <DocAlert
+        title="【通用】数据权限"
+        url="https://doc.iocoder.cn/crm/permission/"
+      />
+    </template>
+
+    <FormModal @success="handleRefresh" />
+    <StageModal @success="handleRefresh" />
+    <WinModal @success="handleRefresh" />
+    <LoseModal @success="handleRefresh" />
+    <Grid>
+      <template #toolbar-actions>
+        <Tabs class="w-full" @change="handleChangeSceneType">
+          <Tabs.TabPane tab="我负责的" key="1" />
+          <Tabs.TabPane tab="我参与的" key="2" />
+          <Tabs.TabPane tab="下属负责的" key="3" />
+        </Tabs>
+      </template>
+      <template #toolbar-tools>
+        <TableAction
+          :actions="[
+            {
+              label: $t('ui.actionTitle.create', ['商机']),
+              type: 'primary',
+              icon: ACTION_ICON.ADD,
+              auth: ['crm:business:create'],
+              onClick: handleCreate,
+            },
+            {
+              label: $t('ui.actionTitle.export'),
+              type: 'primary',
+              icon: ACTION_ICON.DOWNLOAD,
+              auth: ['crm:business:export'],
+              onClick: handleExport,
+            },
+          ]"
+        />
+      </template>
+      <template #name="{ row }">
+        <Button type="link" @click="handleDetail(row)">
+          {{ row.name }}
+        </Button>
+      </template>
+      <template #customerName="{ row }">
+        <Button type="link" @click="handleCustomerDetail(row)">
+          {{ row.customerName }}
+        </Button>
+      </template>
+      <template #actions="{ row }">
+        <TableAction
+          :actions="[
+            {
+              label: '赢单',
+              type: 'link',
+              auth: ['crm:business:update'],
+              ifShow: () => !isBusinessClosed(row.businessState),
+              onClick: handleWin.bind(null, row),
+            },
+            {
+              label: '输单',
+              type: 'link',
+              auth: ['crm:business:update'],
+              ifShow: () => !isBusinessClosed(row.businessState),
+              onClick: handleLose.bind(null, row),
+            },
+            {
+              label: '更改阶段',
+              type: 'link',
+              auth: ['crm:business:update'],
+              ifShow: () => !isBusinessClosed(row.businessState),
+              onClick: handleChangeStage.bind(null, row),
+            },
+            {
+              label: $t('common.edit'),
+              type: 'link',
+              icon: ACTION_ICON.EDIT,
+              ifShow: () => !isBusinessClosed(row.businessState),
+              auth: ['crm:business:update'],
+              onClick: handleEdit.bind(null, row),
+            },
+            {
+              label: $t('common.delete'),
+              type: 'link',
+              danger: true,
+              icon: ACTION_ICON.DELETE,
+              auth: ['crm:business:delete'],
+              popConfirm: {
+                title: $t('ui.actionMessage.deleteConfirm', [row.name]),
+                confirm: handleDelete.bind(null, row),
+              },
+            },
+          ]"
+        />
+      </template>
+    </Grid>
+  </Page>
+</template>

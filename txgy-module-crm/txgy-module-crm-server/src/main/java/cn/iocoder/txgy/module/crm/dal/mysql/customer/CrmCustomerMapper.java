@@ -1,0 +1,261 @@
+package cn.iocoder.txgy.module.crm.dal.mysql.customer;
+
+import cn.hutool.core.date.LocalDateTimeUtil;
+import cn.hutool.core.util.ObjUtil;
+import cn.hutool.core.util.StrUtil;
+import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.framework.mybatis.core.mapper.BaseMapperX;
+import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
+import cn.iocoder.txgy.framework.mybatis.core.query.MPJLambdaWrapperX;
+import cn.iocoder.txgy.module.crm.controller.admin.customer.vo.customer.CrmCustomerPageReqVO;
+import cn.iocoder.txgy.module.crm.dal.dataobject.customer.CrmCustomerDO;
+import cn.iocoder.txgy.module.crm.dal.dataobject.customer.CrmCustomerPoolConfigDO;
+import cn.iocoder.txgy.module.crm.enums.common.CrmBizTypeEnum;
+import cn.iocoder.txgy.module.crm.enums.common.CrmSceneTypeEnum;
+import cn.iocoder.txgy.module.crm.util.CrmPermissionUtils;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import org.apache.ibatis.annotations.Mapper;
+import org.springframework.lang.Nullable;
+import org.springframework.util.Assert;
+
+import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.List;
+
+/**
+ * 客户 Mapper
+ *
+ * @author Wanwan
+ */
+@Mapper
+public interface CrmCustomerMapper extends BaseMapperX<CrmCustomerDO> {
+
+    /**
+     * 查询相似客户：同客户类别 + 同行业（按编号倒序，最多 limit 条）
+     *
+     * @param current 当前客户
+     * @param limit   返回数量
+     * @return 相似客户列表
+     */
+    default List<CrmCustomerDO> selectSimilarList(CrmCustomerDO current, Integer limit) {
+        LambdaQueryWrapperX<CrmCustomerDO> query = new LambdaQueryWrapperX<>();
+        query.ne(CrmCustomerDO::getId, current.getId());
+        query.eqIfPresent(CrmCustomerDO::getCustomerType, current.getCustomerType());
+        query.eqIfPresent(CrmCustomerDO::getIndustryId, current.getIndustryId());
+        query.orderByDesc(CrmCustomerDO::getId);
+        query.last("LIMIT " + (limit == null || limit <= 0 ? 10 : Math.min(limit, 50)));
+        return selectList(query);
+    }
+
+    default Long selectCountByLockStatusAndOwnerUserId(Boolean lockStatus, Long ownerUserId) {
+        return selectCount(new LambdaUpdateWrapper<CrmCustomerDO>()
+                .eq(CrmCustomerDO::getLockStatus, lockStatus)
+                .eq(CrmCustomerDO::getOwnerUserId, ownerUserId));
+    }
+
+    default Long selectCountByDealStatusAndOwnerUserId(@Nullable Boolean dealStatus, Long ownerUserId) {
+        return selectCount(new LambdaQueryWrapperX<CrmCustomerDO>()
+                .eqIfPresent(CrmCustomerDO::getDealStatus, dealStatus)
+                .eq(CrmCustomerDO::getOwnerUserId, ownerUserId));
+    }
+
+    default int updateOwnerUserIdById(Long id, Long ownerUserId) {
+        return update(new LambdaUpdateWrapper<CrmCustomerDO>()
+                .eq(CrmCustomerDO::getId, id)
+                .set(CrmCustomerDO::getOwnerUserId, ownerUserId));
+    }
+
+    default PageResult<CrmCustomerDO> selectPage(CrmCustomerPageReqVO pageReqVO, Long ownerUserId) {
+        MPJLambdaWrapperX<CrmCustomerDO> query = new MPJLambdaWrapperX<>();
+        // 拼接数据权限的查询条件
+        if (Boolean.TRUE.equals(pageReqVO.getPool())) {
+            query.isNull(CrmCustomerDO::getOwnerUserId);
+        } else {
+            CrmPermissionUtils.appendPermissionCondition(query, CrmBizTypeEnum.CRM_CUSTOMER.getType(),
+                    CrmCustomerDO::getId, ownerUserId, pageReqVO.getSceneType());
+        }
+        // 拼接自身的查询条件
+        query.selectAll(CrmCustomerDO.class)
+                .likeIfPresent(CrmCustomerDO::getName, pageReqVO.getName())
+                .eqIfPresent(CrmCustomerDO::getMobile, pageReqVO.getMobile())
+                .eqIfPresent(CrmCustomerDO::getIndustryId, pageReqVO.getIndustryId())
+                .eqIfPresent(CrmCustomerDO::getLevel, pageReqVO.getLevel())
+                .eqIfPresent(CrmCustomerDO::getSource, pageReqVO.getSource())
+                .eqIfPresent(CrmCustomerDO::getCustomerType, pageReqVO.getCustomerType())
+                .eqIfPresent(CrmCustomerDO::getFollowUpStatus, pageReqVO.getFollowUpStatus());
+
+        // backlog 查询
+        if (ObjUtil.isNotNull(pageReqVO.getContactStatus())) {
+            Assert.isNull(pageReqVO.getPool(), "pool 必须是 null");
+            LocalDateTime beginOfToday = LocalDateTimeUtil.beginOfDay(LocalDateTime.now());
+            LocalDateTime endOfToday = LocalDateTimeUtil.endOfDay(LocalDateTime.now());
+            if (pageReqVO.getContactStatus().equals(CrmCustomerPageReqVO.CONTACT_TODAY)) { // 今天需联系
+                query.between(CrmCustomerDO::getContactNextTime, beginOfToday, endOfToday);
+            } else if (pageReqVO.getContactStatus().equals(CrmCustomerPageReqVO.CONTACT_EXPIRED)) { // 已逾期
+                query.lt(CrmCustomerDO::getContactNextTime, beginOfToday);
+            } else if (pageReqVO.getContactStatus().equals(CrmCustomerPageReqVO.CONTACT_ALREADY)) { // 已联系
+                query.between(CrmCustomerDO::getContactLastTime, beginOfToday, endOfToday);
+            } else {
+                throw new IllegalArgumentException("未知联系状态：" + pageReqVO.getContactStatus());
+            }
+        }
+        return selectJoinPage(pageReqVO, CrmCustomerDO.class, query);
+    }
+
+    default CrmCustomerDO selectByCustomerName(String name) {
+        return selectOne(CrmCustomerDO::getName, name);
+    }
+
+    /**
+     * 按客户类别查询客户列表（供应商基础库下拉使用）
+     *
+     * @param customerType 客户类别：1=下游客户 2=上游供应商
+     * @return 客户列表（按名称升序）
+     */
+    default List<CrmCustomerDO> selectListByCustomerType(Integer customerType) {
+        return selectList(new LambdaQueryWrapperX<CrmCustomerDO>()
+                .eqIfPresent(CrmCustomerDO::getCustomerType, customerType)
+                .orderByAsc(CrmCustomerDO::getName));
+    }
+
+    /**
+     * 查重：根据手机号、客户名称查询匹配的客户（包含公海客户）
+     *
+     * @param mobile 手机号，精确匹配
+     * @param name   客户名称，精确匹配
+     * @return 客户列表，最多 5 条
+     */
+    /**
+     * 变更累计跟进次数（delta 为 +1 表示新增一次跟进，-1 表示删除一条跟进；结果不会小于 0）
+     *
+     * 用 SQL 自增而不是「先查再写」，避免并发下相互覆盖导致次数丢失
+     *
+     * @param id    客户编号
+     * @param delta 变更量
+     * @return 影响行数
+     */
+    default int updateFollowUpCountById(Long id, int delta) {
+        return update(null, new LambdaUpdateWrapper<CrmCustomerDO>()
+                .eq(CrmCustomerDO::getId, id)
+                .setSql("follow_up_count = GREATEST(follow_up_count + (" + delta + "), 0)"));
+    }
+
+    default List<CrmCustomerDO> selectListByDuplicate(String mobile, String name) {
+        LambdaQueryWrapperX<CrmCustomerDO> query = new LambdaQueryWrapperX<>();
+        if (StrUtil.isNotBlank(mobile) && StrUtil.isNotBlank(name)) {
+            query.and(w -> w.eq(CrmCustomerDO::getMobile, mobile).or().eq(CrmCustomerDO::getName, name));
+        } else if (StrUtil.isNotBlank(mobile)) {
+            query.eq(CrmCustomerDO::getMobile, mobile);
+        } else if (StrUtil.isNotBlank(name)) {
+            query.eq(CrmCustomerDO::getName, name);
+        } else {
+            return Collections.emptyList();
+        }
+        query.orderByDesc(CrmCustomerDO::getId).last("LIMIT 5");
+        return selectList(query);
+    }
+
+    default PageResult<CrmCustomerDO> selectPutPoolRemindCustomerPage(CrmCustomerPageReqVO pageReqVO,
+                                                                      CrmCustomerPoolConfigDO poolConfig,
+                                                                      Long ownerUserId) {
+        final MPJLambdaWrapperX<CrmCustomerDO> query = buildPutPoolRemindCustomerQuery(pageReqVO, poolConfig, ownerUserId);
+        return selectJoinPage(pageReqVO, CrmCustomerDO.class, query.selectAll(CrmCustomerDO.class));
+    }
+
+    default Long selectPutPoolRemindCustomerCount(CrmCustomerPageReqVO pageReqVO,
+                                                  CrmCustomerPoolConfigDO poolConfig,
+                                                  Long userId) {
+        final MPJLambdaWrapperX<CrmCustomerDO> query = buildPutPoolRemindCustomerQuery(pageReqVO, poolConfig, userId);
+        return selectCount(query);
+    }
+
+    private static MPJLambdaWrapperX<CrmCustomerDO> buildPutPoolRemindCustomerQuery(CrmCustomerPageReqVO pageReqVO,
+                                                                                    CrmCustomerPoolConfigDO poolConfig,
+                                                                                    Long ownerUserId) {
+        MPJLambdaWrapperX<CrmCustomerDO> query = new MPJLambdaWrapperX<>();
+        // 拼接数据权限的查询条件
+        CrmPermissionUtils.appendPermissionCondition(query, CrmBizTypeEnum.CRM_CUSTOMER.getType(),
+                CrmCustomerDO::getId, ownerUserId, pageReqVO.getSceneType());
+
+        // 未锁定 + 未成交
+        query.eq(CrmCustomerDO::getLockStatus, false).eq(CrmCustomerDO::getDealStatus, false);
+
+        // 情况一：未成交提醒日期区间
+        Integer dealExpireDays = poolConfig.getDealExpireDays();
+        LocalDateTime startDealRemindTime = LocalDateTime.now().minusDays(dealExpireDays);
+        LocalDateTime endDealRemindTime = LocalDateTime.now()
+                .minusDays(Math.max(dealExpireDays - poolConfig.getNotifyDays(), 0));
+        // 情况二：未跟进提醒日期区间
+        Integer contactExpireDays = poolConfig.getContactExpireDays();
+        LocalDateTime startContactRemindTime = LocalDateTime.now().minusDays(contactExpireDays);
+        LocalDateTime endContactRemindTime = LocalDateTime.now()
+                .minusDays(Math.max(contactExpireDays - poolConfig.getNotifyDays(), 0));
+        query.and(q -> {
+            // 情况一：成交超时提醒
+            q.between(CrmCustomerDO::getOwnerTime, startDealRemindTime, endDealRemindTime)
+            // 情况二：跟进超时提醒
+            .or(w -> w.between(CrmCustomerDO::getOwnerTime, startContactRemindTime, endContactRemindTime)
+                    .and(p -> p.between(CrmCustomerDO::getContactLastTime, startContactRemindTime, endContactRemindTime)
+                            .or().isNull(CrmCustomerDO::getContactLastTime)));
+        });
+        return query;
+    }
+
+    /**
+     * 获得需要过期到公海的客户列表
+     *
+     * @return 客户列表
+     */
+    default List<CrmCustomerDO> selectListByAutoPool(CrmCustomerPoolConfigDO poolConfig) {
+        LambdaQueryWrapper<CrmCustomerDO> query = new LambdaQueryWrapper<>();
+        query.gt(CrmCustomerDO::getOwnerUserId, 0);
+        // 未锁定 + 未成交
+        query.eq(CrmCustomerDO::getLockStatus, false).eq(CrmCustomerDO::getDealStatus, false);
+        // 已经超时
+        LocalDateTime dealExpireTime = LocalDateTime.now().minusDays(poolConfig.getDealExpireDays());
+        LocalDateTime contactExpireTime = LocalDateTime.now().minusDays(poolConfig.getContactExpireDays());
+        query.and(q -> {
+            // 情况一：成交超时
+            q.lt(CrmCustomerDO::getOwnerTime, dealExpireTime)
+            // 情况二：跟进超时
+            .or(w -> w.lt(CrmCustomerDO::getOwnerTime, contactExpireTime)
+                    .and(p -> p.lt(CrmCustomerDO::getContactLastTime, contactExpireTime)
+                            .or().isNull(CrmCustomerDO::getContactLastTime)));
+        });
+        return selectList(query);
+    }
+
+    default Long selectCountByTodayContact(Long ownerUserId) {
+        MPJLambdaWrapperX<CrmCustomerDO> query = new MPJLambdaWrapperX<>();
+        // 主管/租户管理员统计下属负责的；普通销售统计自己负责的
+        if (CrmPermissionUtils.isCrmOrTenantAdmin() || CrmPermissionUtils.hasSubordinate(ownerUserId)) {
+            CrmPermissionUtils.appendPermissionCondition(query, CrmBizTypeEnum.CRM_CUSTOMER.getType(),
+                    CrmCustomerDO::getId, ownerUserId, CrmSceneTypeEnum.SUBORDINATE.getType());
+        } else {
+            CrmPermissionUtils.appendPermissionCondition(query, CrmBizTypeEnum.CRM_CUSTOMER.getType(),
+                    CrmCustomerDO::getId, ownerUserId, CrmSceneTypeEnum.OWNER.getType());
+        }
+        // 今天需联系
+        LocalDateTime beginOfToday = LocalDateTimeUtil.beginOfDay(LocalDateTime.now());
+        LocalDateTime endOfToday = LocalDateTimeUtil.endOfDay(LocalDateTime.now());
+        query.between(CrmCustomerDO::getContactNextTime, beginOfToday, endOfToday);
+        return selectCount(query);
+    }
+
+    default Long selectCountByFollow(Long ownerUserId) {
+        MPJLambdaWrapperX<CrmCustomerDO> query = new MPJLambdaWrapperX<>();
+        // 主管/租户管理员统计下属负责的；普通销售统计自己负责的
+        if (CrmPermissionUtils.isCrmOrTenantAdmin() || CrmPermissionUtils.hasSubordinate(ownerUserId)) {
+            CrmPermissionUtils.appendPermissionCondition(query, CrmBizTypeEnum.CRM_CUSTOMER.getType(),
+                    CrmCustomerDO::getId, ownerUserId, CrmSceneTypeEnum.SUBORDINATE.getType());
+        } else {
+            CrmPermissionUtils.appendPermissionCondition(query, CrmBizTypeEnum.CRM_CUSTOMER.getType(),
+                    CrmCustomerDO::getId, ownerUserId, CrmSceneTypeEnum.OWNER.getType());
+        }
+        // 未跟进（注意：这里统计的是客户，字段要取 CrmCustomerDO）
+        query.eq(CrmCustomerDO::getFollowUpStatus, false);
+        return selectCount(query);
+    }
+
+}

@@ -1,0 +1,86 @@
+/* HRM QA report styles */
+:root {
+  --bg: #f6f1ea;
+  --ink: #2a2420;
+  --muted: #6b6560;
+  --card: #fffdf9;
+  --line: #e4d9cc;
+  --accent: #b54a2c;
+  --fatal: #9b1c1c;
+  --serious: #c2410c;
+  --normal: #a16207;
+  --advice: #0f766e;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  line-height: 1.55;
+}
+.wrap { max-width: 1100px; margin: 0 auto; padding: 28px 20px 60px; }
+.hero {
+  display: flex; justify-content: space-between; gap: 16px; align-items: flex-end;
+  padding: 22px 24px; background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+}
+.hero h1 { margin: 0 0 6px; font-size: 28px; letter-spacing: 0.02em; }
+.sub { color: var(--muted); font-size: 13px; }
+.meta {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px; margin: 16px 0;
+}
+.meta .card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+}
+.meta .k { font-size: 11px; color: var(--muted); }
+.meta .v { font-size: 13px; margin-top: 2px; }
+.meta a { color: var(--accent); }
+.stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 16px 0; }
+.stat {
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  padding: 14px 12px; text-align: center;
+}
+.stat .n { font-size: 28px; font-weight: 650; }
+.stat .t { font-size: 12px; color: var(--muted); }
+.stat.fatal .n { color: var(--fatal); }
+.stat.serious .n { color: var(--serious); }
+.stat.normal .n { color: var(--normal); }
+.stat.advice .n { color: var(--advice); }
+.panel {
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 16px 18px; margin: 14px 0;
+}
+.panel h2 { margin: 0 0 12px; font-size: 16px; }
+.cover { margin: 0; padding-left: 18px; color: var(--ink); font-size: 13px; }
+.cover li { margin: 4px 0; }
+.filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; font-size: 13px; }
+.filters label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); }
+.filters select, .filters input {
+  min-width: 140px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff;
+}
+.filters button {
+  padding: 8px 14px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer;
+}
+.item {
+  border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; background: #fff;
+}
+.item header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 6px; }
+.item .id { font-weight: 700; font-family: ui-monospace, monospace; }
+.badge {
+  font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted);
+}
+.badge.致命, .badge.P0 { background: #fee2e2; color: var(--fatal); border-color: #fecaca; }
+.badge.严重, .badge.P1 { background: #ffedd5; color: var(--serious); border-color: #fed7aa; }
+.badge.一般, .badge.P2 { background: #fef3c7; color: var(--normal); border-color: #fde68a; }
+.badge.建议, .badge.I { background: #ccfbf1; color: var(--advice); border-color: #99f6e4; }
+.item h3 { margin: 0; font-size: 15px; flex: 1; min-width: 200px; }
+.item dl { margin: 0; display: grid; grid-template-columns: 88px 1fr; gap: 4px 10px; font-size: 13px; }
+.item dt { color: var(--muted); }
+.item dd { margin: 0; }
+.item code { background: #f3eee7; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+.empty { color: var(--muted); padding: 12px; text-align: center; }
+@media (max-width: 720px) {
+  .stats { grid-template-columns: repeat(2, 1fr); }
+  .hero { flex-direction: column; align-items: flex-start; }
+}

@@ -1,0 +1,46 @@
+package cn.iocoder.txgy.module.system.controller.admin.mail.vo.account;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotNull;
+import lombok.Data;
+
+@Schema(description = "管理后台 - 邮箱账号创建/修改 Request VO")
+@Data
+public class MailAccountSaveReqVO {
+
+    @Schema(description = "编号", example = "1024")
+    private Long id;
+
+    @Schema(description = "邮箱", requiredMode = Schema.RequiredMode.REQUIRED, example = "txgyyuanma@123.com")
+    @NotNull(message = "邮箱不能为空")
+    @Email(message = "必须是 Email 格式")
+    private String mail;
+
+    @Schema(description = "用户名", requiredMode = Schema.RequiredMode.REQUIRED, example = "txgy")
+    @NotNull(message = "用户名不能为空")
+    private String username;
+
+    /**
+     * 新增时必填（由 Service 校验）；修改时留空表示沿用原密码，避免前端因为拿不到密码而把它清掉。
+     */
+    @Schema(description = "密码（授权码）。新增必填；修改时留空表示不修改", example = "123456")
+    private String password;
+
+    @Schema(description = "SMTP 服务器域名", requiredMode = Schema.RequiredMode.REQUIRED, example = "www.iocoder.cn")
+    @NotNull(message = "SMTP 服务器域名不能为空")
+    private String host;
+
+    @Schema(description = "SMTP 服务器端口", requiredMode = Schema.RequiredMode.REQUIRED, example = "80")
+    @NotNull(message = "SMTP 服务器端口不能为空")
+    private Integer port;
+
+    @Schema(description = "是否开启 ssl", requiredMode = Schema.RequiredMode.REQUIRED, example = "true")
+    @NotNull(message = "是否开启 ssl 必填")
+    private Boolean sslEnable;
+
+    @Schema(description = "是否开启 starttls", requiredMode = Schema.RequiredMode.REQUIRED, example = "true")
+    @NotNull(message = "是否开启 starttls 必填")
+    private Boolean starttlsEnable;
+
+}

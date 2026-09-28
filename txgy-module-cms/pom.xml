@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>cn.iocoder.cloud</groupId>
+        <artifactId>txgy</artifactId>
+        <version>${revision}</version>
+    </parent>
+    <artifactId>txgy-module-cms</artifactId>
+    <packaging>pom</packaging>
+    <name>${project.artifactId}</name>
+    <description>CMS 骨架：法规与劳动法、标准规范、材料参数、工法案例、资质定额</description>
+    <modules>
+        <module>txgy-module-cms-api</module>
+        <module>txgy-module-cms-server</module>
+    </modules>
+</project>

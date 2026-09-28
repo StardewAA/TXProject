@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "packageName": "cn.txgy.mall",
+  "version": "1.0.2",
+  "versionCode": 102,
+  "apkUrl": "/downloads/txgy-mall-1.0.2-8df324973c31.apk",
+  "fileSizeBytes": 25058,
+  "releaseDate": "2026-09-24",
+  "minimumAndroidVersion": "Android 6.0",
+  "sha256": "8df324973c31d6ac24dd7aa42f6b1eef3409cc93e51d834c31a6371abe831055",
+  "permissionsSummary": "网络访问、网络状态；文件上传通过系统选择器，不读取通讯录或短信",
+  "distribution": "classroom-demo"
+}

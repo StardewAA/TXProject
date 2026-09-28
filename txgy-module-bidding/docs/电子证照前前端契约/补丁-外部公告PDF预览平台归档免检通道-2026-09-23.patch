@@ -1,0 +1,20 @@
+--- a/txgy-module-bidding/txgy-module-bidding-server/src/main/java/cn/iocoder/txgy/module/bidding/service/noticeexternal/NoticeExternalServiceImpl.java
++++ b/txgy-module-bidding/txgy-module-bidding-server/src/main/java/cn/iocoder/txgy/module/bidding/service/noticeexternal/NoticeExternalServiceImpl.java
+@@ -836,7 +836,16 @@
+         //   （恶意/异常大文件会撑爆管理端响应），且无法在单测中打桩（预览回退的合规行为无法回归验证）。
+         //   契约不变：任何失败/空体一律返回 null，调用方按"暂无原文"404 处理。
+         try {
+-            byte[] bytes = httpFetchClient.getBytes(url);
++            // 2026-09-23 缺陷修复（与 2026-09-22 采集侧 ARCHIVE_HTML 同款分流）：平台归档地址形如
++            //   http://127.0.0.1:48080/admin-api/infra/file/4/get/…（infra 存储配置 domain = 宿主回环），
++            //   走带 SSRF 校验的 getBytes 会被 SsrfGuard 判「目标解析到受限地址」直接拒 ——
++            //   实测 GX 源 347 条 PDF 公告里 344 条预览恒 404，应用日志原文：
++            //   [pdfContent][id=…][平台归档] 获取失败: SSRF 拦截：目标解析到受限地址 127.0.0.1（host=127.0.0.1）。
++            //   平台文件端点属系统自产、外部不可控（判定口径 UrlHostGuard.isInternalFileUrl），故改走免检通道；
++            //   外站直链仍走带 SSRF 校验的 getBytes（双保险），SSRF 防护面不扩大。
++            byte[] bytes = UrlHostGuard.isInternalFileUrl(url)
++                    ? httpFetchClient.fetchTextInternal(url).getBytes()
++                    : httpFetchClient.getBytes(url);
+             if (bytes != null && bytes.length > 0) {
+                 return bytes;
+             }

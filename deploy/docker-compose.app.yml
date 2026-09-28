@@ -1,0 +1,165 @@
+# 应用服务编排：基于宿主机已构建 fat jar 的薄镜像（deploy/jars/<svc>/app.jar）。
+#
+# 用途：把 gateway / system / infra / bidding 四个服务跑进 Docker，接入主 compose
+# （deploy/docker-compose.yml）创建的 txgy-dev 网络，与 mysql/redis/nacos 同网通信。
+#
+# 用法（在 deploy 目录执行）：
+#   docker compose -f docker-compose.app.yml build
+#   docker compose -f docker-compose.app.yml up -d
+#
+# 与主 compose 的关系：本文件只补「应用服务」，不重复定义中间件；网络 txgy-dev 为外部引用，
+# 故需先 `docker compose -f docker-compose.yml up -d mysql redis nacos`。
+#
+# 命名空间：统一用 public（空串）。宿主 JVM 联调与本编排保持一致，避免 dev/public 分裂
+#   导致网关查不到 bidding 实例。
+services:
+
+  gateway:
+    image: txgy-app-gateway:latest
+    container_name: txgy-gateway
+    build:
+      context: ./jars/gateway
+      dockerfile: Dockerfile.runtime
+      args:
+        JAR_FILE: app.jar
+    environment:
+      TZ: Asia/Shanghai
+      SERVER_PORT: 48080
+      SPRING_PROFILES_ACTIVE: local
+      SPRING_CLOUD_NACOS_SERVER_ADDR: nacos:8848
+      SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+      SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR: nacos:8848
+      SPRING_CLOUD_NACOS_DISCOVERY_NAMESPACE: ""
+      SPRING_CLOUD_NACOS_CONFIG_NAMESPACE: ""
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      JAVA_OPTS: "-Xms128m -Xmx384m -XX:+UseG1GC"
+    ports:
+      - "48080:48080"
+    networks:
+      - txgy-dev
+    restart: unless-stopped
+
+  system:
+    image: txgy-app-system:latest
+    container_name: txgy-system
+    build:
+      context: ./jars/system
+      dockerfile: Dockerfile.runtime
+      args:
+        JAR_FILE: app.jar
+    environment:
+      TZ: Asia/Shanghai
+      SERVER_PORT: 48080
+      SPRING_PROFILES_ACTIVE: local
+      SPRING_CLOUD_NACOS_SERVER_ADDR: nacos:8848
+      SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+      SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR: nacos:8848
+      SPRING_CLOUD_NACOS_DISCOVERY_NAMESPACE: ""
+      SPRING_CLOUD_NACOS_CONFIG_NAMESPACE: ""
+      SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_URL: "jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true"
+      SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_USERNAME: root
+      SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      JAVA_OPTS: "-Xms128m -Xmx448m -XX:+UseG1GC"
+    ports:
+      - "48081:48080"
+    networks:
+      - txgy-dev
+    restart: unless-stopped
+
+  infra:
+    image: txgy-app-infra:latest
+    container_name: txgy-infra
+    build:
+      context: ./jars/infra
+      dockerfile: Dockerfile.runtime
+      args:
+        JAR_FILE: app.jar
+    environment:
+      TZ: Asia/Shanghai
+      SERVER_PORT: 48080
+      SPRING_PROFILES_ACTIVE: local
+      SPRING_CLOUD_NACOS_SERVER_ADDR: nacos:8848
+      SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+      SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR: nacos:8848
+      SPRING_CLOUD_NACOS_DISCOVERY_NAMESPACE: ""
+      SPRING_CLOUD_NACOS_CONFIG_NAMESPACE: ""
+      SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_URL: "jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true"
+      SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_USERNAME: root
+      SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      RESOURCE_UPLOAD_DIR: /app/uploads
+      JAVA_OPTS: "-Xms128m -Xmx448m -XX:+UseG1GC"
+    ports:
+      - "48082:48080"
+    volumes:
+      - app-uploads:/app/uploads
+    networks:
+      - txgy-dev
+    restart: unless-stopped
+
+  # 招投标模块（本编排的主角）。
+  # 容器内不依赖 ES / AI：本机没有 ES 集群，AI 模块也未部署，故显式关闭，
+  #   否则 bidding 的 EsStartupHealthCheck 会 fail-fast 拒绝启动（无索引不上线是刻意设计）。
+  # Feign 直连：local profile 默认指向 127.0.0.1:48087/48088（宿主联调用），容器内改为服务名。
+  bidding:
+    image: txgy-app-bidding:latest
+    container_name: txgy-bidding
+    build:
+      context: ./jars/bidding
+      dockerfile: Dockerfile.runtime
+      args:
+        JAR_FILE: app.jar
+    environment:
+      TZ: Asia/Shanghai
+      SERVER_PORT: 48080
+      SPRING_PROFILES_ACTIVE: local
+      SPRING_CLOUD_NACOS_SERVER_ADDR: nacos:8848
+      SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+      SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR: nacos:8848
+      SPRING_CLOUD_NACOS_DISCOVERY_NAMESPACE: ""
+      SPRING_CLOUD_NACOS_CONFIG_NAMESPACE: ""
+      SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_URL: "jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true"
+      SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_USERNAME: root
+      SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      # 容器内 RPC 直连改走服务名（覆盖 application-local.yaml 的 127.0.0.1:48087/48088）
+      SPRING_CLOUD_OPENFEIGN_CLIENT_CONFIG_SYSTEM_SERVER_URL: http://system:48080
+      SPRING_CLOUD_OPENFEIGN_CLIENT_CONFIG_INFRA_SERVER_URL: http://infra:48080
+      # 无 ES 集群 → 关闭检索引擎，走数据库兜底
+      BIDDING_ES_ENABLED: "false"
+      # AI 模块未部署 → 关闭 AI 结构化抽取
+      BIDDING_AI_ENABLED: "false"
+      # 标书 Agent 向量库 Qdrant（由 deploy/models/docker-compose.yml 起，已加入 txgy-dev 网络）
+      QDRANT_HOST: txgy-qdrant
+      QDRANT_PORT: "6334"
+      # 标书 Agent 检索能力（阿里云百炼 embedding）——key 由 deploy/.env 提供，不进 git
+      BID_AGENT_AI_ENABLED: "true"
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
+      # 材料入库下载文件 url 时，把宿主的 127.0.0.1:48080 重写为网关容器名（容器内可达）
+      BIDDING_BID_AGENT_FILE_DOWNLOAD_HOST: txgy-gateway:48080
+      # 标书生成执行底座（Node bid-agent-service 容器，见 docker-compose.bidagent.yml，同网容器名访问）
+      BIDDING_BID_AGENT_ORCHESTRATOR_BASE_URL: http://txgy-bid-agent:8199
+      # 门户标书工坊（个人/平台租户 0）挂载的企业租户：材料入库/生成任务/知识库检索/企业事实统一落到该租户（西安欧鹏=1）
+      BIDDING_BID_AGENT_PORTAL_ENTERPRISE_TENANT_ID: "1"
+      JAVA_OPTS: "-Xms192m -Xmx640m -XX:+UseG1GC"
+    ports:
+      - "48110:48080"
+    volumes:
+      - bidding-crawl-tmp:/app/data
+    networks:
+      - txgy-dev
+    restart: unless-stopped
+
+volumes:
+  app-uploads:
+  bidding-crawl-tmp:
+
+networks:
+  txgy-dev:
+    external: true
+    name: txgy-dev

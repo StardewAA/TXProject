@@ -1,0 +1,20 @@
+# Image-only overlay for the 2026-09-25 cross-tenant order and image fixes.
+# Apply LAST, after the existing mall / Android / file-ACL overlays.
+# Keep all existing env, ports, volumes and master=4. Never use --build here.
+# Roll back by removing only this overlay and re-running the same five services.
+services:
+  infra:
+    image: txgy-infra:cross-tenant-20260925-2
+    pull_policy: never
+  trade:
+    image: txgy-trade:cross-tenant-20260925
+    pull_policy: never
+  product:
+    image: txgy-product:cross-tenant-20260925
+    pull_policy: never
+  mall-pc:
+    image: txgy-mall-pc:cross-tenant-20260925
+    pull_policy: never
+  mall-h5:
+    image: txgy-mall-h5:cross-tenant-20260925
+    pull_policy: never

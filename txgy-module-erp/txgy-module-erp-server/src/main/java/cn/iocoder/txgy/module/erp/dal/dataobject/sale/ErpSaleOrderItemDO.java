@@ -1,0 +1,106 @@
+package cn.iocoder.txgy.module.erp.dal.dataobject.sale;
+
+import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.txgy.module.erp.dal.dataobject.product.ErpProductDO;
+import com.baomidou.mybatisplus.annotation.KeySequence;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
+import lombok.*;
+
+import java.math.BigDecimal;
+
+/**
+ * ERP 销售订单项 DO
+ *
+ * @author OPENLAB BS
+ */
+@TableName("erp_sale_order_items")
+@KeySequence("erp_sale_order_items_seq") // 用于 Oracle、PostgreSQL、Kingbase、DB2、H2 数据库的主键自增。如果是 MySQL 等数据库，可不写。
+@Data
+@EqualsAndHashCode(callSuper = true)
+@ToString(callSuper = true)
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class ErpSaleOrderItemDO extends BaseDO {
+
+    /**
+     * 编号
+     */
+    @TableId
+    private Long id;
+    /**
+     * 销售订单编号
+     *
+     * 关联 {@link ErpSaleOrderDO#getId()}
+     */
+    private Long orderId;
+    /**
+     * 产品编号
+     *
+     * 关联 {@link ErpProductDO#getId()}
+     */
+    private Long productId;
+    /**
+     * 产品单位单位
+     *
+     * 冗余 {@link ErpProductDO#getUnitId()}
+     */
+    private Long productUnitId;
+    /** WMS 统一仓库编码 */
+    private String warehouseCode;
+
+    /**
+     * 产品单位单价，单位：元
+     */
+    private BigDecimal productPrice;
+    /**
+     * 数量
+     */
+    private BigDecimal count;
+    /** WMS 已预留数量 */
+    private BigDecimal reservedCount;
+    /** WMS 剩余缺口数量 */
+    private BigDecimal shortageCount;
+    /**
+     * 总价，单位：元
+     *
+     * totalPrice = productPrice * count
+     */
+    private BigDecimal totalPrice;
+    /**
+     * 税率，百分比
+     */
+    private BigDecimal taxPercent;
+    /**
+     * 税额，单位：元
+     *
+     * taxPrice = totalPrice * taxPercent
+     */
+    private BigDecimal taxPrice;
+
+    /**
+     * 备注
+     */
+    private String remark;
+
+    // ========== 销售出库 ==========
+    /**
+     * 销售出库数量
+     */
+    private BigDecimal outCount;
+
+    /**
+     * MES 累计完工合格数量
+     *
+     * 由 MES 工单完工时回传，覆盖式写入（非增量）；与出库数量语义不同。
+     */
+    private BigDecimal producedCount;
+
+    // ========== 销售退货（入库）） ==========
+    /**
+     * 销售退货数量
+     */
+    private BigDecimal returnCount;
+
+}

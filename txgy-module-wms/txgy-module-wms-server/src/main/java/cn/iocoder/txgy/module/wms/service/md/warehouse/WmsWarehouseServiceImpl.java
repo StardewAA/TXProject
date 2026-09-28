@@ -1,0 +1,211 @@
+package cn.iocoder.txgy.module.wms.service.md.warehouse;
+
+import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.util.ObjUtil;
+import cn.iocoder.txgy.framework.common.enums.CommonStatusEnum;
+import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
+import cn.iocoder.txgy.module.wms.controller.admin.md.warehouse.vo.WmsWarehousePageReqVO;
+import cn.iocoder.txgy.module.wms.controller.admin.md.warehouse.vo.WmsWarehouseSaveReqVO;
+import cn.iocoder.txgy.module.wms.dal.dataobject.md.warehouse.WmsWarehouseDO;
+import cn.iocoder.txgy.module.wms.dal.mysql.md.warehouse.WmsWarehouseMapper;
+import cn.iocoder.txgy.module.wms.enums.order.WmsOrderTypeEnum;
+import cn.iocoder.txgy.module.wms.service.inventory.WmsInventoryService;
+import cn.iocoder.txgy.module.wms.service.order.check.WmsCheckOrderService;
+import cn.iocoder.txgy.module.wms.service.order.movement.WmsMovementOrderService;
+import cn.iocoder.txgy.module.wms.service.order.receipt.WmsReceiptOrderService;
+import cn.iocoder.txgy.module.wms.service.order.shipment.WmsShipmentOrderService;
+import cn.iocoder.txgy.module.wms.service.permission.WmsWarehouseAccessService;
+import jakarta.annotation.Resource;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.validation.annotation.Validated;
+
+import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+
+import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
+import static cn.iocoder.txgy.module.wms.enums.ErrorCodeConstants.*;
+
+/**
+ * WMS 仓库 Service 实现类
+ *
+ * @author OPENLAB BS
+ */
+@Service
+@Validated
+public class WmsWarehouseServiceImpl implements WmsWarehouseService {
+
+    @Resource
+    private WmsWarehouseMapper warehouseMapper;
+    @Resource
+    private WmsWarehousePersonnelService warehousePersonnelService;
+    @Resource
+    private WmsWarehouseAccessService warehouseAccessService;
+
+    @Resource
+    @Lazy // 延迟加载，避免循环依赖
+    private WmsInventoryService inventoryService;
+    @Resource
+    @Lazy // 延迟加载，避免循环依赖
+    private WmsReceiptOrderService receiptOrderService;
+    @Resource
+    @Lazy // 延迟加载，避免循环依赖
+    private WmsShipmentOrderService shipmentOrderService;
+    @Resource
+    @Lazy // 延迟加载，避免循环依赖
+    private WmsMovementOrderService movementOrderService;
+    @Resource
+    @Lazy // 延迟加载，避免循环依赖
+    private WmsCheckOrderService checkOrderService;
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long createWarehouse(WmsWarehouseSaveReqVO createReqVO) {
+        // 校验数据
+        validateWarehouseSaveData(createReqVO);
+
+        // 插入
+        WmsWarehouseDO warehouse = BeanUtils.toBean(createReqVO, WmsWarehouseDO.class)
+                .setWarehouseType(createReqVO.getWarehouseType() == null ? "RAW_MATERIAL" : createReqVO.getWarehouseType())
+                .setStatus(CommonStatusEnum.ENABLE.getStatus())
+                .setDataVersion(1L);
+        warehouseMapper.insert(warehouse);
+        if (createReqVO.getManagerUserId() != null) {
+            warehousePersonnelService.replacePersonnel(warehouse.getId(), createReqVO.getManagerUserId(), createReqVO.getMemberUserIds());
+        }
+        return warehouse.getId();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateWarehouse(WmsWarehouseSaveReqVO updateReqVO) {
+        // 校验存在
+        WmsWarehouseDO current = validateWarehouseExists(updateReqVO.getId());
+        // 校验数据
+        validateWarehouseSaveData(updateReqVO);
+
+        // 更新
+        WmsWarehouseDO updateObj = BeanUtils.toBean(updateReqVO, WmsWarehouseDO.class)
+                .setWarehouseType(updateReqVO.getWarehouseType() != null ? updateReqVO.getWarehouseType()
+                        : current.getWarehouseType() == null ? "RAW_MATERIAL" : current.getWarehouseType())
+                .setStatus(current.getStatus() == null ? CommonStatusEnum.ENABLE.getStatus() : current.getStatus())
+                .setDataVersion(current.getDataVersion() == null ? 1L : current.getDataVersion() + 1);
+        warehouseMapper.updateById(updateObj);
+        if (updateReqVO.getManagerUserId() != null) {
+            warehousePersonnelService.replacePersonnel(updateReqVO.getId(), updateReqVO.getManagerUserId(), updateReqVO.getMemberUserIds());
+        }
+    }
+
+    private void validateWarehouseSaveData(WmsWarehouseSaveReqVO reqVO) {
+        validateWarehouseNameUnique(reqVO.getId(), reqVO.getName());
+        validateWarehouseCodeUnique(reqVO.getId(), reqVO.getCode());
+    }
+
+    private void validateWarehouseNameUnique(Long id, String name) {
+        WmsWarehouseDO warehouse = warehouseMapper.selectByName(name);
+        if (warehouse == null) {
+            return;
+        }
+        if (ObjUtil.notEqual(warehouse.getId(), id)) {
+            throw exception(WAREHOUSE_NAME_DUPLICATE);
+        }
+    }
+
+    private void validateWarehouseCodeUnique(Long id, String code) {
+        WmsWarehouseDO warehouse = warehouseMapper.selectByCode(code);
+        if (warehouse == null) {
+            return;
+        }
+        if (ObjUtil.notEqual(warehouse.getId(), id)) {
+            throw exception(WAREHOUSE_CODE_DUPLICATE);
+        }
+    }
+
+    @Override
+    public void deleteWarehouse(Long id) {
+        // 校验存在
+        validateWarehouseExists(id);
+        // 校验未被单据使用
+        validateWarehouseUnused(id);
+
+        // 删除
+        warehouseMapper.deleteById(id);
+        warehousePersonnelService.clearPersonnel(id);
+    }
+
+    private void validateWarehouseUnused(Long id) {
+        if (inventoryService.getInventoryCountByWarehouseId(id) > 0) {
+            throw exception(WAREHOUSE_HAS_INVENTORY);
+        }
+        if (receiptOrderService.getReceiptOrderCountByWarehouseId(id) > 0) {
+            throw exception(WAREHOUSE_HAS_ORDER, WmsOrderTypeEnum.RECEIPT.getName());
+        }
+        if (shipmentOrderService.getShipmentOrderCountByWarehouseId(id) > 0) {
+            throw exception(WAREHOUSE_HAS_ORDER, WmsOrderTypeEnum.SHIPMENT.getName());
+        }
+        if (movementOrderService.getMovementOrderCountByWarehouseId(id) > 0) {
+            throw exception(WAREHOUSE_HAS_ORDER, WmsOrderTypeEnum.MOVEMENT.getName());
+        }
+        if (checkOrderService.getCheckOrderCountByWarehouseId(id) > 0) {
+            throw exception(WAREHOUSE_HAS_ORDER, WmsOrderTypeEnum.CHECK.getName());
+        }
+    }
+
+    @Override
+    public WmsWarehouseDO validateWarehouseExists(Long id) {
+        WmsWarehouseDO warehouse = warehouseMapper.selectById(id);
+        if (warehouse == null) {
+            throw exception(WAREHOUSE_NOT_EXISTS);
+        }
+        return warehouse;
+    }
+
+    @Override
+    public WmsWarehouseDO validateWarehouseEnabled(Long id) {
+        WmsWarehouseDO warehouse = validateWarehouseExists(id);
+        if (warehouse.getStatus() != null && warehouse.getStatus() != 0) {
+            throw exception(WAREHOUSE_NOT_ENABLED);
+        }
+        return warehouse;
+    }
+
+    @Override
+    public WmsWarehouseDO getWarehouse(Long id) {
+        return warehouseMapper.selectById(id);
+    }
+
+    @Override
+    public PageResult<WmsWarehouseDO> getWarehousePage(WmsWarehousePageReqVO pageReqVO) {
+        PageResult<WmsWarehouseDO> result = warehouseMapper.selectPage(pageReqVO);
+        if (warehouseAccessService.hasGlobalAccess()) return result;
+        Set<Long> ids = warehouseAccessService.getReadableWarehouseIds();
+        List<WmsWarehouseDO> filtered = result.getList().stream().filter(row -> ids.contains(row.getId())).toList();
+        return new PageResult<>(filtered, (long) filtered.size());
+    }
+
+    @Override
+    public List<WmsWarehouseDO> getWarehouseList() {
+        List<WmsWarehouseDO> list = warehouseMapper.selectSimpleList();
+        if (warehouseAccessService.hasGlobalAccess()) return list;
+        Set<Long> ids = warehouseAccessService.getReadableWarehouseIds();
+        return list.stream().filter(row -> ids.contains(row.getId())).toList();
+    }
+
+    @Override
+    public List<WmsWarehouseDO> getWarehouseList(Collection<Long> ids) {
+        if (CollUtil.isEmpty(ids)) {
+            return Collections.emptyList();
+        }
+        return warehouseMapper.selectByIds(ids);
+    }
+
+
+
+}

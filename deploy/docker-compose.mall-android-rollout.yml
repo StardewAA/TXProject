@@ -1,0 +1,9 @@
+# Use with docker-compose.yml and docker-compose.mall-rollout.yml to serve the
+# verified Android download page and current mobile H5 in the local demo stack.
+services:
+  frontend:
+    image: txgy-mall-admin:pc-entry-20260924
+  mall-pc:
+    image: txgy-mall-pc:android-102-20260924-2
+  mall-h5:
+    image: txgy-mall-h5:mobile-fixes-20260924-2

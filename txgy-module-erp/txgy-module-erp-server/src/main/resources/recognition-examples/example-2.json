@@ -1,0 +1,44 @@
+{
+  "documentType": "SALE_ORDER",
+  "documentNo": "XSD202509104065",
+  "documentDate": "2025-09-10",
+  "items": [
+    {
+      "productName": "冷轧钢板 1.5mm",
+      "productCode": "CP-1001",
+      "count": 45.75,
+      "productPrice": 202.09,
+      "taxPercent": 13,
+      "remark": null
+    },
+    {
+      "productName": "不锈钢螺栓 M8×30",
+      "productCode": "CP-1002",
+      "count": 18.14,
+      "productPrice": 308.71,
+      "taxPercent": 13,
+      "remark": null
+    },
+    {
+      "productName": "六角螺母 M12",
+      "productCode": "CP-1009",
+      "count": 97,
+      "productPrice": 325.57,
+      "taxPercent": 6,
+      "remark": "本月 25 日前交货"
+    },
+    {
+      "productName": "镀锌角钢 40×4",
+      "productCode": "CP-1013",
+      "count": 347,
+      "productPrice": 393.92,
+      "taxPercent": 3,
+      "remark": null
+    }
+  ],
+  "contact": "陈静",
+  "mobile": "13577683827",
+  "telephone": "0581-83254195",
+  "remark": "货到验收合格后付款",
+  "customerName": "嘉和实业有限公司"
+}

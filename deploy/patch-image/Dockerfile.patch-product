@@ -1,0 +1,8 @@
+# 统一补丁的复制与启动路径，兼容旧 product 基础镜像和新的源码基础镜像。
+# 不继承旧镜像指向其他路径的 ENTRYPOINT/CMD，避免补丁未被执行。
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+WORKDIR /app
+COPY app.jar /app/app.jar
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]
+CMD []

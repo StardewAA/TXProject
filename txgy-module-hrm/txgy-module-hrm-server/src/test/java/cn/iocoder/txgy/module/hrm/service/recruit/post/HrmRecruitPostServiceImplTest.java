@@ -1,0 +1,700 @@
+package cn.iocoder.txgy.module.hrm.service.recruit.post;
+
+import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.framework.common.util.collection.ArrayUtils;
+import cn.iocoder.txgy.framework.test.core.ut.BaseDbUnitTest;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
+import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.post.HrmRecruitPostPageReqVO;
+import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.post.HrmRecruitPostSaveReqVO;
+import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.post.HrmRecruitPostStatusReqVO;
+import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.post.HrmRecruitPostDO;
+import cn.iocoder.txgy.module.hrm.dal.mysql.recruit.post.HrmRecruitPostMapper;
+import cn.iocoder.txgy.module.hrm.enums.employee.info.HrmEmployeeEntryStatusEnum;
+import cn.iocoder.txgy.module.hrm.enums.recruit.post.HrmRecruitPostStatusEnum;
+import cn.iocoder.txgy.module.hrm.service.employee.info.HrmEmployeeService;
+import cn.iocoder.txgy.module.hrm.service.recruit.config.HrmRecruitChannelService;
+import cn.iocoder.txgy.module.system.api.dept.DeptApi;
+import jakarta.annotation.Resource;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+
+import javax.sql.DataSource;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Consumer;
+
+import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
+import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertSet;
+import static cn.iocoder.txgy.framework.common.util.date.LocalDateTimeUtils.buildTime;
+import static cn.iocoder.txgy.framework.common.util.date.LocalDateTimeUtils.getDateTimeRange;
+import static cn.iocoder.txgy.framework.common.util.object.ObjectUtils.cloneIgnoreId;
+import static cn.iocoder.txgy.framework.test.core.util.AssertUtils.assertPojoEquals;
+import static cn.iocoder.txgy.framework.test.core.util.AssertUtils.assertServiceException;
+import static cn.iocoder.txgy.framework.test.core.util.RandomUtils.*;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.EMPLOYEE_NOT_EXISTS;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_POST_NOT_EXISTS;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_POST_NOT_PUBLISHED;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_POST_STATUS_TRANSITION_INVALID;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_POST_TYPE_NOT_EXISTS;
+import static cn.iocoder.txgy.module.system.enums.ErrorCodeConstants.DEPT_NOT_FOUND;
+import static java.util.Arrays.asList;
+import static java.util.Collections.emptyList;
+import static java.util.Collections.singleton;
+import static java.util.Collections.singletonList;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+
+/**
+ * {@link HrmRecruitPostServiceImpl} 的单元测试类
+ *
+ * @author OPENLAB BS
+ */
+@Import({HrmRecruitPostServiceImpl.class, HrmRecruitPostServiceImplTest.JdbcTemplateTestConfiguration.class})
+public class HrmRecruitPostServiceImplTest extends BaseDbUnitTest {
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class JdbcTemplateTestConfiguration {
+
+        @Bean
+        JdbcTemplate jdbcTemplate(DataSource dataSource) {
+            return new JdbcTemplate(dataSource);
+        }
+
+    }
+
+    @Resource
+    private HrmRecruitPostServiceImpl recruitPostService;
+
+    @Resource
+    private HrmRecruitPostMapper recruitPostMapper;
+    @Resource
+    private JdbcTemplate jdbcTemplate;
+
+    @MockitoBean
+    private HrmRecruitPostTypeService recruitPostTypeService;
+    @MockitoBean
+    private HrmEmployeeService employeeService;
+    @MockitoBean
+    private HrmRecruitChannelService recruitChannelService;
+    @MockitoBean
+    private DeptApi deptApi;
+
+    @Test
+    public void testCreateRecruitPost_success() {
+        // 准备参数
+        HrmRecruitPostSaveReqVO reqVO = randomRecruitPostSaveReqVO(o -> o
+                .setDeptId(100L).setOwnerEmployeeId(200L)
+                .setInterviewEmployeeIds(asList(201L, 202L)));
+
+        // 调用
+        Long postId = recruitPostService.createRecruitPost(reqVO);
+
+        // 断言
+        assertNotNull(postId);
+        HrmRecruitPostDO recruitPost = recruitPostMapper.selectById(postId);
+        assertPojoEquals(reqVO, recruitPost, "id", "status");
+        assertEquals(HrmRecruitPostStatusEnum.PUBLISHED.getStatus(), recruitPost.getStatus());
+        verify(recruitPostTypeService).validateRecruitPostTypeExists(reqVO.getPostTypeId());
+        verify(deptApi).validateDeptList(singleton(reqVO.getDeptId()));
+        verify(employeeService).validateEmployeeListByEntryStatus(
+                new HashSet<>(asList(reqVO.getOwnerEmployeeId(), 201L, 202L)),
+                HrmEmployeeEntryStatusEnum.ACTIVE.getStatus());
+    }
+
+    @Test
+    public void testCreateRecruitPost_postTypeNotExists() {
+        // 准备参数
+        HrmRecruitPostSaveReqVO reqVO = randomRecruitPostSaveReqVO();
+        // mock 方法
+        doThrow(exception(RECRUIT_POST_TYPE_NOT_EXISTS)).when(recruitPostTypeService)
+                .validateRecruitPostTypeExists(reqVO.getPostTypeId());
+
+        // 调用，并断言异常
+        assertServiceException(() -> recruitPostService.createRecruitPost(reqVO), RECRUIT_POST_TYPE_NOT_EXISTS);
+        assertEquals(0L, recruitPostMapper.selectCount());
+    }
+
+    @Test
+    public void testCreateRecruitPost_employeeNotExists() {
+        // 准备参数
+        HrmRecruitPostSaveReqVO reqVO = randomRecruitPostSaveReqVO();
+        // mock 方法
+        doThrow(exception(EMPLOYEE_NOT_EXISTS)).when(employeeService)
+                .validateEmployeeListByEntryStatus(anyCollection(),
+                        eq(HrmEmployeeEntryStatusEnum.ACTIVE.getStatus()));
+
+        // 调用，并断言异常
+        assertServiceException(() -> recruitPostService.createRecruitPost(reqVO), EMPLOYEE_NOT_EXISTS);
+        assertEquals(0L, recruitPostMapper.selectCount());
+    }
+
+    @Test
+    public void testCreateRecruitPost_deptNotExists() {
+        // 准备参数
+        HrmRecruitPostSaveReqVO reqVO = randomRecruitPostSaveReqVO();
+        // mock 方法
+        doThrow(exception(DEPT_NOT_FOUND)).when(deptApi)
+                .validateDeptList(singleton(reqVO.getDeptId()));
+
+        // 调用，并断言异常
+        assertServiceException(() -> recruitPostService.createRecruitPost(reqVO), DEPT_NOT_FOUND);
+        assertEquals(0L, recruitPostMapper.selectCount());
+    }
+
+    @Test
+    public void testUpdateRecruitPost_success() {
+        // mock 数据
+        HrmRecruitPostDO dbRecruitPost = randomRecruitPostDO(o -> o
+                .setStatus(HrmRecruitPostStatusEnum.PAUSED.getStatus()));
+        recruitPostMapper.insert(dbRecruitPost);
+        // 准备参数
+        HrmRecruitPostSaveReqVO reqVO = randomRecruitPostSaveReqVO(o -> o.setId(dbRecruitPost.getId()));
+
+        // 调用
+        recruitPostService.updateRecruitPost(reqVO);
+
+        // 断言
+        HrmRecruitPostDO recruitPost = recruitPostMapper.selectById(dbRecruitPost.getId());
+        assertPojoEquals(reqVO, recruitPost);
+        assertEquals(HrmRecruitPostStatusEnum.PAUSED.getStatus(), recruitPost.getStatus());
+        verify(recruitPostTypeService).validateRecruitPostTypeExists(reqVO.getPostTypeId());
+    }
+
+    @Test
+    public void testUpdateRecruitPost_clearOptionalFields() {
+        // mock 数据
+        HrmRecruitPostDO dbRecruitPost = randomRecruitPostDO();
+        recruitPostMapper.insert(dbRecruitPost);
+        // 准备参数
+        HrmRecruitPostSaveReqVO reqVO = randomRecruitPostSaveReqVO(o -> o.setId(dbRecruitPost.getId())
+                .setDeptId(null).setAreaId(null).setWorkAddress(null).setLongitude(null).setLatitude(null)
+                .setRecruitNum(null).setReason(null)
+                .setWorkTime(null).setEducationRequire(null).setMinSalary(null).setMaxSalary(null)
+                .setSalaryUnit(null).setMinAge(null).setMaxAge(null).setLatestEntryTime(null)
+                .setOwnerEmployeeId(null).setInterviewEmployeeIds(null).setDescription(null)
+                .setEmergencyLevel(null).setPostTypeId(null));
+
+        // 调用
+        recruitPostService.updateRecruitPost(reqVO);
+
+        // 断言
+        HrmRecruitPostDO recruitPost = recruitPostMapper.selectById(dbRecruitPost.getId());
+        assertNull(recruitPost.getDeptId());
+        assertNull(recruitPost.getAreaId());
+        assertNull(recruitPost.getWorkAddress());
+        assertNull(recruitPost.getLongitude());
+        assertNull(recruitPost.getLatitude());
+        assertNull(recruitPost.getRecruitNum());
+        assertNull(recruitPost.getLatestEntryTime());
+        assertNull(recruitPost.getOwnerEmployeeId());
+        assertNull(recruitPost.getInterviewEmployeeIds());
+        assertNull(recruitPost.getPostTypeId());
+        assertEquals(dbRecruitPost.getStatus(), recruitPost.getStatus());
+    }
+
+    @Test
+    public void testUpdateRecruitPost_notExists() {
+        // 准备参数
+        HrmRecruitPostSaveReqVO reqVO = randomRecruitPostSaveReqVO(o -> o.setId(randomLongId()));
+
+        // 调用，并断言异常
+        assertServiceException(() -> recruitPostService.updateRecruitPost(reqVO), RECRUIT_POST_NOT_EXISTS);
+        verifyNoInteractions(recruitPostTypeService);
+    }
+
+    @Test
+    public void testGetRecruitPost() {
+        // mock 数据
+        HrmRecruitPostDO dbRecruitPost = randomRecruitPostDO();
+        recruitPostMapper.insert(dbRecruitPost);
+
+        // 调用
+        HrmRecruitPostDO recruitPost = recruitPostService.getRecruitPost(dbRecruitPost.getId());
+
+        // 断言
+        assertPojoEquals(dbRecruitPost, recruitPost);
+    }
+
+    @Test
+    public void testValidateRecruitPostExists_success() {
+        // mock 数据
+        HrmRecruitPostDO dbRecruitPost = randomRecruitPostDO();
+        recruitPostMapper.insert(dbRecruitPost);
+
+        // 调用
+        HrmRecruitPostDO recruitPost = recruitPostService.validateRecruitPostExists(dbRecruitPost.getId());
+
+        // 断言
+        assertPojoEquals(dbRecruitPost, recruitPost);
+    }
+
+    @Test
+    public void testValidateRecruitPostExists_notExists() {
+        // 准备参数
+        Long id = randomLongId();
+
+        // 调用，并断言异常
+        assertServiceException(() -> recruitPostService.validateRecruitPostExists(id), RECRUIT_POST_NOT_EXISTS);
+    }
+
+    @Test
+    public void testValidateRecruitPostPublished_success() {
+        HrmRecruitPostDO dbRecruitPost = randomRecruitPostDO(o -> o
+                .setStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus()));
+        recruitPostMapper.insert(dbRecruitPost);
+
+        HrmRecruitPostDO recruitPost = recruitPostService.validateRecruitPostPublished(dbRecruitPost.getId());
+
+        assertPojoEquals(dbRecruitPost, recruitPost);
+    }
+
+    @Test
+    public void testValidateRecruitPostPublished_notPublished() {
+        for (HrmRecruitPostStatusEnum status : asList(
+                HrmRecruitPostStatusEnum.PAUSED, HrmRecruitPostStatusEnum.CLOSED)) {
+            HrmRecruitPostDO dbRecruitPost = randomRecruitPostDO(o -> o.setStatus(status.getStatus()));
+            recruitPostMapper.insert(dbRecruitPost);
+
+            assertServiceException(() -> recruitPostService.validateRecruitPostPublished(dbRecruitPost.getId()),
+                    RECRUIT_POST_NOT_PUBLISHED);
+        }
+    }
+
+    @Test
+    public void testGetRecruitPostList() {
+        // mock 数据
+        HrmRecruitPostDO firstPost = randomRecruitPostDO();
+        recruitPostMapper.insert(firstPost);
+        HrmRecruitPostDO secondPost = randomRecruitPostDO();
+        recruitPostMapper.insert(secondPost);
+        // 测试 id 不匹配
+        recruitPostMapper.insert(randomRecruitPostDO());
+        // 准备参数
+        List<Long> ids = asList(firstPost.getId(), secondPost.getId());
+
+        // 调用
+        List<HrmRecruitPostDO> posts = recruitPostService.getRecruitPostList(ids);
+
+        // 断言
+        assertEquals(2, posts.size());
+        assertEquals(new HashSet<>(ids), convertSet(posts, HrmRecruitPostDO::getId));
+    }
+
+    @Test
+    public void testGetRecruitPostList_empty() {
+        // 调用
+        List<HrmRecruitPostDO> posts = recruitPostService.getRecruitPostList(emptyList());
+
+        // 断言
+        assertTrue(posts.isEmpty());
+    }
+
+    @Test
+    public void testGetRecruitPostPage() {
+        // mock 数据
+        HrmRecruitPostDO dbRecruitPost = randomRecruitPostDO(o -> o.setPostName("Java 开发工程师")
+                .setJobNature(1).setAreaId(310100).setDeptId(100L).setOwnerEmployeeId(200L)
+                .setPostTypeId(300L).setStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus())
+                .setCreateTime(buildTime(2026, 1, 20).plusHours(12)));
+        recruitPostMapper.insert(dbRecruitPost);
+        // 测试 postName 不匹配
+        recruitPostMapper.insert(cloneIgnoreId(dbRecruitPost, o -> o.setPostName("产品经理")));
+        // 测试 jobNature 不匹配
+        recruitPostMapper.insert(cloneIgnoreId(dbRecruitPost, o -> o.setJobNature(2)));
+        // 测试 areaId 不匹配
+        recruitPostMapper.insert(cloneIgnoreId(dbRecruitPost, o -> o.setAreaId(110100)));
+        // 测试 deptId 不匹配
+        recruitPostMapper.insert(cloneIgnoreId(dbRecruitPost, o -> o.setDeptId(101L)));
+        // 测试 ownerEmployeeId 不匹配
+        recruitPostMapper.insert(cloneIgnoreId(dbRecruitPost, o -> o.setOwnerEmployeeId(201L)));
+        // 测试 postTypeId 不匹配
+        recruitPostMapper.insert(cloneIgnoreId(dbRecruitPost, o -> o.setPostTypeId(301L)));
+        // 测试 status 不匹配
+        recruitPostMapper.insert(cloneIgnoreId(dbRecruitPost,
+                o -> o.setStatus(HrmRecruitPostStatusEnum.PAUSED.getStatus())));
+        // 测试 createTime 不匹配
+        recruitPostMapper.insert(cloneIgnoreId(dbRecruitPost, o -> o.setCreateTime(buildTime(2026, 1, 1))));
+        // 准备参数
+        HrmRecruitPostPageReqVO reqVO = new HrmRecruitPostPageReqVO();
+        reqVO.setPostName("Java");
+        reqVO.setJobNature(1);
+        reqVO.setAreaId(310100);
+        reqVO.setDeptId(100L);
+        reqVO.setOwnerEmployeeId(200L);
+        reqVO.setPostTypeId(300L);
+        reqVO.setStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus());
+        reqVO.setCreateTime(getDateTimeRange(
+                LocalDate.of(2026, 1, 10), LocalDate.of(2026, 1, 20)));
+
+        // 调用
+        PageResult<HrmRecruitPostDO> pageResult = recruitPostService.getRecruitPostPage(reqVO);
+
+        // 断言
+        assertEquals(1L, pageResult.getTotal());
+        assertEquals(1, pageResult.getList().size());
+        assertPojoEquals(dbRecruitPost, pageResult.getList().get(0));
+    }
+
+    @Test
+    public void testGetRecruitPostPage_areaIdIncludesDescendants() {
+        HrmRecruitPostDO provincePost = randomRecruitPostDO(o -> o.setAreaId(440000));
+        HrmRecruitPostDO cityPost = randomRecruitPostDO(o -> o.setAreaId(440300));
+        HrmRecruitPostDO districtPost = randomRecruitPostDO(o -> o.setAreaId(440305));
+        HrmRecruitPostDO siblingCityPost = randomRecruitPostDO(o -> o.setAreaId(440600));
+        HrmRecruitPostDO otherProvincePost = randomRecruitPostDO(o -> o.setAreaId(430100));
+        recruitPostMapper.insert(provincePost);
+        recruitPostMapper.insert(cityPost);
+        recruitPostMapper.insert(districtPost);
+        recruitPostMapper.insert(siblingCityPost);
+        recruitPostMapper.insert(otherProvincePost);
+
+        HrmRecruitPostPageReqVO reqVO = new HrmRecruitPostPageReqVO();
+        reqVO.setAreaId(440000);
+        assertEquals(new HashSet<>(asList(provincePost.getId(), cityPost.getId(), districtPost.getId(),
+                        siblingCityPost.getId())),
+                convertSet(recruitPostService.getRecruitPostPage(reqVO).getList(), HrmRecruitPostDO::getId));
+
+        reqVO.setAreaId(440300);
+        assertEquals(new HashSet<>(asList(cityPost.getId(), districtPost.getId())),
+                convertSet(recruitPostService.getRecruitPostPage(reqVO).getList(), HrmRecruitPostDO::getId));
+
+        reqVO.setAreaId(440305);
+        assertEquals(singleton(districtPost.getId()),
+                convertSet(recruitPostService.getRecruitPostPage(reqVO).getList(), HrmRecruitPostDO::getId));
+    }
+
+    @Test
+    public void testGetPortalRecruitPostPage_crossTenantOnlyPublished() {
+        insertHrPublisher(10101L, 101L, "hr-one");
+        insertHrPublisher(20201L, 202L, "hr-two");
+        HrmRecruitPostDO firstTenantPost = randomRecruitPostDO(o -> {
+            o.setTenantId(101L);
+            o.setPostName("企业一已发布岗位");
+            o.setCreator("10101");
+            o.setStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus());
+        });
+        HrmRecruitPostDO secondTenantPost = randomRecruitPostDO(o -> {
+            o.setTenantId(202L);
+            o.setPostName("企业二已发布岗位");
+            o.setCreator("20201");
+            o.setStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus());
+        });
+        HrmRecruitPostDO pausedPost = randomRecruitPostDO(o -> {
+            o.setTenantId(303L);
+            o.setPostName("企业三已暂停岗位");
+            o.setStatus(HrmRecruitPostStatusEnum.PAUSED.getStatus());
+        });
+        recruitPostMapper.insert(firstTenantPost);
+        recruitPostMapper.insert(secondTenantPost);
+        recruitPostMapper.insert(pausedPost);
+
+        HrmRecruitPostPageReqVO reqVO = new HrmRecruitPostPageReqVO();
+        reqVO.setStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus());
+        TenantContextHolder.setTenantId(999L);
+        PageResult<HrmRecruitPostDO> pageResult;
+        try {
+            pageResult = recruitPostService.getPortalRecruitPostPage(reqVO);
+        } finally {
+            TenantContextHolder.clear();
+        }
+
+        assertEquals(2L, pageResult.getTotal());
+        assertEquals(new HashSet<>(asList(firstTenantPost.getId(), secondTenantPost.getId())),
+                convertSet(pageResult.getList(), HrmRecruitPostDO::getId));
+        assertEquals(101L, pageResult.getList().stream()
+                .filter(post -> post.getId().equals(firstTenantPost.getId())).findFirst().orElseThrow().getTenantId());
+        assertEquals(202L, pageResult.getList().stream()
+                .filter(post -> post.getId().equals(secondTenantPost.getId())).findFirst().orElseThrow().getTenantId());
+    }
+
+    @Test
+    public void testGetPortalRecruitPostPage_hidesNonHrPublishersButAllowsSuperAdmin() {
+        insertHrPublisher(10101L, 101L, "hr-one");
+        insertTenantAdminPublisher(20201L, 202L, "tenant-admin");
+        insertSuperAdminPublisher(30301L, 303L, "super-admin");
+        HrmRecruitPostDO hrPost = randomRecruitPostDO(o -> {
+            o.setTenantId(101L);
+            o.setCreator("10101");
+            o.setPostName("HR 发布岗位");
+        });
+        HrmRecruitPostDO tenantAdminPost = randomRecruitPostDO(o -> {
+            o.setTenantId(202L);
+            o.setCreator("20201");
+            o.setPostName("租户管理员发布岗位");
+        });
+        HrmRecruitPostDO superAdminPost = randomRecruitPostDO(o -> {
+            o.setTenantId(303L);
+            o.setCreator("30301");
+            o.setPostName("超级管理员发布岗位");
+        });
+        recruitPostMapper.insert(hrPost);
+        recruitPostMapper.insert(tenantAdminPost);
+        recruitPostMapper.insert(superAdminPost);
+
+        PageResult<HrmRecruitPostDO> pageResult = recruitPostService.getPortalRecruitPostPage(
+                new HrmRecruitPostPageReqVO());
+
+        assertEquals(2L, pageResult.getTotal());
+        assertEquals(new HashSet<>(asList(hrPost.getId(), superAdminPost.getId())),
+                convertSet(pageResult.getList(), HrmRecruitPostDO::getId));
+    }
+
+    @Test
+    public void testGetPortalRecruitPostPage_forcesPublishedStatus() {
+        insertHrPublisher(10101L, 101L, "hr-one");
+        HrmRecruitPostDO publishedPost = randomRecruitPostDO(o -> {
+            o.setTenantId(101L);
+            o.setCreator("10101");
+            o.setStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus());
+        });
+        HrmRecruitPostDO pausedPost = randomRecruitPostDO(o -> {
+            o.setTenantId(202L);
+            o.setStatus(HrmRecruitPostStatusEnum.PAUSED.getStatus());
+        });
+        HrmRecruitPostDO closedPost = randomRecruitPostDO(o -> {
+            o.setTenantId(303L);
+            o.setStatus(HrmRecruitPostStatusEnum.CLOSED.getStatus());
+        });
+        recruitPostMapper.insert(publishedPost);
+        recruitPostMapper.insert(pausedPost);
+        recruitPostMapper.insert(closedPost);
+
+        // 即使调用方传入暂停状态，门户查询也必须固定为已发布。
+        HrmRecruitPostPageReqVO reqVO = new HrmRecruitPostPageReqVO();
+        reqVO.setStatus(HrmRecruitPostStatusEnum.PAUSED.getStatus());
+        // 模拟无租户个人用户：服务层必须在没有当前租户上下文时完成查询。
+        TenantContextHolder.clear();
+        PageResult<HrmRecruitPostDO> pageResult;
+        try {
+            pageResult = recruitPostService.getPortalRecruitPostPage(reqVO);
+        } finally {
+            TenantContextHolder.clear();
+        }
+
+        assertEquals(HrmRecruitPostStatusEnum.PUBLISHED.getStatus(), reqVO.getStatus());
+        assertEquals(1L, pageResult.getTotal());
+        assertEquals(publishedPost.getId(), pageResult.getList().get(0).getId());
+    }
+
+    @Test
+    public void testGetPortalRecruitPostPublished_rejectsPaused() {
+        insertHrPublisher(40401L, 404L, "hr-four");
+        HrmRecruitPostDO pausedPost = randomRecruitPostDO(o -> {
+            o.setTenantId(404L);
+            o.setCreator("40401");
+            o.setStatus(HrmRecruitPostStatusEnum.PAUSED.getStatus());
+        });
+        recruitPostMapper.insert(pausedPost);
+
+        assertServiceException(() -> recruitPostService.getPortalRecruitPostPublished(pausedPost.getId()),
+                RECRUIT_POST_NOT_PUBLISHED);
+    }
+
+    @Test
+    public void testGetPortalRecruitPostPublished_rejectsTenantAdminPublisher() {
+        insertTenantAdminPublisher(50501L, 505L, "tenant-admin");
+        HrmRecruitPostDO tenantAdminPost = randomRecruitPostDO(o -> o
+                .setTenantId(505L).setCreator("50501"));
+        recruitPostMapper.insert(tenantAdminPost);
+
+        assertServiceException(() -> recruitPostService.getPortalRecruitPostPublished(tenantAdminPost.getId()),
+                RECRUIT_POST_NOT_EXISTS);
+    }
+
+    @Test
+    public void testGetPortalRecruitPostPublished_allowsSuperAdminPublisher() {
+        insertSuperAdminPublisher(60601L, 606L, "super-admin");
+        HrmRecruitPostDO superAdminPost = randomRecruitPostDO(o -> o
+                .setTenantId(606L).setCreator("60601"));
+        recruitPostMapper.insert(superAdminPost);
+
+        HrmRecruitPostDO result = recruitPostService.getPortalRecruitPostPublished(superAdminPost.getId());
+
+        assertEquals(superAdminPost.getId(), result.getId());
+    }
+
+    @Test
+    public void testGetRecruitPostSimpleList() {
+        // mock 数据
+        HrmRecruitPostDO firstPost = randomRecruitPostDO(o -> o
+                .setStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus()));
+        recruitPostMapper.insert(firstPost);
+        HrmRecruitPostDO secondPost = randomRecruitPostDO(o -> o
+                .setStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus()));
+        recruitPostMapper.insert(secondPost);
+        // 测试 status 不匹配
+        recruitPostMapper.insert(randomRecruitPostDO(o -> o
+                .setStatus(HrmRecruitPostStatusEnum.PAUSED.getStatus())));
+
+        // 调用
+        List<HrmRecruitPostDO> posts = recruitPostService.getRecruitPostSimpleList();
+
+        // 断言
+        assertEquals(new HashSet<>(asList(firstPost.getId(), secondPost.getId())),
+                convertSet(posts, HrmRecruitPostDO::getId));
+        assertTrue(posts.get(0).getId() > posts.get(1).getId());
+    }
+
+    @Test
+    public void testUpdateRecruitPostStatus_pause() {
+        // mock 数据
+        HrmRecruitPostDO dbRecruitPost = randomRecruitPostDO(o -> o
+                .setStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus()).setStopReason(null));
+        recruitPostMapper.insert(dbRecruitPost);
+        // 准备参数
+        HrmRecruitPostStatusReqVO reqVO = randomPojo(HrmRecruitPostStatusReqVO.class, o -> o
+                .setId(dbRecruitPost.getId()).setStatus(HrmRecruitPostStatusEnum.PAUSED.getStatus())
+                .setStopReason(randomString()));
+
+        // 调用
+        recruitPostService.updateRecruitPostStatus(reqVO);
+
+        // 断言
+        HrmRecruitPostDO recruitPost = recruitPostMapper.selectById(dbRecruitPost.getId());
+        assertEquals(reqVO.getStatus(), recruitPost.getStatus());
+        assertEquals(reqVO.getStopReason(), recruitPost.getStopReason());
+    }
+
+    @Test
+    public void testUpdateRecruitPostStatus_publish() {
+        // mock 数据
+        HrmRecruitPostDO dbRecruitPost = randomRecruitPostDO(o -> o
+                .setStatus(HrmRecruitPostStatusEnum.PAUSED.getStatus()).setStopReason(randomString()));
+        recruitPostMapper.insert(dbRecruitPost);
+        // 准备参数
+        HrmRecruitPostStatusReqVO reqVO = randomPojo(HrmRecruitPostStatusReqVO.class, o -> o
+                .setId(dbRecruitPost.getId()).setStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus()));
+
+        // 调用
+        recruitPostService.updateRecruitPostStatus(reqVO);
+
+        // 断言
+        HrmRecruitPostDO recruitPost = recruitPostMapper.selectById(dbRecruitPost.getId());
+        assertEquals(reqVO.getStatus(), recruitPost.getStatus());
+        assertEquals("", recruitPost.getStopReason());
+    }
+
+    @Test
+    public void testUpdateRecruitPostStatus_close() {
+        HrmRecruitPostDO dbRecruitPost = randomRecruitPostDO(o -> o
+                .setStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus()));
+        recruitPostMapper.insert(dbRecruitPost);
+        HrmRecruitPostStatusReqVO reqVO = new HrmRecruitPostStatusReqVO()
+                .setId(dbRecruitPost.getId()).setStatus(HrmRecruitPostStatusEnum.CLOSED.getStatus())
+                .setStopReason("招聘计划终止");
+
+        recruitPostService.updateRecruitPostStatus(reqVO);
+
+        HrmRecruitPostDO recruitPost = recruitPostMapper.selectById(dbRecruitPost.getId());
+        assertEquals(HrmRecruitPostStatusEnum.CLOSED.getStatus(), recruitPost.getStatus());
+        assertEquals(reqVO.getStopReason(), recruitPost.getStopReason());
+    }
+
+    @Test
+    public void testUpdateRecruitPostStatus_closedCannotPublish() {
+        HrmRecruitPostDO dbRecruitPost = randomRecruitPostDO(o -> o
+                .setStatus(HrmRecruitPostStatusEnum.CLOSED.getStatus()).setStopReason("招聘完成"));
+        recruitPostMapper.insert(dbRecruitPost);
+        HrmRecruitPostStatusReqVO reqVO = new HrmRecruitPostStatusReqVO()
+                .setId(dbRecruitPost.getId()).setStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus());
+
+        assertServiceException(() -> recruitPostService.updateRecruitPostStatus(reqVO),
+                RECRUIT_POST_STATUS_TRANSITION_INVALID);
+        HrmRecruitPostDO recruitPost = recruitPostMapper.selectById(dbRecruitPost.getId());
+        assertEquals(HrmRecruitPostStatusEnum.CLOSED.getStatus(), recruitPost.getStatus());
+        assertEquals("招聘完成", recruitPost.getStopReason());
+    }
+
+    @Test
+    public void testUpdateRecruitPostStatus_notExists() {
+        // 准备参数
+        HrmRecruitPostStatusReqVO reqVO = randomPojo(HrmRecruitPostStatusReqVO.class, o -> o
+                .setId(randomLongId()).setStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus()));
+
+        // 调用，并断言异常
+        assertServiceException(() -> recruitPostService.updateRecruitPostStatus(reqVO), RECRUIT_POST_NOT_EXISTS);
+    }
+
+    @Test
+    public void testGetRecruitPostStatusCount() {
+        // mock 数据
+        HrmRecruitPostDO recruitingPost = randomRecruitPostDO(o -> o.setPostName("Java 开发工程师")
+                .setStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus()));
+        recruitPostMapper.insert(recruitingPost);
+        recruitPostMapper.insert(cloneIgnoreId(recruitingPost, o -> {}));
+        HrmRecruitPostDO stoppedPost = cloneIgnoreId(recruitingPost, o -> o
+                .setStatus(HrmRecruitPostStatusEnum.PAUSED.getStatus()));
+        recruitPostMapper.insert(stoppedPost);
+        // 测试 postName 不匹配
+        recruitPostMapper.insert(cloneIgnoreId(recruitingPost, o -> o.setPostName("产品经理")));
+        // 准备参数
+        HrmRecruitPostPageReqVO reqVO = new HrmRecruitPostPageReqVO();
+        reqVO.setPostName("开发工程师");
+        reqVO.setStatus(HrmRecruitPostStatusEnum.PAUSED.getStatus());
+
+        // 调用
+        Map<Integer, Long> countMap = recruitPostService.getRecruitPostStatusCount(reqVO);
+
+        // 断言
+        assertEquals(2L, countMap.get(HrmRecruitPostStatusEnum.PUBLISHED.getStatus()));
+        assertEquals(1L, countMap.get(HrmRecruitPostStatusEnum.PAUSED.getStatus()));
+    }
+
+    // ========== 随机对象 ==========
+
+    private void insertHrPublisher(Long userId, Long tenantId, String username) {
+        insertPublisher(userId, tenantId, username, userId + 100000L, "hrm_team_leader");
+    }
+
+    private void insertTenantAdminPublisher(Long userId, Long tenantId, String username) {
+        insertPublisher(userId, tenantId, username, userId + 100000L, "tenant_admin");
+    }
+
+    private void insertSuperAdminPublisher(Long userId, Long tenantId, String username) {
+        insertPublisher(userId, tenantId, username, userId + 100000L, "super_admin");
+    }
+
+    private void insertPublisher(Long userId, Long tenantId, String username, Long roleId, String roleCode) {
+        jdbcTemplate.update("INSERT INTO system_users (id, username, status, deleted, tenant_id) VALUES (?, ?, 0, FALSE, ?)",
+                userId, username, tenantId);
+        jdbcTemplate.update("INSERT INTO system_role (id, name, code, status, deleted, tenant_id) VALUES (?, ?, ?, 0, FALSE, ?)",
+                roleId, roleCode, roleCode, tenantId);
+        jdbcTemplate.update("INSERT INTO system_user_role (user_id, role_id, deleted, tenant_id) VALUES (?, ?, FALSE, ?)",
+                userId, roleId, tenantId);
+    }
+
+    @SafeVarargs
+    private static HrmRecruitPostDO randomRecruitPostDO(Consumer<HrmRecruitPostDO>... consumers) {
+        Consumer<HrmRecruitPostDO> consumer = o -> o.setPostName(randomString()).setRecruitNum(randomInteger())
+                .setJobNature(1).setWorkTime(1).setEducationRequire(1)
+                .setMinSalary(new BigDecimal("10000.00")).setMaxSalary(new BigDecimal("20000.00")).setSalaryUnit(2)
+                .setMinAge(22).setMaxAge(35).setInterviewEmployeeIds(singletonList(randomLongId()))
+                .setEmergencyLevel(2).setLongitude(null).setLatitude(null)
+                .setStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus());
+        return randomPojo(HrmRecruitPostDO.class, ArrayUtils.append(consumer, consumers));
+    }
+
+    @SafeVarargs
+    private static HrmRecruitPostSaveReqVO randomRecruitPostSaveReqVO(
+            Consumer<HrmRecruitPostSaveReqVO>... consumers) {
+        Consumer<HrmRecruitPostSaveReqVO> consumer = o -> o.setId(null).setPostName(randomString())
+                .setRecruitNum(randomInteger()).setJobNature(1).setWorkTime(1).setEducationRequire(1)
+                .setMinSalary(new BigDecimal("10000.00")).setMaxSalary(new BigDecimal("20000.00")).setSalaryUnit(2)
+                .setMinAge(22).setMaxAge(35).setInterviewEmployeeIds(singletonList(randomLongId()))
+                .setEmergencyLevel(2).setPostTypeId(randomLongId())
+                .setLongitude(null).setLatitude(null);
+        return randomPojo(HrmRecruitPostSaveReqVO.class, ArrayUtils.append(consumer, consumers));
+    }
+
+}

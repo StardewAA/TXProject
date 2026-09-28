@@ -1,0 +1,13 @@
+# No backend JARs, host dependencies, credentials or private uploads are copied.
+**
+!txgy-mall-uniapp-master
+!txgy-mall-uniapp-master/**
+!deploy
+!deploy/uniapp
+!deploy/uniapp/nginx-mall.conf
+**/node_modules
+**/dist
+**/.git
+**/.env
+**/.env.*
+**/*.log

@@ -1,0 +1,15 @@
+# syntax=docker/dockerfile:1
+# 薄运行时镜像：复用容器内 Maven 构建并暂存到本目录的 app.jar
+FROM eclipse-temurin:25-jre
+
+# docker-compose.yml uses curl for the shared backend health check.
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+ARG JAR_FILE=app.jar
+COPY ${JAR_FILE} /app/app.jar
+
+ENV JAVA_OPTS=""
+
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]

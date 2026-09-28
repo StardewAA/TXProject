@@ -1,0 +1,140 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>小天预览</title>
+<style>
+body{margin:0;display:flex;gap:80px;align-items:center;justify-content:center;height:100vh;background:#0b2f57;font-family:'Microsoft YaHei',sans-serif}
+.box{position:relative;width:280px;height:300px;filter:drop-shadow(0 10px 18px rgba(0,0,0,.3));display:grid;place-items:center}
+svg{width:240px;height:260px}
+.bubble{position:absolute;top:6px;left:50%;transform:translateX(-40%);display:flex;gap:5px;align-items:center;background:#fff;color:#0b2f57;border-radius:12px;padding:8px 14px;font-size:15px;box-shadow:0 6px 16px rgba(10,37,64,.25)}
+.bubble .dot{width:6px;height:6px;border-radius:50%;background:#1a4480;animation:b 1s infinite ease-in-out}
+.bubble .dot:nth-child(2){animation-delay:.15s}.bubble .dot:nth-child(3){animation-delay:.3s}
+@keyframes b{0%,100%{transform:translateY(0);opacity:.45}50%{transform:translateY(-3px);opacity:1}}
+</style></head><body>
+<div class="box"><div class="bubble">我是小天，欢迎咨询</div><svg v-if="!thinking" class="ai-pet-svg" viewBox="0 0 120 130">
+        <defs>
+          <radialGradient id="txgyBodyGrad" cx="38%" cy="28%" r="78%">
+            <stop offset="0" stop-color="#FFF8F1" />
+            <stop offset="1" stop-color="#F5DECB" />
+          </radialGradient>
+          <linearGradient id="txgyEarGrad" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0" stop-color="#EE4A3C" />
+            <stop offset="1" stop-color="#C4231A" />
+          </linearGradient>
+          <linearGradient id="txgyBadgeGrad" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0" stop-color="#E8412F" />
+            <stop offset="1" stop-color="#B71C13" />
+          </linearGradient>
+        </defs>
+
+        <ellipse cx="60" cy="121" fill="#0A2540" opacity="0.14" rx="30" ry="6" />
+
+        <!-- 小脚 -->
+        <ellipse cx="45" cy="112" fill="#F3DAC6" rx="12" ry="8" />
+        <ellipse cx="75" cy="112" fill="#F3DAC6" rx="12" ry="8" />
+
+        <!-- 耳朵（品牌红） -->
+        <path d="M38 30 28 10c-1.6-3 1.6-6 4.4-4.4L52 16Z" fill="url(#txgyEarGrad)" />
+        <path d="M82 30 92 10c1.6-3-1.6-6-4.4-4.4L68 16Z" fill="url(#txgyEarGrad)" />
+        <path d="M38.5 27 33 15l9.6 6Z" fill="#FFD9CF" opacity="0.75" />
+        <path d="M81.5 27 87 15l-9.6 6Z" fill="#FFD9CF" opacity="0.75" />
+
+        <!-- 身体 -->
+        <path
+          d="M60 16c24 0 40 19 40 46 0 28-18 46-40 46S20 90 20 62c0-27 16-46 40-46Z"
+          fill="url(#txgyBodyGrad)"
+        />
+
+        <!-- 小手 -->
+        <ellipse cx="22" cy="80" fill="#F3DAC6" rx="8" ry="11" transform="rotate(-16 22 80)" />
+        <ellipse cx="98" cy="80" fill="#F3DAC6" rx="8" ry="11" transform="rotate(16 98 80)" />
+
+        <!-- 胸口徽章：天信管业三角 + 循环箭头 -->
+        <g transform="translate(60 92)">
+          <path d="M0-13 11.3 6.5H-11.3Z" fill="url(#txgyBadgeGrad)" />
+          <circle cx="0" cy="1" fill="none" r="4.6" stroke="#fff" stroke-width="1.9" />
+          <path d="M0-6 2.6-3.4H-2.6Z" fill="#fff" />
+          <path d="M5.6-1.4 4.6 1.6 1.9-.2Z" fill="#fff" />
+          <path d="M-5.6-1.4 -1.9-.2 -4.6 1.6Z" fill="#fff" />
+        </g>
+
+        <!-- 表情 -->
+        <g class="ai-pet-eyes">
+          <ellipse cx="45" cy="56" fill="#2B1A16" rx="7.2" ry="8.4" />
+          <ellipse cx="75" cy="56" fill="#2B1A16" rx="7.2" ry="8.4" />
+          <circle cx="47.6" cy="52.6" fill="#fff" r="2.7" />
+          <circle cx="77.6" cy="52.6" fill="#fff" r="2.7" />
+          <circle cx="42.8" cy="60" fill="#fff" opacity="0.6" r="1.3" />
+          <circle cx="72.8" cy="60" fill="#fff" opacity="0.6" r="1.3" />
+        </g>
+        <ellipse cx="33" cy="68" fill="#FFA38F" opacity="0.65" rx="6.4" ry="4.2" />
+        <ellipse cx="87" cy="68" fill="#FFA38F" opacity="0.65" rx="6.4" ry="4.2" />
+        <path
+          d="M55.5 68.5c2.2 3.4 6.8 3.4 9 0"
+          fill="none"
+          stroke="#2B1A16"
+          stroke-linecap="round"
+          stroke-width="2.4"
+        />
+      </svg></div>
+<div class="box"><div class="bubble"><span class="dot"></span><span class="dot"></span><span class="dot"></span>正在核对金融政策原文…</div><svg v-else class="ai-pet-svg ai-pet-svg-thinking" viewBox="0 0 120 130">
+        <defs>
+          <radialGradient id="txgyBodyGrad2" cx="38%" cy="26%" r="78%">
+            <stop offset="0" stop-color="#FFF8F1" />
+            <stop offset="1" stop-color="#F5DECB" />
+          </radialGradient>
+          <linearGradient id="txgyEarGrad2" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0" stop-color="#EE4A3C" />
+            <stop offset="1" stop-color="#C4231A" />
+          </linearGradient>
+          <linearGradient id="txgyScreenGrad" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0" stop-color="#8ED8FF" />
+            <stop offset="1" stop-color="#3C8FE0" />
+          </linearGradient>
+        </defs>
+
+        <ellipse cx="60" cy="121" fill="#0A2540" opacity="0.14" rx="32" ry="6" />
+
+        <!-- 坐着的腿 -->
+        <ellipse cx="42" cy="110" fill="#F3DAC6" rx="14" ry="9" />
+        <ellipse cx="78" cy="110" fill="#F3DAC6" rx="14" ry="9" />
+
+        <!-- 耳朵 -->
+        <path d="M38 34 28 14c-1.6-3 1.6-6 4.4-4.4L52 20Z" fill="url(#txgyEarGrad2)" />
+        <path d="M82 34 92 14c1.6-3-1.6-6-4.4-4.4L68 20Z" fill="url(#txgyEarGrad2)" />
+
+        <!-- 身体（坐姿：略矮略宽） -->
+        <path
+          d="M60 20c25 0 41 18 41 43 0 25-18 41-41 41S19 88 19 63c0-25 16-43 41-43Z"
+          fill="url(#txgyBodyGrad2)"
+        />
+
+        <!-- 表情：眼睛看向电脑、专注 -->
+        <g class="ai-pet-eyes">
+          <ellipse cx="45" cy="58" fill="#2B1A16" rx="7" ry="8" />
+          <ellipse cx="75" cy="58" fill="#2B1A16" rx="7" ry="8" />
+          <circle cx="45" cy="61.5" fill="#fff" r="2.5" />
+          <circle cx="75" cy="61.5" fill="#fff" r="2.5" />
+        </g>
+        <ellipse cx="32" cy="70" fill="#FFA38F" opacity="0.65" rx="6" ry="4" />
+        <ellipse cx="88" cy="70" fill="#FFA38F" opacity="0.65" rx="6" ry="4" />
+        <path
+          d="M56 72.5c2 2.4 6 2.4 8 0"
+          fill="none"
+          stroke="#2B1A16"
+          stroke-linecap="round"
+          stroke-width="2.2"
+        />
+
+        <!-- 笔记本电脑 -->
+        <g class="ai-pet-laptop">
+          <rect x="34" y="86" fill="#2C3444" height="8" rx="3" width="52" />
+          <rect x="38" y="70" fill="#3A4356" height="22" rx="4" width="44" />
+          <rect x="41" y="73" fill="url(#txgyScreenGrad)" height="16" rx="2.5" width="38" />
+          <rect x="44" y="77" fill="#fff" height="2" opacity="0.85" rx="1" width="20" />
+          <rect x="44" y="81" fill="#fff" height="2" opacity="0.6" rx="1" width="26" />
+          <rect x="44" y="85" fill="#fff" height="2" opacity="0.45" rx="1" width="14" />
+        </g>
+
+        <!-- 小手扶着电脑 -->
+        <ellipse cx="31" cy="92" fill="#F3DAC6" rx="8" ry="7" transform="rotate(-18 31 92)" />
+        <ellipse cx="89" cy="92" fill="#F3DAC6" rx="8" ry="7" transform="rotate(18 89 92)" />
+      </svg></div>
+</body></html>

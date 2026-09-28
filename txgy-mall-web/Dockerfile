@@ -1,0 +1,53 @@
+# syntax=docker/dockerfile:1
+FROM node:22-alpine AS builder
+
+WORKDIR /app
+ARG VITE_SMS_TEST_CODE
+ENV VITE_SMS_TEST_CODE=${VITE_SMS_TEST_CODE}
+ARG VITE_PAYMENT_PREVIEW=false
+ENV VITE_PAYMENT_PREVIEW=${VITE_PAYMENT_PREVIEW}
+ARG VITE_MALL_PUBLIC_BASE_URL=
+ENV VITE_MALL_PUBLIC_BASE_URL=${VITE_MALL_PUBLIC_BASE_URL}
+ARG VITE_MALL_DEMO_MODE=false
+ENV VITE_MALL_DEMO_MODE=${VITE_MALL_DEMO_MODE}
+ARG VITE_MALL_H5_URL=
+ENV VITE_MALL_H5_URL=${VITE_MALL_H5_URL}
+ARG VITE_MALL_H5_PORT=3000
+ENV VITE_MALL_H5_PORT=${VITE_MALL_H5_PORT}
+ARG VITE_PUBLIC_IMAGE_ORIGIN=
+ENV VITE_PUBLIC_IMAGE_ORIGIN=${VITE_PUBLIC_IMAGE_ORIGIN}
+ARG VITE_ANDROID_APK_URL=
+ENV VITE_ANDROID_APK_URL=${VITE_ANDROID_APK_URL}
+ARG VITE_ANDROID_APP_VERSION=
+ENV VITE_ANDROID_APP_VERSION=${VITE_ANDROID_APP_VERSION}
+ARG VITE_ANDROID_FILE_SIZE=
+ENV VITE_ANDROID_FILE_SIZE=${VITE_ANDROID_FILE_SIZE}
+ARG VITE_ANDROID_RELEASE_DATE=
+ENV VITE_ANDROID_RELEASE_DATE=${VITE_ANDROID_RELEASE_DATE}
+ARG VITE_ANDROID_MIN_VERSION=
+ENV VITE_ANDROID_MIN_VERSION=${VITE_ANDROID_MIN_VERSION}
+ARG VITE_ANDROID_SHA256=
+ENV VITE_ANDROID_SHA256=${VITE_ANDROID_SHA256}
+ARG VITE_ANDROID_PERMISSIONS_SUMMARY=
+ENV VITE_ANDROID_PERMISSIONS_SUMMARY=${VITE_ANDROID_PERMISSIONS_SUMMARY}
+ARG VITE_MOBILE_FEEDBACK_URL=
+ENV VITE_MOBILE_FEEDBACK_URL=${VITE_MOBILE_FEEDBACK_URL}
+RUN corepack enable
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
+COPY . .
+ARG AMAP_BUILD_REV=local
+RUN --mount=type=secret,id=amap_key \
+    --mount=type=secret,id=amap_security_code \
+    --mount=type=secret,id=amap_env,target=/app/.env.local \
+    echo "map build revision: ${AMAP_BUILD_REV}" && \
+    if [ -f /run/secrets/amap_key ]; then export VITE_AMAP_KEY="$(cat /run/secrets/amap_key)"; fi && \
+    if [ -f /run/secrets/amap_security_code ]; then export VITE_AMAP_SECURITY_CODE="$(cat /run/secrets/amap_security_code)"; fi && \
+    pnpm build
+
+FROM nginx:1.27-alpine
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /app/dist /usr/share/nginx/html
+EXPOSE 80
+HEALTHCHECK --interval=15s --timeout=3s --start-period=5s --retries=5 \
+  CMD wget -q -O /dev/null http://127.0.0.1/health || exit 1

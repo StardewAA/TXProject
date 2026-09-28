@@ -1,0 +1,761 @@
+/* ============================================================================
+ * 招投标门户 · 共享设计令牌与基础组件样式（2026-09-17 视觉改版）
+ *
+ * 为什么单独抽一份：公告大厅 / 投标流程管理 / 标书制作 / 合规审查 四页 + 右侧悬浮栏
+ *   此前各写各的颜色与阴影（橙色 #f39c12 与深蓝 #0e3a78 直接硬编码在五处），改一次要改五遍、
+ *   且很容易改漏导致四页不一致。这里把**颜色 / 阴影 / 圆角 / 字体**收敛成 CSS 变量，
+ *   把**胶囊标签、实心状态标签、圆角按钮、选项卡、下拉筛选面板**收敛成共享类，
+ *   四页只引用变量与共享类，不再各写一套。
+ *
+ * 色彩系统（一套：深蓝主色 + 暖金辅助色，替代此前的高饱和橙）：
+ *   · 主色（深蓝）—— 顶部导航/Banner、主按钮、选中态、链接：专业、稳健；
+ *   · 辅助色（暖金 #D9A441）—— 仅用于需要"醒目但柔和不刺眼"的强调（如"立即投标"），
+ *     配深棕文字保证对比度（金底白字对比度不足，不可用）；
+ *   · 状态色（蓝/绿/灰/红/紫/橙）一律"浅底 + 深字"实心标签，扫一眼就能分辨进度。
+ *
+ * 使用方式：页面 `<script setup>` 里 `import './styles/bid-ui.css';`（或对应相对路径），
+ *   在根元素挂类 `.hall` / `.module-page`（悬浮栏挂 `.float-bar`）即可拿到全部变量与基础样式。
+ * ========================================================================= */
+
+.hall,
+.module-page,
+.float-bar,
+.white-modal {
+  /* ---- 主色（深蓝） ---- */
+  --bid-primary: #0e3a78;
+  --bid-primary-600: #0b2f63;
+  --bid-primary-700: #08234a;
+  --bid-primary-500: #1a56b8;
+  --bid-primary-soft: #eaf1fa;
+
+  /* ---- 辅助色（暖金，替代原高饱和橙 #f39c12/#e67e22） ---- */
+  --bid-accent: #d9a441;
+  --bid-accent-600: #c08f2e;
+  --bid-accent-soft: #fbf3e2;
+  --bid-accent-ink: #4a3410; /* 金底上的文字色（保证可读） */
+  --bid-accent-on-dark: #f0cb77; /* 深蓝底上的高亮文字 */
+
+  /* ---- 中性色 ---- */
+  --bid-text-1: #1f2937;
+  --bid-text-2: #4b5563;
+  --bid-text-3: #6b7280;
+  --bid-text-4: #9aa1ad;
+  --bid-border: #e8ebf0;
+  --bid-border-soft: #f0f2f6;
+  --bid-bg: #f4f6f9;
+  --bid-surface: #fff;
+  --bid-surface-2: #fafbfd;
+
+  /* ---- 状态色（浅底 + 深字） ---- */
+  --bid-blue: #1a56b8;
+  --bid-blue-soft: #eaf1fa;
+  --bid-green: #2f9e6b;
+  --bid-green-soft: #e9f6ef;
+  --bid-gray: #6b7280;
+  --bid-gray-soft: #f1f2f5;
+  --bid-red: #d05252;
+  --bid-red-soft: #fdeeee;
+  --bid-gold: #b8842a;
+  --bid-gold-soft: #fbf3e2;
+  --bid-purple: #7a58c8;
+  --bid-purple-soft: #f2eefb;
+  --bid-orange: #c07a1a;
+  --bid-orange-soft: #fdf3e3;
+
+  /* ---- 柔和弥散阴影（替代此前的硬边阴影） ---- */
+  --bid-shadow-sm: 0 1px 2px rgb(16 24 40 / 4%), 0 2px 6px rgb(16 24 40 / 4%);
+  --bid-shadow-md: 0 2px 4px rgb(16 24 40 / 4%), 0 8px 20px rgb(16 24 40 / 7%);
+  --bid-shadow-lg: 0 4px 8px rgb(16 24 40 / 5%), 0 18px 40px rgb(16 24 40 / 12%);
+
+  /* ---- 圆角 ---- */
+  --bid-radius: 10px;
+  --bid-radius-sm: 8px;
+  --bid-radius-lg: 14px;
+  --bid-radius-pill: 999px;
+
+  /* ---- 内容区左右对称边距（Banner 通栏时，内容两侧各留这么多）----
+   * 值是随窗口缩放的 min/max 表达式：即「20% 的窗口宽，夹在 64~480px 之间」，也就是每边 32~240px。
+   * （2026-09-21 注：下面「给悬浮栏让位」这条理由已随那条服务导航整体撤下而失效 ——
+   *   现在这个边距纯粹是页面的左右留白，取值与行为都不用改。）
+   * 为什么不用固定值：
+   *   · 上限 480px（每边 240px）——右侧悬浮栏固定占右侧约 126px；边距若只留到 ~150px，
+   *     内容会紧贴悬浮栏（仅差 24px）显得局促，留到 ~200px 才有明显间隔、版面透气；
+   *   · 下限 64px——窄窗口若边距太大，内容会被挤得没法看；
+   *   · 用百分比过渡——两侧始终对称，宽屏舒展、窄屏自动收敛，无需写一堆媒体查询。 */
+  --bid-side-inset: min(480px, max(64px, 20%));
+
+  /* ---- 玻璃卡（.bid-glass-shell）的内边距与描边宽度 ----
+   * 这两个值是给**玻璃卡外面的元素**用的：Banner 里那排模块入口要「与白卡对齐」
+   * （2026-09-21 用户口径：四个按钮的宽度与**白卡**对齐、而不是与玻璃卡对齐），
+   * 而白卡的左右边缘 = 玻璃卡外缘往里「内边距 + 1px 描边」，所以那一行要按
+   * `(var(--bid-glass-pad) + var(--bid-glass-line)) * 2` 再往里收 —— 算式见 components/HeroMods.vue。
+   * ⚠ 改玻璃卡内边距时改 --bid-glass-pad 一处即可（.bid-glass-shell 的 padding 直接引用它）；
+   *   --bid-glass-line 要跟着实际描边宽度走（现在 .bid-glass-shell 是 1px solid）。 */
+  --bid-glass-pad: 24px;
+  --bid-glass-line: 1px;
+
+  /* ---- 玻璃卡顶边上抬量（2026-09-21 用户口径「四个按钮稍微往上移，然后增加玻璃卡的高度，
+   *      让四个按钮上移后可以压到玻璃卡」）----
+   * 「让玻璃卡变高」在几何上只有一种成立方式：**顶边往上抬**。光加内边距是让它往下变高，
+   *   顶边不动、里面的白卡往下走，按钮上移反而会脱离卡片 —— 那个方向是错的。
+   * 所以这里用**一个变量**同时驱动三处，改它一个数就能整体上移：
+   *   · `.bid-glass-shell` 的**上**内边距 = `--bid-glass-pad + --bid-glass-lift`（卡往上长高）；
+   *   · 各页玻璃卡的 `margin-top` = `calc(-50vh - 64px - var(--bid-glass-lift))`（顶边抬到 50vh − lift）；
+   *   · `components/HeroMods.vue` 的 `margin-bottom` 多减一个 lift（按钮同步上移）。
+   * 三处同增同减，于是：**白卡原地不动**（顶边 = 50vh + 25 不变）、
+   *   **按钮压线恒为 12px**（与 lift 取值无关）、玻璃卡只在顶部多长高 lift。
+   * ⚠ `--bid-glass-pad` 必须保持 24px —— 按钮排的**横向**对齐（与白卡同宽）还在用它，
+   *   别为了「加大玻璃卡」去动它。要调高度请改 `--bid-glass-lift`。 */
+  --bid-glass-lift: 20px;
+
+  /* ---- Banner / 整页底图变量（2026-09-21 用户提供，四个页面共用一张）----
+   * ⚠ 2026-09-21 改动：底图**不再由四个页面自己画**（它们原来在 `<section class="hero">`
+   *   上绑 `--bid-hero-img` 并用它做 background）。现在底图是**钉在视口上的整页背景**，
+   *   挂在 `layouts/portal.vue` 的 `.portal-shell--bidhero` 上（用户口径「照片铺满整页、钉住不滚」）——
+   *   四个页面的根元素与 `.hero` / `.brw-hero` 一律 `background: transparent`，
+   *   只留白字（`color: #fff`）压在那层照片上。原因（负 z-index 的固定层会被 .portal-shell
+   *   自己的不透明背景盖住）与调法都写在那条规则的注释里。
+   * 变量 `--bid-hero-img` 因此由**布局**在 `.portal-shell` 上绑：
+   *     :style="isBiddingHeroPath ? { '--bid-hero-img': `url(${heroBg})` } : undefined"
+   *   其中 heroBg 来自 `import heroBg from '#/assets/imgs/bidding/hero-bg1.jpg'`。
+   * 为什么绕这一下：图片在 src/assets 下，路径必须交给 Vite 处理（打包时改名 + 加哈希），
+   *   而把 url() 写进自定义属性时 Vite **不保证**会重写那个路径（仓库里没有可靠先例），
+   *   经 JS 导入则是 Vite 的标准路径、一定能正确处理。
+   * 消费端统一写 `var(--bid-hero-img, none)`（带 none 兜底：万一忘了绑，
+   *   仍然显示品牌深蓝蒙版 + 兜底底色，不会变成一块透明）。
+   * 换图：改 layouts/portal.vue 里那一行 import 的文件名，或直接覆盖图片文件。 */
+
+  /* ---- 字体：统一无衬线（苹方/思源黑体/雅黑回退），并给足行高 ---- */
+  --bid-font: -apple-system, blinkmacsystemfont, 'PingFang SC', 'Microsoft YaHei',
+    'Source Han Sans SC', 'Noto Sans SC', 'Helvetica Neue', Arial, sans-serif;
+  --bid-font-mono: ui-monospace, sfmono-regular, menlo, consolas, monospace;
+
+  font-family: var(--bid-font);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ============================ 胶囊筛选标签 ============================ */
+.bid-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: var(--bid-radius-pill);
+  background: var(--bid-gray-soft);
+  color: var(--bid-text-2);
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.bid-pill:hover {
+  background: var(--bid-primary-soft);
+  color: var(--bid-primary);
+}
+
+.bid-pill.on {
+  background: var(--bid-primary);
+  color: #fff;
+  font-weight: 600;
+}
+
+.bid-pill--dashed {
+  background: transparent;
+  border: 1px dashed var(--bid-border);
+  color: var(--bid-text-3);
+}
+
+.bid-pill--dashed:hover {
+  border-color: var(--bid-primary);
+  background: var(--bid-primary-soft);
+}
+
+.bid-pill--dashed.on {
+  border: 1px solid var(--bid-primary);
+  background: var(--bid-primary);
+  color: #fff;
+}
+
+/* ======================= 实心状态标签（浅底 + 深字） ======================= */
+.bid-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.bid-tag--blue {
+  background: var(--bid-blue-soft);
+  color: var(--bid-blue);
+}
+
+.bid-tag--green {
+  background: var(--bid-green-soft);
+  color: var(--bid-green);
+}
+
+.bid-tag--gray {
+  background: var(--bid-gray-soft);
+  color: var(--bid-gray);
+}
+
+.bid-tag--red {
+  background: var(--bid-red-soft);
+  color: var(--bid-red);
+}
+
+.bid-tag--gold {
+  background: var(--bid-gold-soft);
+  color: var(--bid-gold);
+}
+
+.bid-tag--purple {
+  background: var(--bid-purple-soft);
+  color: var(--bid-purple);
+}
+
+.bid-tag--orange {
+  background: var(--bid-orange-soft);
+  color: var(--bid-orange);
+}
+
+/* ============================== 按钮 ============================== */
+.bid-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: var(--bid-radius-sm);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s,
+    transform 0.15s;
+}
+
+.bid-btn--primary {
+  background: var(--bid-primary);
+  color: #fff;
+}
+
+.bid-btn--primary:hover {
+  background: var(--bid-primary-600);
+  box-shadow: var(--bid-shadow-sm);
+}
+
+/* 辅助色按钮：暖金 + 深棕文字（金底白字对比度不足，故用深色字） */
+.bid-btn--accent {
+  background: linear-gradient(135deg, #e3b45c, #cf9a35);
+  border-color: #c89a3c;
+  color: var(--bid-accent-ink);
+}
+
+.bid-btn--accent:hover {
+  background: linear-gradient(135deg, #d9a441, #bd8828);
+  box-shadow: 0 4px 12px rgb(185 136 42 / 28%);
+}
+
+.bid-btn--ghost {
+  background: #fff;
+  border-color: var(--bid-border);
+  color: var(--bid-text-2);
+  font-weight: 500;
+}
+
+.bid-btn--ghost:hover {
+  border-color: var(--bid-primary);
+  color: var(--bid-primary);
+}
+
+.bid-btn--danger-ghost {
+  background: #fff;
+  border-color: var(--bid-border);
+  color: var(--bid-red);
+  font-weight: 500;
+}
+
+.bid-btn--danger-ghost:hover {
+  border-color: var(--bid-red);
+  background: var(--bid-red-soft);
+}
+
+.bid-btn--sm {
+  height: 30px;
+  padding: 0 13px;
+  font-size: 12.5px;
+}
+
+.bid-btn[disabled],
+.bid-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* 纯文字操作（次要动作） */
+.bid-link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--bid-primary-500);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.bid-link:hover {
+  color: var(--bid-primary);
+  text-decoration: underline;
+}
+
+.bid-link--danger {
+  color: var(--bid-red);
+}
+
+.bid-link--danger:hover {
+  color: #b83f3f;
+}
+
+/* ============================== 卡片 ============================== */
+.bid-card {
+  background: var(--bid-surface);
+  border: 1px solid var(--bid-border-soft);
+  border-radius: var(--bid-radius);
+  box-shadow: var(--bid-shadow-sm);
+}
+
+.bid-card--hover {
+  transition: box-shadow 0.18s, transform 0.18s, border-color 0.18s;
+}
+
+.bid-card--hover:hover {
+  border-color: rgb(26 86 184 / 35%);
+  box-shadow: var(--bid-shadow-md);
+  transform: translateY(-2px);
+}
+
+/* ============================== 搜索框 ============================== */
+.bid-searchbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.bid-search-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.bid-search-icon {
+  position: absolute;
+  top: 50%;
+  left: 14px;
+  display: inline-flex;
+  color: var(--bid-text-4);
+  font-size: 18px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.bid-search-input {
+  width: 100%;
+  height: 44px;
+  padding: 0 14px 0 42px;
+  border: 1px solid var(--bid-border);
+  border-radius: var(--bid-radius);
+  background: #fff;
+  color: var(--bid-text-1);
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.bid-search-input::placeholder {
+  color: var(--bid-text-4);
+}
+
+.bid-search-input:focus {
+  border-color: var(--bid-primary);
+  box-shadow: 0 0 0 3px rgb(26 86 184 / 12%);
+}
+
+.bid-search-btn {
+  height: 44px;
+  padding: 0 30px;
+  border: 0;
+  border-radius: var(--bid-radius);
+  background: var(--bid-primary);
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s, box-shadow 0.15s;
+}
+
+.bid-search-btn:hover {
+  background: var(--bid-primary-600);
+  box-shadow: var(--bid-shadow-sm);
+}
+
+/* ============================== 选项卡 ============================== */
+.bid-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 26px;
+  border-bottom: 1px solid var(--bid-border);
+}
+
+.bid-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 2px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--bid-text-3);
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.bid-tab:hover {
+  color: var(--bid-primary);
+}
+
+.bid-tab.on {
+  color: var(--bid-primary);
+  font-weight: 700;
+}
+
+.bid-tab.on::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--bid-primary);
+  content: '';
+}
+
+/* 选项卡里的计数小圆标 */
+.bid-tab .cnt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: var(--bid-radius-pill);
+  background: var(--bid-gray-soft);
+  color: var(--bid-text-3);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.bid-tab.on .cnt {
+  background: var(--bid-primary-soft);
+  color: var(--bid-primary);
+}
+
+/* ==================== antd 弹窗（强制白底 + 深色字） ====================
+ * 为什么必须单独处理（这是一个真 bug，不是样式偏好）：
+ *   antd Modal 默认挂载到 body（teleport），**脱离了页面根元素** —— 页面上定义的
+ *   `--bid-*` 令牌不会继承进弹窗内部；于是弹窗里的 `color: var(--bid-text-x)` 取值失败，
+ *   文字回退成 antd 全局（深色）主题的浅色字，叠在我们强制的白底上 → 「白底浅字」看不清。
+ *   修法：① 把 .white-modal 一并列进令牌选择器（见文件顶部），令牌即可继承进弹窗；
+ *         ② 这里再显式给弹窗容器/内容定深色字，做兜底。
+ * 三页（投标流程管理 / 标书制作 / 合规审查）的弹窗共用本段，页面里不再各写一份。 */
+.white-modal {
+  color: var(--bid-text-1);
+}
+
+.white-modal .ant-modal-content {
+  background: #fff;
+  color: var(--bid-text-1);
+}
+
+.white-modal .ant-modal-header {
+  border-bottom: 1px solid var(--bid-border-soft);
+  background: #fff;
+}
+
+.white-modal .ant-modal-title {
+  color: var(--bid-text-1);
+}
+
+/* 选项卡式单选（审核通过/审核不通过、审查通过/审查不通过）：白底深色字，选中项蓝色描边 */
+.white-modal .ant-radio-button-wrapper {
+  border-color: var(--bid-border);
+  background: #fff;
+  color: var(--bid-text-1);
+}
+
+.white-modal .ant-radio-button-wrapper-checked {
+  border-color: var(--bid-primary);
+  background: #fff;
+  color: var(--bid-primary);
+}
+
+.white-modal .ant-radio-button-wrapper:not(:first-child)::before {
+  background-color: var(--bid-border);
+}
+
+/* ============================== 通用文本 ============================== */
+.bid-muted {
+  color: var(--bid-text-3);
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+/* ==================== 列表条目（投标流程 / 标书制作 / 合规审查 共用） ====================
+ * 结构：内容（左，自适应） + 操作（右，固定），标题做主视觉、状态标签紧跟标题。 */
+.bid-item {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 16px 16px 16px 18px;
+  border: 1px solid var(--bid-border-soft);
+  border-radius: var(--bid-radius);
+  background: #fff;
+  transition: border-color 0.16s, box-shadow 0.16s;
+}
+
+.bid-item + .bid-item {
+  margin-top: 10px;
+}
+
+.bid-item:hover {
+  border-color: rgb(26 86 184 / 28%);
+  box-shadow: var(--bid-shadow-md);
+}
+
+.bid-item-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.bid-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.bid-item-title {
+  margin: 0;
+  overflow: hidden;
+  color: var(--bid-text-1);
+  font-size: 15px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bid-item-issuer {
+  color: var(--bid-text-3);
+  font-size: 12.5px;
+}
+
+.bid-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  margin-top: 8px;
+}
+
+.bid-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 10px;
+  border-radius: 6px;
+  background: var(--bid-surface-2);
+  color: var(--bid-text-2);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.bid-chip b {
+  color: var(--bid-text-3);
+  font-weight: 500;
+}
+
+/* 结论/说明提示条（图标 + 浅底色条） */
+.bid-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: var(--bid-radius-sm);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.bid-note--ok {
+  background: var(--bid-green-soft);
+  color: var(--bid-green);
+}
+
+.bid-note--bad {
+  background: var(--bid-red-soft);
+  color: var(--bid-red);
+}
+
+.bid-note--info {
+  background: var(--bid-primary-soft);
+  color: var(--bid-primary);
+}
+
+.bid-item-actions {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  align-items: center;
+}
+
+/* 列表分组标题 */
+.bid-sec-title {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 18px 0 0;
+  color: var(--bid-text-1);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* 空态 */
+.bid-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 56px 16px;
+  color: var(--bid-text-3);
+  font-size: 13px;
+  text-align: center;
+}
+
+.bid-empty-icon {
+  color: var(--bid-text-4);
+  font-size: 34px;
+}
+
+.bid-empty-text {
+  line-height: 1.7;
+}
+
+@media (max-width: 860px) {
+  .bid-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .bid-item-actions {
+    flex-wrap: wrap;
+  }
+}
+
+/* ==================== Banner 的标题段（标题 + 副标题） ====================
+ * 2026-09-21 用户口径：四个页面的蓝色 Banner 结构统一为「**标题段 + 下方四个模块入口**」——
+ *   四个入口的标记与样式在 `components/HeroMods.vue`（共享组件），标题段这个外壳放这里共用。
+ * 用法（DOM 嵌套）：
+ *   <section class="hero">
+ *     <div class="hero-text"> <h1 class="hero-title">…</h1> <div class="hero-sub">…</div> </div>
+ *     <HeroMods active="hall" />
+ *   </section>
+ * **水平居中 + 宽度自适应**（2026-09-21 下午用户口径「标题与下面的小字都移到正中间并放大字号」）。
+ *   沿革：它曾是 `flex: 0 0 384px` 的**定宽段**（当时按钮排在它右边，定宽是为了「切页时按钮位置不变」——
+ *   四页副标题长短不同，左段自适应的话右侧按钮的起点会跟着左右挪）。
+ *   按钮搬到标题下方、改成整行（宽度由 Banner 内边距决定、与页面无关）之后，这个理由就不存在了，
+ *   定宽反而会让标题偏左，故改成自适应 + 居中。
+ * `align-items: center` 管的是段内两个块的水平对齐（定宽段落里它们本来是左对齐的），
+ *   `text-align: center` 管标题/小字**自己折行时**每一行的居中 —— 两条都要有：
+ *   只写前者，小字一旦换行，行内文字仍会左对齐。
+ *
+ * **纵向位置：`margin-top: auto`（2026-09-21 用户口径「标题下移到导航栏与按钮之间的距离的中间」）。**
+ *   标题段与下方的按钮排**各带一个 `margin-top: auto`**，于是 Banner 里的空白被这两条自动外边距
+ *   **对半平分** —— 标题段正好落在「Banner 顶边（＝门户导航栏下沿）」与「按钮排顶边」的正中间。
+ *   成立的前提是 Banner 的内容盒顶边就等于导航栏下沿，所以四个页面的 `.hero` / `.brw-hero`
+ *   **上内边距必须是 0**（原来是 26px，那 26px 会被算进标题上方的空白、让它比中点低 13px）；
+ *   同理 `.hero` 的 `gap` 也要是 0 —— 任何「标题与按钮之间的固定间距」都会把标题往上顶 8px。
+ *   ⚠ 代价：窗口特别矮（约 <570px 高）时 Banner 被内容撑满、自动外边距归零，标题会贴到导航栏下沿。
+ *     桌面正常高度不会出现。
+ *   ⚠ 连带效果：按钮排整体上移 `--bid-glass-lift`（见令牌区）时，标题会**跟着上移它的一半**
+ *     （因为中点的上界跟着动）—— 这是几何必然，不是 bug。 */
+.hero-text {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  margin-top: auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  text-align: center;
+}
+
+/* ==================== 内容区底衬：半透明的玻璃圆角卡片 ====================
+ * 2026-09-21 用户口径：「四个页面下面的内容部分的页面底下加一个**略大一些的半透明底圆角卡片**」。
+ * 本类只负责这张卡片**本身的样子**（半透明白底 + 毛玻璃 + 圆角 + 描边 + 柔和阴影 + 内边距），
+ *   **不含列宽 / 外边距 / 定位** —— 各页的内容容器口径不同（有的新包一层，有的直接加在已有容器上），
+ *   那些由各页自己给；这样四页的「卡片观感」仍然一致。
+ * 配方沿用模块里那条服务导航（components/FloatBar.vue）的毛玻璃：半透明白 + 细边高光 + blur，
+ *   **没有引入任何新颜色**（描边那支 rgb(14 58 120 / 10%) 就是主色 --bid-primary 的浅透明）。
+ * 「略大一些」靠内边距实现：左右下三面各留 --bid-glass-pad（24px）。
+ *   ⚠ 这个值还有第二个消费方：Banner 里那排模块入口按钮要「与白卡对齐」——
+ *     白卡的左右边缘正是玻璃卡外缘往里「--bid-glass-pad + 描边 1px」，所以那一行的宽度是按这两个
+ *     变量算的（见 components/HeroMods.vue）。**别为了「加大玻璃卡」去动它。**
+ * **上**内边距多一个 `--bid-glass-lift`（20px）：那一截是「卡片往上长高」的部分 ——
+ *   各页玻璃卡同时把 `margin-top` 多压了同样的量，所以多出来的这 20px 全在**白卡上方**，
+ *   白卡本身一动不动，按钮也同步上移、依旧压在同一处（算式见令牌区 --bid-glass-lift 的注释）。
+ * 描边与阴影刻意比 FloatBar 那版更明显一点：这张卡片有一半压在浅灰页面底（#f4f6f9）上，
+ *   纯半透明白在那里几乎看不出来 —— 靠一圈浅蓝描边 + 稍重的阴影才能读出「这里有一张卡片」。
+ * 调法：更像玻璃 → 把 58% 调小、blur 调大；想更实 → 把 58% 调大；
+ *   想让卡片四面更大 → 加大 --bid-glass-pad；只想让它往上长高 → 改 --bid-glass-lift。 */
+.bid-glass-shell {
+  padding: calc(var(--bid-glass-pad, 24px) + var(--bid-glass-lift, 0px))
+    var(--bid-glass-pad, 24px) var(--bid-glass-pad, 24px);
+  background: rgb(255 255 255 / 58%);
+  border: 1px solid rgb(14 58 120 / 10%);
+  border-radius: var(--bid-radius-lg);
+  box-shadow:
+    0 10px 30px rgb(16 24 40 / 14%),
+    inset 0 1px 0 rgb(255 255 255 / 70%);
+  backdrop-filter: blur(10px) saturate(160%);
+  -webkit-backdrop-filter: blur(10px) saturate(160%);
+}
+
+/* 2026-09-21 下午删除了一条 `@media (max-width: 800px) { .hero-text { flex-shrink: 1 } }`：
+ *   它是为「定宽 384px 的左段在极窄屏允许收缩」加的；左段改成自适应宽度后这条已无意义
+ *   （`flex: 0 0 auto` 本就按内容取宽，窄屏会自然折行，不需要收缩）。
+ *   顺带作废的还有两条更早的尝试（都别再加回来）：给左段写 `min-width: 45%` 下限、
+ *   以及用两段按基准比例分配剩余空间 —— 前提都是「标题与按钮并排」。 */
+
+/* 2026-09-21 当天曾在这里加过一套「页面两栏骨架」共享类（.layout-cols / .layout-main /
+ *   .layout-aside），把右侧那条服务导航改成了页面内真正的侧栏。同日晚些时候用户要求
+ *   「去掉右侧服务侧边栏、内容恢复居中」，四个页面都退回单栏，故这一整套已删除。
+ *   现在的口径：页面正文仍是单栏居中（`calc(100% - var(--bid-side-inset))` + `margin: 0 auto`），
+ *   投标服务导航不再出现（components/FloatBar.vue 已无任何引用，见其文件头注释）。 */

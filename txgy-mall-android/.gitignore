@@ -1,0 +1,8 @@
+build/
+.hbuilderx/
+unpackage/
+local.properties
+*.keystore
+*.jks
+*.password.dpapi
+*.pack.private.json

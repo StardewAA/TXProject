@@ -1,0 +1,26 @@
+# syntax=docker/dockerfile:1
+FROM maven:3.9-eclipse-temurin-25 AS builder
+WORKDIR /workspace
+ENV MAVEN_OPTS="-Xmx1536m -XX:ActiveProcessorCount=2"
+COPY . .
+# One shared reactor build, cached across all eleven service images. No host JARs.
+RUN --mount=type=cache,id=mall-maven,target=/root/.m2/repository,sharing=locked \
+    mvn -s deploy/mall/maven-settings.xml -B -ntp -Dmaven.test.skip=true -Dmaven.artifact.threads=1 \
+    -pl txgy-gateway,txgy-module-system/txgy-module-system-server,txgy-module-infra/txgy-module-infra-server,txgy-module-member/txgy-module-member-server,txgy-module-pay/txgy-module-pay-server,txgy-module-mall/txgy-module-product-server,txgy-module-mall/txgy-module-trade-server,txgy-module-mall/txgy-module-promotion-server,txgy-module-mall/txgy-module-statistics-server,txgy-module-wms/txgy-module-wms-server,txgy-module-ai/txgy-module-ai-server \
+    -am package
+
+FROM builder AS regression
+RUN --mount=type=cache,id=mall-maven,target=/root/.m2/repository,sharing=locked \
+    mvn -s deploy/mall/maven-settings.xml -B -ntp \
+    -pl txgy-module-infra/txgy-module-infra-server,txgy-module-mall/txgy-module-trade-server -am \
+    -Dtest=PublicFileRedirectTest,PlatformBuyerActionsTest,PlatformSingleChildCancellationTest \
+    -Dsurefire.failIfNoSpecifiedTests=false test
+
+FROM eclipse-temurin:25-jre
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+ARG MODULE_PATH
+COPY --from=builder /workspace/${MODULE_PATH}/target/*.jar /app/app.jar
+ENV JAVA_OPTS="-Xms64m -Xmx384m -XX:MaxMetaspaceSize=256m -XX:ActiveProcessorCount=2"
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]

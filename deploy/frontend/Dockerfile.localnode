@@ -1,0 +1,19 @@
+FROM docker.m.daocloud.io/library/eclipse-temurin:25-jre AS builder
+WORKDIR /workspace
+COPY deploy/frontend/vendor/node-v22.20.0-linux-x64.tar.gz /tmp/node.tar.gz
+RUN tar -xzf /tmp/node.tar.gz -C /usr/local --strip-components=1 && npm install -g pnpm@11.7.0 --registry=https://registry.npmmirror.com
+COPY txgy-ui-admin-vben/ ./txgy-ui-admin-vben
+WORKDIR /workspace/txgy-ui-admin-vben
+ENV CI=true
+ENV NODE_OPTIONS=--max-old-space-size=4096
+ENV VITE_BASE_URL=
+ENV VITE_GLOB_API_URL=/admin-api
+ENV VITE_APP_TENANT_ENABLE=true
+ENV VITE_APP_CAPTCHA_ENABLE=false
+ENV VITE_APP_DOCALERT_ENABLE=false
+RUN pnpm config set registry https://registry.npmmirror.com && pnpm install --no-frozen-lockfile && pnpm run build:antd
+FROM docker.m.daocloud.io/library/nginx:1.27-alpine
+COPY deploy/frontend/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /workspace/txgy-ui-admin-vben/apps/web-antd/dist /usr/share/nginx/html
+EXPOSE 80
+HEALTHCHECK --interval=15s --timeout=5s --retries=10 CMD wget -q -O /dev/null http://127.0.0.1/ || exit 1

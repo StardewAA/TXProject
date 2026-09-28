@@ -1,0 +1,86 @@
+package cn.iocoder.txgy.module.hrm.controller.admin.employee.vo.employee;
+
+import cn.iocoder.txgy.framework.common.validation.InEnum;
+import cn.iocoder.txgy.module.hrm.enums.employee.employment.HrmEmployeeQuitReasonEnum;
+import cn.iocoder.txgy.module.hrm.enums.employee.employment.HrmEmployeeQuitTypeEnum;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import lombok.Data;
+
+import java.time.LocalDateTime;
+import java.time.LocalDate;
+
+import static cn.iocoder.txgy.framework.common.util.date.LocalDateTimeUtils.isAfterOrEqual;
+import static cn.iocoder.txgy.framework.common.util.date.LocalDateTimeUtils.isBeforeOrEqual;
+
+@Schema(description = "管理后台 - HRM 员工离职 Request VO")
+@Data
+public class HrmEmployeeQuitReqVO {
+
+    @Schema(description = "员工编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
+    @NotNull(message = "员工编号不能为空")
+    private Long employeeId;
+
+    @Schema(description = "计划离职时间", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotNull(message = "计划离职时间不能为空")
+    private LocalDateTime planQuitTime;
+
+    @Schema(description = "申请离职时间", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotNull(message = "申请离职时间不能为空")
+    private LocalDateTime applyQuitTime;
+
+    @Schema(description = "薪资结算时间", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotNull(message = "薪资结算时间不能为空")
+    private LocalDateTime salarySettlementTime;
+
+    @Schema(description = "离职类型", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
+    @NotNull(message = "离职类型不能为空")
+    @InEnum(value = HrmEmployeeQuitTypeEnum.class, message = "离职类型必须是 {value}")
+    private Integer type;
+
+    @Schema(description = "离职原因", example = "1")
+    @InEnum(value = HrmEmployeeQuitReasonEnum.class, message = "离职原因必须是 {value}")
+    private Integer reason;
+
+    @Schema(description = "备注", example = "个人原因离职")
+    @Size(max = 500, message = "备注不能超过 500 个字符")
+    private String remark;
+
+    @Schema(description = "计薪截止日（为空时默认取计划离职日期）", example = "2026-10-25")
+    private LocalDate salaryCutoffDate;
+
+    @AssertTrue(message = "申请离职时间不能晚于计划离职时间")
+    @JsonIgnore
+    public boolean isApplyQuitTimeValid() {
+        return applyQuitTime == null || planQuitTime == null
+                || isBeforeOrEqual(applyQuitTime.toLocalDate(), planQuitTime.toLocalDate());
+    }
+
+    @AssertTrue(message = "薪资结算时间不能早于计划离职时间")
+    @JsonIgnore
+    public boolean isSalarySettlementTimeValid() {
+        return salarySettlementTime == null || planQuitTime == null
+                || isAfterOrEqual(salarySettlementTime.toLocalDate(), planQuitTime.toLocalDate());
+    }
+
+    @AssertTrue(message = "计薪截止日不能早于申请离职日期")
+    @JsonIgnore
+    public boolean isSalaryCutoffDateValid() {
+        return salaryCutoffDate == null || applyQuitTime == null
+                || isAfterOrEqual(salaryCutoffDate, applyQuitTime.toLocalDate());
+    }
+
+    @AssertTrue(message = "离职原因与离职类型不匹配")
+    @JsonIgnore
+    public boolean isReasonValid() {
+        if (type == null || HrmEmployeeQuitTypeEnum.RETIREMENT.getType().equals(type)) {
+            return true;
+        }
+        HrmEmployeeQuitReasonEnum quitReason = HrmEmployeeQuitReasonEnum.valueOf(reason);
+        return quitReason != null && quitReason.getQuitType().equals(type);
+    }
+
+}

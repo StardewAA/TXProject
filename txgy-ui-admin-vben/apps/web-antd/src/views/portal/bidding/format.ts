@@ -1,0 +1,384 @@
+/**
+ * 职责：招投标门户展示层格式化工具（大厅列表/详情/管理预览/关注流共用）——时间与空值归一、公告正文智能排版、
+ * 结构化块安全 HTML 渲染。
+ * 明细：展示工具：时间（epoch 毫秒/字符串兼容，0/空视为无值）、空值清洗、
+ * 公告正文智能排版（遗留拍平正文兜底）、正文结构化块 → HTML（02 §4 schema）。
+ */
+import type { NoticeBodyBlock } from './types';
+
+import { fmtDateTimeMinutes, fmtDate as sharedFmtDate } from '#/utils/datetime';
+
+/** 日期时间：YYYY-MM-DD HH:mm（无值返回空串） */
+export const fmtDT = (v: null | number | string | undefined): string =>
+  // 门户面向公众：无秒（紧凑）+ 空值留白（比"—"干净）；解析口径与后台共用同一实现，见 #/utils/datetime
+  fmtDateTimeMinutes(v, '');
+
+/** 仅日期：YYYY-MM-DD（有效期区间用） */
+export const fmtDate = (v: null | number | string | undefined): string => sharedFmtDate(v, '');
+
+/** 后端空值可能以字符串 "NULL"/"null" 下发（历史脏数据），统一还原为空 */
+const NULL_RE = /^(NULL|null|N\/A|-)$/i;
+export function cleanT(v: unknown): string {
+  if (v === null || v === undefined) return '';
+  const s = String(v).trim();
+  return NULL_RE.test(s) ? '' : s;
+}
+
+/** 多值字段（标段等）可能是数组、字符串 "NULL" 或逗号/顿号/分号分隔串，统一归一化为非空数组 */
+export function toCleanList(v: unknown): string[] {
+  if (v === null || v === undefined) return [];
+  const list = Array.isArray(v) ? v.map(String) : String(v).split(/[,，、;；\s]+/);
+  return list.map(cleanT).filter(Boolean);
+}
+
+/* ---------- HTML 转义 / 净化安全渲染 ---------- */
+
+/** 文本 → HTML 转义（所有来自后端/结构化块的文本先转义再进入 v-dompurify-html） */
+export function escapeHtml(s: null | number | string | undefined): string {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+const esc = escapeHtml;
+
+/* ---------- 公告正文智能排版 ----------
+ * 真实数据（EBIDDING 等外部源）拍平正文曾为「一个 <h1> + 一整段无换行的连续文字」，
+ * 原文直接 v-html 会是一大坨。这里仅在“单一长段落、无表格/图片/多段落结构”时
+ * 做纯文本重排：按中文序号（一、二、…）与既有换行切段，恢复公文的段落版式。
+ * 结构化 HTML（含 table/img/h2/多个 p）不受影响，保持原 HTML + 公文 CSS；
+ * 结构化块（bodyBlocksJson）走 blocksToHtml，不经本函数。
+ */
+const SEQ_SPLIT_RE = /[一二三四五六七八九十]{1,3}、/g;
+// 允许切分的后续章节关键词：防止把“共7个标段：标段一、标段二…”误切
+const SEQ_HEAD_RE =
+  /^[一二三四五六七八九十]{1,3}、\s*(招标条件|项目概况|招标范围|标段划分|投标人|资格|招标文件|投标文件|开标|评标|定标|中标|成交|结果|公示|公告|异议|发布|媒介|联系|监督|其他|合同|验收|结算|支付)/;
+const PUNC_END_RE = /[。：；！？）】」』]\s*$/;
+
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&mdash;/gi, '—')
+    .replace(/&ndash;/gi, '–')
+    .replace(/&hellip;/gi, '…')
+    .replace(/&#(\d+);/g, (_m, n) => String.fromCodePoint(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_m, n) => String.fromCodePoint(parseInt(n, 16)));
+}
+
+/** 首段若以公告标题开头（真实数据常见整句回显），裁掉重复部分，避免标题下再叠一遍。
+ * 仅处理“完整标题重复”或“标题前缀残缺回显且后跟标点”两种情况，防止误删正常正文开头。 */
+function stripLeadTitle(line: string, title: string): string {
+  if (!title) return line;
+  const norm = (s: string) => s.replace(/\s+/g, '').replace(/[/／]/g, '');
+  const tn = norm(title);
+  if (!tn) return line;
+  let s = line.trim();
+  // ① 整行就是标题重复 → 整行删除
+  if (norm(s) === tn) return '';
+  // ② 行以完整标题开头 → 裁掉该标题（允许空格/斜杠差异）
+  for (let k = 0; k < 4; k += 1) {
+    let i = 0;
+    let j = 0;
+    while (i < s.length && j < tn.length) {
+      const ch = s[i]!;
+      if (/\s|[/／]/.test(ch)) {
+        i += 1;
+        continue;
+      }
+      if (ch !== tn[j]) break;
+      i += 1;
+      j += 1;
+    }
+    if (j < tn.length || j === 0) break;
+    s = s.slice(i).trim();
+    if (!s) return '';
+  }
+  // ③ 剩余以标题前缀回显开头且后跟标点（如“…维修项目（项目编号…”）→ 仅裁回显前缀
+  let i2 = 0;
+  let j2 = 0;
+  while (i2 < s.length && j2 < tn.length) {
+    const ch = s[i2]!;
+    if (/\s|[/／]/.test(ch)) {
+      i2 += 1;
+      continue;
+    }
+    if (ch !== tn[j2]) break;
+    i2 += 1;
+    j2 += 1;
+  }
+  if (j2 >= 12) {
+    const rest = s.slice(i2);
+    if (rest && /^[（(：:\s，,。.；;]/.test(rest[0]!)) {
+      s = rest.trim();
+    }
+  }
+  return s;
+}
+
+/** 把超长段按中文序号切成若干段落；仅在章节词前切，避免误切“标段一、二” */
+function splitSeq(line: string): string[] {
+  const out: string[] = [];
+  let last = 0;
+  let m: null | RegExpExecArray;
+  SEQ_SPLIT_RE.lastIndex = 0;
+  while ((m = SEQ_SPLIT_RE.exec(line))) {
+    const idx = m.index;
+    if (idx === 0) {
+      last = idx;
+      continue;
+    }
+    const head = line.slice(idx);
+    const prev = line[idx - 1];
+    const okBoundary =
+      PUNC_END_RE.test(line.slice(0, idx)) || (prev && !/[段号包件]/.test(prev));
+    if (okBoundary && SEQ_HEAD_RE.test(head)) {
+      if (idx > last) out.push(line.slice(last, idx).trim());
+      last = idx;
+    }
+  }
+  if (last < line.length) {
+    const rest = line.slice(last).trim();
+    if (rest) out.push(rest);
+  }
+  return out;
+}
+
+/**
+ * 公告正文“公文化”智能排版（遗留拍平正文兜底；bodyBlocks/contentHtmlSafe 结构化时原样返回）。
+ * 返回可安全 v-html 的片段。
+ *
+ * 2026-09 修复：此前“无 h2-6/table/img 的短正文直接原样返回”，导致真实站点常见
+ * “标题写在 <p><strong> 里”（无 h 标签）的正文整体当段落渲染——公文 CSS 对 p 一律
+ * text-indent:2em（首行空两格）且无标题样式，表现为“标题没渲染、前面多两格缩进”。
+ * 现对无 table/img/多级标题的正文一律走本智能排版：按原文 strong 包裹与序号/文档标题
+ * 特征把疑似标题行抬成 h 标签（h 不受 text-indent 影响），普通段才落 p.doc-para。
+ */
+export function prettyNoticeHtml(html: null | string | undefined, docTitle?: null | string): string {
+  if (!html) return '';
+  // 含表格/图片/列表/多级标题 → 结构化内容，保留原 HTML（公文 CSS 已覆盖）
+  if (/<(?:table|img|ul|ol|li|h[2-6])[ >]/i.test(html)) return html;
+
+  const h1m = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+  const title = h1m ? decodeEntities(h1m[1]!.replace(/<[^>]+>/g, '')).trim() : '';
+  const body = html.replace(/<h1[^>]*>[\s\S]*?<\/h1>/i, '');
+
+  // 先按 <p>…</p>（或 <div>…</div> 文本块）切行，保留“整段 strong”的标题候选特征；
+  // 站点正文普遍以 p 为段容器，无 p 时退回按 br/标签剥行
+  const blockRe = /<(p|div)\b[^>]*>([\s\S]*?)<\/\1\s*>/gi;
+  let m: null | RegExpExecArray;
+  const rawLines: Array<{ strong: boolean; text: string; }> = [];
+  blockRe.lastIndex = 0;
+  while ((m = blockRe.exec(body)) !== null) {
+    const inner = m[2] || '';
+    // 整段 strong（允许 span 内层包裹）→ 候选标题；内层剥离后保留 strong 布尔
+    const onlyStrong = /^\s*<strong[^>]*>([\s\S]*?)<\/strong>\s*$/i.test(inner);
+    const text = decodeEntities(
+      inner.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, ''),
+    )
+      .replace(/\s*\n\s*/g, '\n')
+      .split('\n')
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .join('\n');
+    if (text) {
+      for (const seg of text.split('\n')) {
+        if (seg) rawLines.push({ text: seg, strong: onlyStrong });
+      }
+    }
+  }
+  // 无 p/div 容器（纯文本/br 排布）→ 走旧的行剥法
+  if (!rawLines.length) {
+    const plain = decodeEntities(body.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '\n'));
+    plain.split('\n').forEach((t) => {
+      const s = t.trim();
+      if (s) rawLines.push({ text: s, strong: false });
+    });
+  }
+  if (!rawLines.length) return html;
+
+  // 文档标题特征（来自 h1 或调用方 docTitle=公告标题）：用于判定正文首段的整段 strong 是否就是标题行
+  const h1Text = title || docTitle || '';
+  const normForCmp = (s: string) => s.replace(/\s+/g, '').replace(/[/／]/g, '');
+  const h1Norm = normForCmp(h1Text);
+
+  const paras: Array<{ strong: boolean; text: string; }> = rawLines.map((l, idx) =>
+    idx === 0 ? { text: stripLeadTitle(l.text, h1Text), strong: l.strong } : l,
+  );
+
+  /** 中文章节序号（一、二、… 或 （一）（二）…）做小节标题 */
+  /** 中文章节序号（一、二、… 或 （一）（二）…）做小节标题 */
+  const SEC_RE = /^[（(]?[一二三四五六七八九十百]{1,3}[）)]?[、.．\s]/;
+  /** “（采购编号：…）”这类括号注记不是标题 */
+  const PAREN_NOTE_RE = /^[（(](采购编号|项目编号|招标编号|编号|项目名称|招标人|联系人)[：:]/;
+  const parts: string[] = [];
+  if (h1Text) parts.push(`<h1 class="doc-title">${esc(h1Text)}</h1>`);
+  let pushedBodyTitle = false;
+  const pushPara = (t: string) => {
+    if (t.length > 140) {
+      for (const seg of splitSeq(t)) if (seg) parts.push(`<p class="doc-para">${esc(seg)}</p>`);
+    } else {
+      parts.push(`<p class="doc-para">${esc(t)}</p>`);
+    }
+  };
+  // 标题聚合：连续整段 strong 的行先收拢，拼接后与文档标题（docTitle）比对——
+  // 真实站点常把标题拆成多行多个 <p><strong>（“公司名”/“项目名”/“…公告”），逐段判断会误抬/漏抬
+  for (let i = 0; i < paras.length; i += 1) {
+    const para = paras[i]!;
+    if (!para.text) continue;
+    // 收集从 i 开始连续的 strong 整段（且非序号/括号注记）
+    if (para.strong && !SEC_RE.test(para.text) && !PAREN_NOTE_RE.test(para.text)) {
+      const buf: string[] = [para.text];
+      let j = i + 1;
+      while (j < paras.length && paras[j]!.strong && !SEC_RE.test(paras[j]!.text) && !PAREN_NOTE_RE.test(paras[j]!.text)) {
+        buf.push(paras[j]!.text);
+        j += 1;
+      }
+      const joined = buf.join('');
+      const jn = normForCmp(joined);
+      // 拼接后与文档标题高度重合 → 这就是被拆的标题行，整个吞掉（h1Text 已展示过）
+      const matchedTitle =
+        h1Norm.length > 0 && (jn === h1Norm || (jn.length >= h1Norm.length * 0.6 && h1Norm.includes(jn)) || (jn.length >= 12 && jn.includes(h1Norm)));
+      if (matchedTitle) {
+        pushedBodyTitle = true;
+        i = j - 1;
+        continue;
+      }
+      // 未匹配文档标题：若 buf 整段像公告类短标题（行尾公告词）且首段，仍作文档大标题
+      const tailLooksNotice = /(公告|公示|通知|招标|中标|更正|变更|邀请)$/.test(joined);
+      if (!pushedBodyTitle && joined.length <= 60 && tailLooksNotice && !SEC_RE.test(joined)) {
+        parts.push(`<h1 class="doc-title">${esc(joined)}</h1>`);
+        pushedBodyTitle = true;
+        i = j - 1;
+        continue;
+      }
+      // 否则逐段落普通段落
+      for (const b of buf) pushPara(b);
+      i = j - 1;
+      continue;
+    }
+    // 小节标题：中文序号开头（整段 strong 或 strong 夹序号如 “<span>一、</span><strong>内容</strong>”）
+    if (SEC_RE.test(para.text)) {
+      parts.push(`<h3>${esc(para.text)}</h3>`);
+      continue;
+    }
+    pushPara(para.text);
+  }
+  return parts.join('\n');
+}
+
+/* ---------- 正文结构化块 → 安全 HTML（02 §4：heading/paragraph/table/list） ---------- */
+
+function renderBlock(b: NoticeBodyBlock): string {
+  switch (b.type) {
+    case 'heading': {
+      const lv = Number.isInteger(b.level) ? Math.min(6, Math.max(1, b.level)) : 2;
+      // 首尾空白是原站排版残留（空格缩进等），结构化后由公文 CSS 负责版式 → trim 后判空，
+      // 杜绝“内容开头有空格”产出空白标题/段落占位、正文看起来渲染了实际为空
+      const text = (b.text ?? '').trim();
+      return text ? `<h${lv}>${esc(text)}</h${lv}>` : '';
+    }
+    case 'list': {
+      const items = Array.isArray(b.items)
+        ? b.items.map((it) => (it == null ? '' : String(it).trim())).filter(Boolean)
+        : [];
+      if (!items.length) return '';
+      const tag = b.ordered ? 'ol' : 'ul';
+      return `<${tag}>${items.map((it) => `<li>${esc(it)}</li>`).join('')}</${tag}>`;
+    }
+    case 'paragraph': {
+      const text = (b.text ?? '').trim();
+      return text ? `<p class="doc-para">${esc(text)}</p>` : '';
+    }
+    case 'table': {
+      const cap = b.caption ? (b.caption.trim() ? `<caption>${esc(b.caption.trim())}</caption>` : '') : '';
+      const head =
+        Array.isArray(b.headers) && b.headers.length
+          ? `<thead><tr>${b.headers
+              .map((h) => (h == null ? '' : `<th>${esc(String(h).trim())}</th>`))
+              .join('')}</tr></thead>`
+          : '';
+      const rows = Array.isArray(b.rows) ? b.rows : [];
+      const body = rows.length
+        ? `<tbody>${rows
+            .map((r) => {
+              const cells = (Array.isArray(r) ? r : [])
+                .filter((c) => c != null && String(c).trim() !== '')
+                .map((c) => `<td>${esc(String(c).trim())}</td>`);
+              return cells.length ? `<tr>${cells.join('')}</tr>` : '';
+            })
+            .filter(Boolean)
+            .join('')}</tbody>`
+        : '';
+      if (!head && !body) return '';
+      return `<table>${cap}${head}${body}</table>`;
+    }
+    default:
+      return '';
+  }
+}
+
+/**
+ * 正文结构化块 → 可安全 v-html 的 HTML（文本一律先转义，v-dompurify-html 二次净化兜底）。
+ * 空数组/非块内容返回 ''。
+ */
+export function blocksToHtml(blocks: NoticeBodyBlock[] | null | undefined): string {
+  if (!blocks || !blocks.length) return '';
+  return blocks.map(renderBlock).filter(Boolean).join('\n');
+}
+
+/* ---------- 关注 / 订阅域展示文案（02 §5：targetType / stage / 事件类型标签） ---------- */
+
+const FOLLOW_TYPE_NAME: Record<string, string> = {
+  ANNOUNCEMENT: '公告',
+  PROJECT: '项目',
+  TENDER_PROJECT: '招标项目',
+  SECTION: '标段',
+};
+/** 维度 code → 展示名（未知原文回显自身） */
+export function followTypeName(code?: null | string): string {
+  if (!code) return '';
+  return FOLLOW_TYPE_NAME[code] || code;
+}
+
+const STAGE_NAME: Record<string, string> = {
+  PENDING: '前期',
+  TENDER: '招标',
+  OPEN_BID: '开标',
+  EVAL: '评标',
+  RESULT: '中标结果',
+  CONTRACT: '签约',
+  DONE: '完成',
+  UNKNOWN: '未知',
+};
+/** 阶段展示：后端 stageName 优先（快照可含业务改写），否则按 stageCode 字典 */
+export function stageNameOf(stageCode?: null | string, stageName?: null | string): string {
+  if (stageName) return stageName;
+  if (!stageCode) return '';
+  return STAGE_NAME[stageCode] || stageCode;
+}
+
+/** 事件类型 → 展示名 */
+export function eventTypeText(eventType?: null | string): string {
+  const map: Record<string, string> = {
+    NOTICE_PUBLISHED: '公告发布',
+    NOTICE_UPDATED: '公告更新',
+    EXTERNAL_ACTIVE: '外部公告审核生效',
+    STAGE_CHANGE: '阶段变更',
+  };
+  if (!eventType) return '';
+  return map[eventType] || eventType;
+}
+
+/** 事件来源 → 展示名 */
+export function eventSourceText(source?: null | string): string {
+  const map: Record<string, string> = { INTERNAL: '内部公告', EXTERNAL: '外部平台' };
+  if (!source) return '';
+  return map[source] || source;
+}

@@ -1,0 +1,45 @@
+package cn.iocoder.txgy.module.hrm.dal.mysql.employee.employment;
+
+import cn.iocoder.txgy.framework.mybatis.core.mapper.BaseMapperX;
+import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
+import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.employment.HrmEmployeeChangeRecordDO;
+import cn.iocoder.txgy.module.hrm.enums.employee.employment.HrmEmployeeChangeCancelStatusEnum;
+import org.apache.ibatis.annotations.Mapper;
+
+import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.List;
+
+@Mapper
+public interface HrmEmployeeChangeRecordMapper extends BaseMapperX<HrmEmployeeChangeRecordDO> {
+
+    default List<HrmEmployeeChangeRecordDO> selectListByEmployeeId(Long employeeId) {
+        return selectList(new LambdaQueryWrapperX<HrmEmployeeChangeRecordDO>()
+                .eq(HrmEmployeeChangeRecordDO::getEmployeeId, employeeId)
+                .orderByDesc(HrmEmployeeChangeRecordDO::getEffectTime)
+                .orderByDesc(HrmEmployeeChangeRecordDO::getId));
+    }
+
+    default List<HrmEmployeeChangeRecordDO> selectListByAppliedTimeNullAndEffectTimeBeforeOrEqual(
+            LocalDateTime deadlineTime, Collection<Integer> types) {
+        return selectList(new LambdaQueryWrapperX<HrmEmployeeChangeRecordDO>()
+                .isNull(HrmEmployeeChangeRecordDO::getAppliedTime)
+                .le(HrmEmployeeChangeRecordDO::getEffectTime, deadlineTime)
+                // 已撤销的异动不再生效
+                .ne(HrmEmployeeChangeRecordDO::getCancelStatus,
+                        HrmEmployeeChangeCancelStatusEnum.CANCELED.getStatus())
+                .in(HrmEmployeeChangeRecordDO::getType, types)
+                .orderByAsc(HrmEmployeeChangeRecordDO::getEffectTime)
+                .orderByAsc(HrmEmployeeChangeRecordDO::getId));
+    }
+
+    default List<HrmEmployeeChangeRecordDO> selectListByEmployeeIdsAndEffectTimeBetween(Collection<Long> employeeIds,
+                                                                                       LocalDateTime[] effectTimes) {
+        return selectList(new LambdaQueryWrapperX<HrmEmployeeChangeRecordDO>()
+                .in(HrmEmployeeChangeRecordDO::getEmployeeId, employeeIds)
+                .betweenIfPresent(HrmEmployeeChangeRecordDO::getEffectTime, effectTimes)
+                .orderByDesc(HrmEmployeeChangeRecordDO::getEffectTime)
+                .orderByDesc(HrmEmployeeChangeRecordDO::getId));
+    }
+
+}

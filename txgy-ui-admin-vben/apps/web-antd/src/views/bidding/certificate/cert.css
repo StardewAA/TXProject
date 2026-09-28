@@ -1,0 +1,221 @@
+/* 电子证照模块（证照台账 / 证件全生命周期 / 员工资质）共享样式
+ * 视觉基座沿用招投标域工业线稿（bid-indust.css 的 .bid-ind 命名空间，页面根节点需挂 bid-ind）；
+ * 本文件只补本模块特有外壳：页头、KPI、筛选条、表单栅格、表格微调、时间轴。
+ *
+ * 深色模式（2026-09-28 整改）：全部颜色改走主题令牌，禁止硬编码十六进制色值。
+ *   --ind-* 已在 bid-indust.css 内映射到平台 token（hsl(var(--card)) / --muted / --border / --foreground …），
+ *   故同一份样式在浅色/深色下自动成立；新增样式请沿用下面的令牌，不要再写 #fff 之类。 */
+.ct-page { padding: 12px; }
+.ct-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.ct-title { font-size: 22px; font-weight: 800; letter-spacing: 0.5px; margin: 0; color: var(--ind-ink-text, hsl(var(--foreground))); }
+.ct-sub { margin: 6px 0 0; font-size: 13px; line-height: 1.7; color: var(--ind-sub-text, hsl(var(--muted-foreground))); max-width: 980px; }
+.ct-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* KPI（复用 .bid-ind .ind-kpi 视觉，本类仅做栅格） */
+.ct-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 12px 0; }
+.ct-kpi { position: relative; background: var(--ind-paper, hsl(var(--card))); border: 2px solid var(--ind-line, hsl(var(--border))); border-radius: 3px; padding: 10px 14px; box-shadow: var(--ind-shadow, 0 2px 5px hsl(var(--foreground) / 8%)); }
+.ct-kpi::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: var(--ind-weak-text, hsl(var(--muted-foreground))); }
+.ct-kpi.k-green::before { background: var(--ind-ok, hsl(var(--success))); }
+.ct-kpi.k-orange::before { background: var(--ind-warn, hsl(var(--warning))); }
+.ct-kpi.k-red::before { background: var(--ind-danger, hsl(var(--destructive))); }
+.ct-kpi.k-blue::before { background: var(--ind-orange, hsl(var(--primary))); }
+.ct-kpi .k-label { font-size: 12.5px; font-weight: 700; color: var(--ind-sub-text, hsl(var(--muted-foreground))); letter-spacing: 0.4px; }
+.ct-kpi .k-num { font-size: 26px; font-weight: 800; line-height: 1.2; font-variant-numeric: tabular-nums; color: var(--ind-ink-text, hsl(var(--foreground))); }
+.ct-kpi .k-note { font-size: 12px; color: var(--ind-weak-text, hsl(var(--muted-foreground))); }
+
+/* 面板 */
+.ct-panel { background: var(--ind-paper, hsl(var(--card))); border: 1.5px solid var(--ind-line, hsl(var(--border))); border-radius: 3px; box-shadow: var(--ind-shadow, 0 1px 3px hsl(var(--foreground) / 6%)); }
+.ct-panel-h { display: flex; align-items: center; gap: 12px; padding: 9px 14px; background: var(--ind-bone, hsl(var(--muted))); border-bottom: 1.5px solid var(--ind-line, hsl(var(--border))); flex-wrap: wrap; }
+.ct-panel-t { font-size: 15px; font-weight: 800; color: var(--ind-ink-text, hsl(var(--foreground))); }
+.ct-panel-meta { font-size: 12.5px; color: var(--ind-weak-text, hsl(var(--muted-foreground))); }
+.ct-panel-b { padding: 12px 14px; }
+
+/* 筛选条 */
+.ct-filter { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 9px 14px; background: var(--ind-bone, hsl(var(--muted))); border-bottom: 1px solid var(--ind-line-soft, hsl(var(--border))); }
+.ct-filter .ct-ml { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--ind-weak-text, hsl(var(--muted-foreground))); }
+
+/* 表格微调（antd Table 在线稿下的克制外观）
+ * 用户口径（2026-09-20）："有一种表格的感觉，表格的线必须明显一点，不要用太圆滑的样式"。
+ * → 表格加粗实线边框、细分隔线、小圆角；筛选/面板边框同样加粗，弱化圆滑。 */
+.ct-table :where(.ant-table) { border: 1.5px solid var(--ind-line, hsl(var(--border))); border-radius: 2px; box-shadow: var(--ind-shadow, 0 1px 3px hsl(var(--foreground) / 8%)); }
+.ct-table :where(.ant-table-container) { border-radius: 2px; }
+.ct-table :where(.ant-table-thead > tr > th) {
+  background: var(--ind-bone, hsl(var(--muted))) !important;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--ind-ink-text, hsl(var(--foreground)));
+  border-bottom: 1.5px solid var(--ind-line, hsl(var(--border))) !important;
+}
+.ct-table :where(.ant-table-tbody > tr > td) {
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--ind-line-soft, hsl(var(--border)));
+}
+.ct-table :where(.ant-table-tbody > tr:last-child > td) { border-bottom: none; }
+.ct-table :where(.ant-table-tbody > tr:hover > td) { background: var(--ind-row-hover, hsl(var(--accent))) !important; }
+.ct-table :where(.ant-table-cell) { border-right: 1px solid var(--ind-line-soft, hsl(var(--border))); }
+.ct-table :where(.ant-table-cell:last-child) { border-right: none; }
+/* 斑马纹：行与行之间有"格"的感觉（浅灰/白交替），减轻全满眩晕 */
+.ct-table :where(.ant-table-tbody > tr:nth-child(even) > td) { background: var(--ind-zebra, hsl(var(--muted-foreground) / 6%)); }
+.ct-table :where(.ant-table-tbody > tr:nth-child(even):hover > td) { background: var(--ind-row-hover, hsl(var(--accent))) !important; }
+.ct-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ind-weak-text, hsl(var(--muted-foreground))); }
+
+/* 表单栅格 */
+.ct-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 18px; }
+.ct-grid .ct-wide { grid-column: 1 / -1; }
+.ct-lb { font-size: 13.5px; font-weight: 600; color: var(--ind-ink-text, hsl(var(--foreground))); margin-bottom: 5px; }
+.ct-lb .ct-ast { color: var(--ind-danger, hsl(var(--destructive))); font-weight: 700; margin-right: 3px; }
+.ct-tip { font-size: 11.5px; line-height: 1.6; color: var(--ind-weak-text, hsl(var(--muted-foreground))); margin-top: 4px; }
+.ct-warn { font-size: 12.5px; line-height: 1.7; color: var(--ind-warn, hsl(var(--warning))); background: var(--ind-warn-bg, hsl(var(--warning) / 12%)); border: 1px solid var(--ind-warn-border, hsl(var(--warning) / 40%)); border-radius: 3px; padding: 6px 10px; }
+.ct-empty { padding: 22px 0; text-align: center; color: var(--ind-weak-text, hsl(var(--muted-foreground))); font-size: 12.5px; }
+
+/* 时间轴（生命周期轨迹） */
+.ct-tl { list-style: none; margin: 0; padding: 0; }
+.ct-tl li { position: relative; padding: 0 0 14px 16px; border-left: 2px solid var(--ind-line-soft, hsl(var(--border))); }
+.ct-tl li:last-child { border-left-color: transparent; padding-bottom: 0; }
+.ct-tl li::before { content: ''; position: absolute; left: -6px; top: 4px; width: 10px; height: 10px; border-radius: 50%; background: var(--ind-orange, hsl(var(--primary))); }
+.ct-tl .tl-t { font-size: 13px; font-weight: 700; color: var(--ind-ink-text, hsl(var(--foreground))); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ct-tl .tl-m { font-size: 12px; color: var(--ind-sub-text, hsl(var(--muted-foreground))); line-height: 1.7; margin-top: 3px; }
+.ct-tl .tl-k { color: var(--ind-weak-text, hsl(var(--muted-foreground))); }
+
+/* ===== 表格式录入（2026-09-20 第5点整改） =====
+ * 用户口径："待填项的左边写上要填什么""一类是一行、关系强的放一起（编号类归组）"
+ * "表格线框直一点，拐角处才微弯""颜色深一点/有阴影、有层次感、存在感强"。
+ * 用法：a-form layout="horizontal" 包在 .ct-sheet 内；.ct-sheet-group 为分组标题条；
+ *   .ct-sheet-row 为一行（grid 3 列）；每格 .ct-sheet-cell 包一个 a-form-item；
+ *   长字段用 .ct-sheet-wide 跨整行（自由文本/附件放最后）。校验/required/错误提示仍由 a-form-item 承担。
+ */
+.ct-sheet {
+  border: 1.5px solid var(--ind-line, hsl(var(--border)));
+  border-radius: 4px; /* 仅拐角微弯，不做大圆角 */
+  overflow: hidden;
+  box-shadow: var(--ind-shadow-lg, 0 2px 8px hsl(var(--foreground) / 10%)); /* 层次感/存在感 */
+  background: var(--ind-paper, hsl(var(--card)));
+}
+.ct-sheet-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--ind-bone, hsl(var(--muted)));
+  border-bottom: 1.5px solid var(--ind-line, hsl(var(--border)));
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ind-ink-text, hsl(var(--foreground)));
+  letter-spacing: 0.3px;
+}
+.ct-sheet-group .ct-sg-note { font-size: 11.5px; font-weight: 500; color: var(--ind-weak-text, hsl(var(--muted-foreground))); }
+.ct-sheet-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ct-sheet-cell {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 10px 12px;
+  border-right: 1px solid var(--ind-line-soft, hsl(var(--border)));
+  border-bottom: 1px solid var(--ind-line-soft, hsl(var(--border)));
+  background: var(--ind-paper, hsl(var(--card)));
+}
+.ct-sheet-cell:nth-child(3n) { border-right: none; }
+.ct-sheet-row:last-child > .ct-sheet-cell { border-bottom: none; }
+.ct-sheet-wide { grid-column: 1 / -1; }
+.ct-sheet-wide.ct-sheet-cell { border-right: none; }
+.ct-sheet :where(.ant-form-item) { margin: 0; }
+.ct-sheet :where(.ant-form-item-row) { display: flex; align-items: flex-start; flex-wrap: nowrap; }
+.ct-sheet :where(.ant-form-item-label) {
+  flex: 0 0 108px;
+  text-align: left;
+  padding: 0 6px 0 0;
+  font-weight: 600;
+  color: var(--ind-sub-text, hsl(var(--muted-foreground)));
+}
+.ct-sheet :where(.ant-form-item-label > label) { height: auto; min-height: 30px; font-size: 12.5px; }
+.ct-sheet :where(.ant-form-item-label > label::after) { content: ""; } /* 去掉 horizontal 冒号 */
+.ct-sheet :where(.ant-form-item-control) { flex: 1; min-width: 0; }
+.ct-sheet :where(.ant-form-item-control-input) { min-height: 30px; }
+.ct-sheet :where(.ant-form-item-explain-error) { font-size: 11.5px; }
+.ct-sheet + .ct-sheet { margin-top: 14px; }
+
+/* 筛选/查询卡：用户反馈"外框颜色浅、界面白茫茫"——统一加深边框、加段差阴影，与表格线同宽 */
+.rounded-md.border.border-border.bg-card {
+  border-width: 1.5px !important;
+  border-color: var(--ind-line, hsl(var(--border))) !important;
+  box-shadow: var(--ind-shadow, 0 1px 3px hsl(var(--foreground) / 7%));
+}
+
+/* 详情描边（descriptions bordered）：与表格线同规格——深色外框、小圆角、表头底纹，弱化"白茫茫" */
+.ct-panel :where(.ant-descriptions-bordered) {
+  border: 1.5px solid var(--ind-line, hsl(var(--border)));
+  border-radius: 3px;
+  overflow: hidden;
+  box-shadow: var(--ind-shadow, 0 1px 3px hsl(var(--foreground) / 6%));
+}
+.ct-panel :where(.ant-descriptions-bordered .ant-descriptions-item-label) {
+  background: var(--ind-bone, hsl(var(--muted)));
+  font-weight: 700;
+  color: var(--ind-sub-text, hsl(var(--muted-foreground)));
+  white-space: nowrap;
+}
+
+/* ===== 页头「口径」气泡内容（2026-09-28） =====
+ * 原先把字典口径/字段来源写成常驻 a-alert 或长副标题，占掉页头一大块；
+ * 现统一收进 a-popover，用户主动点开才占空间。本类由证照台账 / 企业资质 / 员工证件台账共用，
+ * 故放共享样式表而非各页 scoped（scoped 会导致别的页面用不到）。 */
+.cert-note,
+.qual-note {
+  max-width: 520px;
+  font-size: 12.5px;
+  line-height: 1.75;
+  color: hsl(var(--foreground));
+}
+.cert-note p,
+.qual-note p {
+  margin: 0 0 8px;
+}
+.cert-note p:last-child,
+.qual-note p:last-child {
+  margin-bottom: 0;
+}
+.cert-note code,
+.qual-note code {
+  padding: 0 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  background: hsl(var(--muted));
+  border-radius: 3px;
+}
+.qual-note-weak {
+  color: hsl(var(--muted-foreground));
+}
+
+/* 行内危险动作（删除/作废等）：走主题 destructive 令牌，深色下自动取亮色变体 */
+.ct-danger {
+  color: hsl(var(--destructive));
+}
+.ct-danger:hover {
+  color: hsl(var(--destructive) / 80%);
+}
+
+/* ===== 嵌入模式（2026-09-28 三台账重组） =====
+ * 被宿主页以页签/面板形式嵌入的页面组件，其自带的 .ct-page 内边距会与宿主叠加，
+ * 造成"双份留白"。挂本类的根节点在嵌入时去掉自身内边距。 */
+.ct-embedded-root {
+  padding: 0;
+}
+
+/* 行内禁用态（如"不可预览"的伪链接）：弱化且不响应点击 */
+.ct-disabled {
+  color: hsl(var(--muted-foreground) / 60%);
+  cursor: not-allowed;
+}
+
+/* 行高密度统一：小行距 + 明显分隔线 = "表格感"；避免行被撑高、界面拥挤（第 5 点 2.d） */
+.ct-table :where(.ant-table-thead > tr > th) { padding-top: 8px; padding-bottom: 8px; }
+.ct-table :where(.ant-table-tbody > tr > td) { padding-top: 8px; padding-bottom: 8px; }
+/* 数字/编号列等宽对齐 */
+.ct-table :where(.ant-table-tbody > tr > td) { font-variant-numeric: tabular-nums; }

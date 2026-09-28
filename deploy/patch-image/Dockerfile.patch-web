@@ -1,0 +1,17 @@
+# 前端补丁镜像：以"当前正在运行的 nginx 镜像"为基底，仅替换静态产物。
+#
+# 用途：源码已在本机用与 Dockerfile 一致的构建环境变量完成构建（无外网依赖），
+#      无需在容器内重跑 pnpm install。
+# 约束：BASE_IMAGE 必须是该前端**当前运行**的镜像 tag，以保留 nginx 配置与健康检查。
+#
+# 用法：
+#   docker build --build-arg BASE_IMAGE=<running-image> \
+#     -t <new-tag> -f deploy/patch-image/Dockerfile.patch-web <dist-dir>
+# 其中 <dist-dir> 内需包含前端产物；构建上下文使用：
+#   deploy/patch-image/stage-web/html/
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+# 先清空旧产物：补丁镜像是"叠加"语义，若直接 COPY 会把上一版带 hash 的旧资产
+# 留在镜像里（index.html 不会引用它们，但它们仍含旧配置，会污染体检与排查）。
+RUN rm -rf /usr/share/nginx/html/* /usr/share/nginx/html/.[!.]* 2>/dev/null || true
+COPY html/ /usr/share/nginx/html/

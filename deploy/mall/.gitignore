@@ -1,0 +1,6 @@
+.env
+*.log
+verification.json
+.assets/
+__pycache__/
+tools/__pycache__/

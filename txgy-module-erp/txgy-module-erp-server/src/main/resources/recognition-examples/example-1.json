@@ -1,0 +1,43 @@
+{
+  "documentType": "PURCHASE_ORDER",
+  "documentNo": "CGDD202604212209",
+  "documentDate": "2026-04-21",
+  "items": [
+    {
+      "productName": "冷轧钢板 1.5mm",
+      "productCode": "CP-1001",
+      "count": 39.1,
+      "productPrice": 785.36,
+      "taxPercent": 13,
+      "remark": null
+    },
+    {
+      "productName": "不锈钢螺栓 M8×30",
+      "productCode": "CP-1002",
+      "count": 46.16,
+      "productPrice": 792.91,
+      "taxPercent": 13,
+      "remark": null
+    },
+    {
+      "productName": "抗磨液压油 46#",
+      "productCode": "CP-1012",
+      "count": 161,
+      "productPrice": 619.56,
+      "taxPercent": 0,
+      "remark": null
+    },
+    {
+      "productName": "铜排 TMY-40×4",
+      "productCode": "CP-1003",
+      "count": 114,
+      "productPrice": 402.03,
+      "taxPercent": 13,
+      "remark": null
+    }
+  ],
+  "contact": "陈静",
+  "mobile": "18877855756",
+  "telephone": "0305-81786452",
+  "supplierName": "众联电气科技有限公司"
+}

@@ -1,0 +1,18 @@
+{
+    "sealedAt":  "2026-09-20 11:22:01",
+    "canonical":  {
+                      "nacosNamespace":  "public(空值)",
+                      "overrideEmptyNamespaceCount":  3,
+                      "nacosPorts":  [
+                                         "8848:8848",
+                                         "9848:9848",
+                                         "9849:9849"
+                                     ]
+                  },
+    "guardFiles":  {
+                       "deploy/guard-nacos-config.ps1":  "51098FA7F525EC21C3E64A3010496551E163AEFFDA454FE7B65239757E9185EC",
+                       "deploy/start.bat":  "C44F57BE2A4D24F1A3C5AC5EEE1A389338DA748CE21629288AFE97CEE97BE1EA",
+                       "txgy-module-bidding/.githooks/pre-commit":  "D03C79CC099A77596A5D02BE79B4ED869211234A8D82B611DD08432DC6A06990",
+                       "txgy-module-bidding/txgy-module-bidding-server/run-local.cmd":  "F645F7CA97998529C868C5F02C06618623306B0183CC50F843A7FB88EA972761"
+                   }
+}

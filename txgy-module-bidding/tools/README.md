@@ -1,0 +1,19 @@
+# tools —— 通用工具目录
+
+> 项目根目录下的工具目录，存放内部开发/验证用工具。每个工具一个子目录，先出"硬性条件/调研"文档，再实现。
+
+## 子工具清单
+
+| 子目录 | 工具 | 状态 |
+|---|---|---|
+| `ca-verify/` | 电子文件 CA 真实性验证工具（依据 20 号令附件《电子招标投标系统技术规范》、电子签名法） | v0.1 接口占位：`CaVerifyService` 校验直接返回成功；硬性条件见 `ca-verify/01-硬性条件.md`，真实验签待排期 |
+| `pdf-to-image/` | PDF 转图片（电子资质证明 → 标书插图）：批量、DPI/分辨率限制、JPG 质量、report.json | v0.1 已实现（PDFBox 2.0.31）：Java API + CLI；调研见 `pdf-to-image/00-调研与技术方案.md` |
+| `api-smoke/` | 电子资质域接口冒烟（五页改造 Q1~Q23 的**运行期**验收：一条命令跑完新增/改动接口，逐项 PASS/FAIL） | v1 已实现（`smoke-cert-api.js`，Node 零依赖，需活服务 + JWT）；用法与局限见 `api-smoke/README.md` |
+
+## 决策记录（已与需求方确认）
+
+1. 目录：本目录即通用工具目录；各工具独立子目录；
+2. ca-verify 形态：Java 验证库（可被 bidding-server 内嵌）+ CLI；
+3. ca-verify 算法：国密 SM2/SM3 为主、兼容平台实际 CA 双轨，信任根白名单可配置；
+4. ca-verify 现状：先只留接口，检验直接返回成功，真实验签后续排期；
+5. pdf-to-image：渲染主选 Apache PDFBox 2.0.x（Apache-2.0，可内嵌）；默认 PNG、200dpi、上限 2480×3508（等比缩小）；支持目录递归批量、并发、幂等跳过与 report.json；与"一键制标"模板占位符替换（poi-tl）衔接；**仅处理 PDF，OFD 另案**。
