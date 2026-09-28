@@ -1,0 +1,13 @@
+# mes 服务 jar-only 镜像：复用本机 Maven 构建产物，无需容器内联网构建
+# 前置步骤：
+#   1) 本机编译：mvn -pl :txgy-module-mes-server -am -Dmaven.test.skip=true package
+#   2) 复制产物：txgy-module-mes/txgy-module-mes-server/target/*.jar -> deploy/backend/app.jar
+#   3) 构建：docker build -f deploy/backend/Dockerfile.mes-jar -t deploy-mes:latest .
+# 基础镜像 deploy-mes-base:latest 含 JDK25 运行时 + curl（healthcheck 依赖）
+FROM deploy-mes-base:latest
+
+WORKDIR /app
+
+COPY deploy/backend/app.jar /app/app.jar
+
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]

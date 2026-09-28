@@ -1,0 +1,105 @@
+package cn.iocoder.txgy.module.crm.dal.mysql.business;
+
+import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.framework.mybatis.core.mapper.BaseMapperX;
+import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
+import cn.iocoder.txgy.framework.mybatis.core.query.MPJLambdaWrapperX;
+import cn.iocoder.txgy.module.crm.controller.admin.business.vo.business.CrmBusinessPageReqVO;
+import cn.iocoder.txgy.module.crm.controller.admin.statistics.vo.funnel.CrmStatisticsFunnelReqVO;
+import cn.iocoder.txgy.module.crm.dal.dataobject.business.CrmBusinessDO;
+import cn.iocoder.txgy.module.crm.enums.business.CrmBusinessStateEnum;
+import cn.iocoder.txgy.module.crm.enums.common.CrmBizTypeEnum;
+import cn.iocoder.txgy.module.crm.util.CrmPermissionUtils;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import org.apache.ibatis.annotations.Mapper;
+
+import java.util.Collection;
+import java.util.List;
+
+/**
+ * 商机 Mapper
+ *
+ * @author ljlleo
+ */
+@Mapper
+public interface CrmBusinessMapper extends BaseMapperX<CrmBusinessDO> {
+
+    default int updateOwnerUserIdById(Long id, Long ownerUserId) {
+        return update(new LambdaUpdateWrapper<CrmBusinessDO>()
+                .eq(CrmBusinessDO::getId, id)
+                .set(CrmBusinessDO::getOwnerUserId, ownerUserId));
+    }
+
+    /**
+     * 变更累计跟进次数（delta 为 +1 表示新增一次跟进，-1 表示删除一条跟进；结果不会小于 0）
+     *
+     * @param id    商机编号
+     * @param delta 变更量
+     * @return 影响行数
+     */
+    default int updateFollowUpCountById(Long id, int delta) {
+        return update(null, new LambdaUpdateWrapper<CrmBusinessDO>()
+                .eq(CrmBusinessDO::getId, id)
+                .setSql("follow_up_count = GREATEST(follow_up_count + (" + delta + "), 0)"));
+    }
+
+    default PageResult<CrmBusinessDO> selectPageByCustomerId(CrmBusinessPageReqVO pageReqVO) {
+        return selectPage(pageReqVO, new LambdaQueryWrapperX<CrmBusinessDO>()
+                .eq(CrmBusinessDO::getCustomerId, pageReqVO.getCustomerId()) // 指定客户编号
+                .likeIfPresent(CrmBusinessDO::getName, pageReqVO.getName())
+                .orderByDesc(CrmBusinessDO::getId));
+    }
+
+    default PageResult<CrmBusinessDO> selectPageByContactId(CrmBusinessPageReqVO pageReqVO, Collection<Long> businessIds) {
+        return selectPage(pageReqVO, new LambdaQueryWrapperX<CrmBusinessDO>()
+                .in(CrmBusinessDO::getId, businessIds) // 指定商机编号
+                .likeIfPresent(CrmBusinessDO::getName, pageReqVO.getName())
+                .orderByDesc(CrmBusinessDO::getId));
+    }
+
+    default PageResult<CrmBusinessDO> selectPage(CrmBusinessPageReqVO pageReqVO, Long userId) {
+        MPJLambdaWrapperX<CrmBusinessDO> query = new MPJLambdaWrapperX<>();
+        // 拼接数据权限的查询条件
+        CrmPermissionUtils.appendPermissionCondition(query, CrmBizTypeEnum.CRM_BUSINESS.getType(),
+                CrmBusinessDO::getId, userId, pageReqVO.getSceneType());
+        // 拼接自身的查询条件
+        query.selectAll(CrmBusinessDO.class)
+                .likeIfPresent(CrmBusinessDO::getName, pageReqVO.getName())
+                .eqIfPresent(CrmBusinessDO::getStage, pageReqVO.getStage())
+                .eqIfPresent(CrmBusinessDO::getBusinessState, pageReqVO.getBusinessState());
+        // 销售看板：仅未开始 / 进行中
+        if (Boolean.TRUE.equals(pageReqVO.getOpenOnly())) {
+            query.in(CrmBusinessDO::getBusinessState, CrmBusinessStateEnum.NOT_STARTED.getState(),
+                    CrmBusinessStateEnum.IN_PROGRESS.getState());
+        }
+        // 归档视图：仅已赢单 / 已丢单
+        if (Boolean.TRUE.equals(pageReqVO.getClosedOnly())) {
+            query.in(CrmBusinessDO::getBusinessState, CrmBusinessStateEnum.WON.getState(),
+                    CrmBusinessStateEnum.LOST.getState());
+        }
+        query.orderByDesc(CrmBusinessDO::getId);
+        return selectJoinPage(pageReqVO, CrmBusinessDO.class, query);
+    }
+
+    default Long selectCountByStatusTypeId(Long statusTypeId) {
+        return selectCount(CrmBusinessDO::getStatusTypeId, statusTypeId);
+    }
+
+    default List<CrmBusinessDO> selectListByCustomerIdOwnerUserId(Long customerId, Long ownerUserId) {
+        return selectList(new LambdaQueryWrapperX<CrmBusinessDO>()
+                .eq(CrmBusinessDO::getCustomerId, customerId)
+                .eq(CrmBusinessDO::getOwnerUserId, ownerUserId));
+    }
+
+    default List<CrmBusinessDO> selectListByCustomerId(Long customerId) {
+        return selectList(CrmBusinessDO::getCustomerId, customerId);
+    }
+
+    default PageResult<CrmBusinessDO> selectPage(CrmStatisticsFunnelReqVO pageVO) {
+        return selectPage(pageVO, new LambdaQueryWrapperX<CrmBusinessDO>()
+                .in(CrmBusinessDO::getOwnerUserId, pageVO.getUserIds())
+                .eqIfPresent(CrmBusinessDO::getStatusTypeId, pageVO.getStatusTypeId())
+                .betweenIfPresent(CrmBusinessDO::getCreateTime, pageVO.getTimes()));
+    }
+
+}

@@ -1,0 +1,47 @@
+{
+  "index_patterns": ["txgy-cms-law-v1-*"],
+  "priority": 200,
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0,
+      "refresh_interval": "1s"
+    },
+    "mappings": {
+      "dynamic": "strict",
+      "properties": {
+        "tenant_id": { "type": "keyword" },
+        "law_id": { "type": "long" },
+        "article_id": { "type": "long" },
+        "source_id": { "type": "keyword" },
+        "version": { "type": "keyword" },
+        "title": {
+          "type": "text",
+          "fields": { "raw": { "type": "keyword", "ignore_above": 512 } }
+        },
+        "document_no": { "type": "text" },
+        "document_no_normalized": { "type": "keyword" },
+        "article_no": { "type": "text" },
+        "article_no_normalized": { "type": "keyword" },
+        "content": { "type": "text", "index_options": "offsets" },
+        "issuing_authority": {
+          "type": "text",
+          "fields": { "raw": { "type": "keyword", "ignore_above": 256 } }
+        },
+        "industry_code": { "type": "keyword" },
+        "region_code": { "type": "keyword" },
+        "law_type": { "type": "keyword" },
+        "status": { "type": "keyword" },
+        "effective_date": { "type": "date", "format": "strict_date" },
+        "expiry_date": { "type": "date", "format": "strict_date" },
+        "source_url": { "type": "keyword", "index": false },
+        "published": { "type": "boolean" },
+        "revision": { "type": "long" },
+        "updated_at": { "type": "date" }
+      }
+    },
+    "aliases": {
+      "txgy-cms-law-read": {}
+    }
+  }
+}

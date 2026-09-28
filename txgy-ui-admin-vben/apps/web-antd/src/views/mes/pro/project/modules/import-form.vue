@@ -1,0 +1,113 @@
+<script lang="ts" setup>
+import type { FileType } from 'ant-design-vue/es/upload/interface';
+
+import type { MesProProjectApi } from '#/api/mes/pro/project';
+
+import { useVbenModal } from '@vben/common-ui';
+import { downloadFileFromBlobPart } from '@vben/utils';
+
+import { Button, message, Upload } from 'ant-design-vue';
+
+import { useVbenForm } from '#/adapter/form';
+import { getImportTemplate, importProject } from '#/api/mes/pro/project';
+import { $t } from '#/locales';
+
+import { useImportFormSchema } from '../data';
+
+const emit = defineEmits(['success']);
+
+const [Form, formApi] = useVbenForm({
+  commonConfig: {
+    componentProps: {
+      class: 'w-full',
+    },
+    formItemClass: 'col-span-2',
+    labelWidth: 120,
+  },
+  layout: 'horizontal',
+  schema: useImportFormSchema(),
+  showDefaultActions: false,
+});
+
+const [Modal, modalApi] = useVbenModal({
+  async onConfirm() {
+    const { valid } = await formApi.validate();
+    if (!valid) {
+      return;
+    }
+    const data = await formApi.getValues();
+    if (!uploadRawFile) {
+      message.error('请先选择 Excel 文件');
+      return;
+    }
+    modalApi.lock();
+    // 提交表单
+    try {
+      const result = await importProject(uploadRawFile, data.updateSupport === true);
+      const importData = result as MesProProjectApi.ProjectImportRespVO;
+      let text = `上传成功数量：${importData.createCodes?.length || 0};`;
+      for (const code of importData.createCodes || []) {
+        text += `< ${code} >`;
+      }
+      text += `更新成功数量：${importData.updateCodes?.length || 0};`;
+      for (const code of importData.updateCodes || []) {
+        text += `< ${code} >`;
+      }
+      text += `更新失败数量：${
+        Object.keys(importData.failureCodes || {}).length
+      };`;
+      for (const code in importData.failureCodes || {}) {
+        text += `< ${code}: ${importData.failureCodes?.[code]} >`;
+      }
+      message.info(text);
+      // 关闭并提示
+      await modalApi.close();
+      emit('success');
+      message.success($t('ui.actionMessage.operationSuccess'));
+    } finally {
+      modalApi.unlock();
+    }
+  },
+});
+
+/** 原生 File 引用（不经过表单值，避免被 Input 组件破坏） */
+let uploadRawFile: null | File = null;
+
+/** 上传前 */
+function beforeUpload(file: FileType) {
+  const raw = (file as any)?.originFileObj ?? file;
+  uploadRawFile = raw instanceof File ? raw : null;
+  // 表单值只存文件名，用于必填校验展示
+  formApi.setFieldValue('file', (raw as any)?.name ?? '');
+  return false;
+}
+
+/** 下载模板 */
+async function handleDownload() {
+  const data = await getImportTemplate();
+  downloadFileFromBlobPart({ fileName: '项目管理导入模板.xls', source: data });
+}
+</script>
+
+<template>
+  <Modal :title="$t('ui.actionTitle.import', ['项目'])" class="w-1/3">
+    <Form class="mx-4">
+      <template #file>
+        <div class="w-full">
+          <Upload
+            :before-upload="beforeUpload"
+            :max-count="1"
+            accept=".xls,.xlsx"
+          >
+            <Button type="primary">选择 Excel 文件</Button>
+          </Upload>
+        </div>
+      </template>
+    </Form>
+    <template #prepend-footer>
+      <div class="flex flex-auto items-center">
+        <Button @click="handleDownload">下载导入模板</Button>
+      </div>
+    </template>
+  </Modal>
+</template>

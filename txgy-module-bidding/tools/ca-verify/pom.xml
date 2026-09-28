@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>cn.iocoder.txgy</groupId>
+    <artifactId>txgy-tool-ca-verify</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <name>txgy-tool-ca-verify</name>
+    <description>
+        电子文件 CA 真实性验证工具。
+        当前为接口占位版本（v0.1）：仅预留 CaVerifyService 统一验证接口，校验直接返回成功；
+        真实验签实现按本目录 01-硬性条件.md 排期落地，接口签名与结果结构保持兼容。
+    </description>
+
+    <properties>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+    </properties>
+
+</project>

@@ -1,0 +1,41 @@
+﻿# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+*.iml
+
+# Node / Frontend - EXPLICIT PATHS
+txgy-ui-admin-vben/node_modules
+txgy-ui-admin-vben/.pnpm-store
+txgy-ui-admin-vben/dist
+txgy-ui-admin-vben/.turbo
+**/node_modules
+**/dist
+# The host-dist frontend image copies this verified web-antd artifact.
+!txgy-ui-admin-vben/apps/web-antd/dist/
+!txgy-ui-admin-vben/apps/web-antd/dist/**
+**/.env
+**/.env.local
+
+txgy-ui-admin-uniapp-master
+txgy-ui-go-view
+
+# Java / Maven
+**/target
+**/.mvn
+
+# Docker / Deploy
+.image
+docker-compose*.yml
+deploy/mysql/backup
+deploy/local/jars
+deploy/local/*.sql
+deploy/**/*.log
+
+# Misc
+*.md
+*.log
+.DS_Store

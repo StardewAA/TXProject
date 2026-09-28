@@ -1,0 +1,75 @@
+<script setup lang="ts">
+import { computed,nextTick,onMounted,onUnmounted,ref } from 'vue';
+import { Button,Card,Empty,Input,Modal,Select,Tag,message } from 'ant-design-vue';
+import videojs from 'video.js';
+import 'video.js/dist/video-js.css';
+import type { Assignment,LiveContext,LiveRow,Notice,Quiz } from './api';
+import { getLive,postLive,statusText } from './api';
+import { endSession,getDanmaku,heartbeat,sendDanmaku,startSession,verifySession } from '../../portal/training/learning/api';
+const rooms=ref<LiveRow[]>([]);const notices=ref<Notice[]>([]);const ctx=ref<LiveContext>();const keyword=ref('');const filter=ref('all');const loading=ref(false);
+const current=ref<LiveRow>();const watching=ref(false);const replay=ref(false);const sessionId=ref<number>();const seconds=ref(0);const videoHost=ref<HTMLDivElement>();
+const question=ref('');const answer=ref('');const dmText=ref('');const danmaku=ref<{id?:number;userName?:string;content?:string}[]>([]);const quizzes=ref<Quiz[]>([]);const quizAnswers=ref<Record<number,number>>({});
+const homeworkOpen=ref(false);const assignments=ref<Assignment[]>([]);const submissions=ref<Record<number,string>>({});const noticeOpen=ref(false);
+const busy=ref(false);const heartbeatBusy=ref(false);let player:ReturnType<typeof videojs>|undefined;let timer:ReturnType<typeof setInterval>|undefined;let inboxTimer:ReturnType<typeof setInterval>|undefined;
+const shown=computed(()=>rooms.value.filter(r=>filter.value==='all'||String(r.status)===filter.value));
+async function load(){loading.value=true;try{[rooms.value,notices.value,ctx.value]=await Promise.all([getLive<LiveRow[]>('rooms',{scope:'browse',keyword:keyword.value}),getLive<Notice[]>('notices'),getLive<LiveContext>('context')]);}finally{loading.value=false;}}
+async function run(fn:()=>Promise<unknown>){if(busy.value)return;busy.value=true;try{await fn();}finally{busy.value=false;}}
+async function openHomework(r:LiveRow){current.value=r;assignments.value=await getLive('assignments',{roomId:r.id});submissions.value=Object.fromEntries(assignments.value.map(a=>[a.id,a.submissionContent??'']));homeworkOpen.value=true;}
+async function openWatch(r:LiveRow,isReplay:boolean){
+ const media=await getLive<{url:string;token?:string;config:LiveContext['config']}>('playback',{roomId:r.id,replay:isReplay});
+ if(!media.url){message.warning('直播流尚未就绪');return;}
+ if(media.token)document.cookie=`training_live_media=${media.token}; Path=/live-media/; SameSite=Lax`;
+ current.value=r;replay.value=isReplay;watching.value=true;seconds.value=0;question.value='';danmaku.value=[];
+ await nextTick();const el=document.createElement('video');el.className='video-js vjs-big-play-centered';videoHost.value!.append(el);
+ player=videojs(el,{controls:true,fluid:true,preload:'auto',playbackRates:[1],sources:[{src:media.url,type:media.url.includes('.m3u8')?'application/x-mpegURL':'video/mp4'}]});
+ player.on('playing',()=>void beginSession());player.on('pause',()=>void stopSession());player.on('ended',()=>void stopSession());
+ player.on('error',()=>{void stopSession();message.warning('视频暂时不可用，请确认讲师已开始推流后重新进入');});
+ timer=setInterval(()=>void tick(),5000);await interactions();
+}
+async function beginSession(){if(sessionId.value||busy.value||document.hidden)return;await run(async()=>{const s=await startSession({mediaId:current.value!.id,mediaType:replay.value?'replay':'live'});sessionId.value=s.sessionId;});}
+async function stopSession(){const id=sessionId.value;sessionId.value=undefined;question.value='';if(id)await endSession(id).catch(()=>undefined);}
+async function closeWatch(){clearInterval(timer);player?.dispose();player=undefined;watching.value=false;await stopSession();}
+function visibility(){if(document.hidden){player?.pause();void stopSession();}}
+async function interactions(){if(!current.value||replay.value)return;const [config,qs,dm]=await Promise.all([getLive<LiveContext>('context'),getLive<Quiz[]>('quizzes',{roomId:current.value.id}),getDanmaku(current.value.id,danmaku.value.at(-1)?.id)]);ctx.value=config;quizzes.value=qs;if(!config.config.danmakuEnabled)danmaku.value=[];else danmaku.value=[...danmaku.value,...dm].slice(-100);}
+async function tick(){if(heartbeatBusy.value||!watching.value)return;heartbeatBusy.value=true;try{
+ if(sessionId.value&&!document.hidden&&!player?.paused()){const res=await heartbeat({sessionId:sessionId.value});seconds.value=res.validSeconds??seconds.value;question.value=res.needVerify?res.challengeQuestion??'请完成验证':'';if(res.status!=='active'){sessionId.value=undefined;player?.pause();message.warning('学习会话已结束，请重新播放开始计时');}}
+ await interactions();
+ }catch{player?.pause();await stopSession();message.warning('访问状态发生变化，请重新进入直播间');}finally{heartbeatBusy.value=false;}}
+onMounted(async()=>{await load();document.addEventListener('visibilitychange',visibility);inboxTimer=setInterval(()=>{getLive<Notice[]>('notices').then(r=>{const old=new Set(notices.value.map(n=>n.id));for(const n of r)if(!old.has(n.id)&&!n.readAt)message.info(n.content);notices.value=r;}).catch(()=>undefined);},15000);});
+onUnmounted(()=>{clearInterval(inboxTimer);document.removeEventListener('visibilitychange',visibility);void closeWatch();});
+</script>
+<template>
+ <div class="toolbar"><Input v-model:value="keyword" placeholder="搜索直播主题" style="width:260px" @press-enter="load"/><Select v-model:value="filter" style="width:150px" :options="[{value:'all',label:'全部直播'},{value:'0',label:'即将开播'},{value:'1',label:'正在直播'},{value:'2',label:'精彩回放'}]"/><Button :loading="loading" @click="load">刷新</Button><Button @click="noticeOpen=true">消息提醒 <Tag color="blue">{{notices.filter(n=>!n.readAt).length}}</Tag></Button></div>
+ <div class="room-grid"><div v-for="r in shown" :key="r.id" class="room-card"><div class="cover" :style="r.coverUrl?{backgroundImage:`url(${JSON.stringify(r.coverUrl)})`}:{}"><Tag :color="r.status===1?'red':'blue'">{{statusText(r.status)}}</Tag><span>{{r.visibility==='public'?'公开课堂':'企业课堂'}}</span></div><h2>{{r.title}}</h2><p class="muted">{{r.lecturerName}} · {{r.creditHours}} 学时</p><p>{{r.remark||'讲师邀你一起学习与交流'}}</p><p class="muted">{{r.planStartAt}} · {{r.bookingCount}} 人预约</p><details v-if="r.lecturerBio || r.lecturerExpertise"><summary>讲师介绍</summary><p>{{r.lecturerExpertise}}</p><p>{{r.lecturerBio}}</p></details><div class="toolbar"><Button v-if="r.status===0" :type="r.booked?'default':'primary'" :loading="busy" @click="run(async()=>{await postLive(r.booked?'room/cancel-booking':'room/book',{id:r.id});await load();})">{{r.booked?'取消预约':'预约直播'}}</Button><Button v-if="r.status===1" type="primary" @click="run(()=>openWatch(r,false))">进入直播间</Button><Button v-if="r.status===2 && r.replayEnabled && r.replayAuditStatus==='approved'" @click="run(()=>openWatch(r,true))">观看回放</Button><Tag v-else-if="r.status===2">回放暂未开放</Tag><Button @click="openHomework(r)">课后作业</Button></div></div></div><Empty v-if="!loading && !shown.length" description="暂无符合条件的直播"/>
+ <Modal :open="watching" :title="current?.title" :width="1100" :footer="null" wrap-class-name="training-light-modal" @cancel="closeWatch"><div class="watch-grid"><div><div ref="videoHost"/><p class="muted">本次有效学习 {{seconds}} 秒 · 暂停或切换到后台不累计学时</p><Card v-if="question" title="学习验证"><p>{{question}}</p><div class="toolbar"><Input v-model:value="answer" placeholder="输入答案"/><Button @click="run(async()=>{await verifySession({sessionId:sessionId!,answer});question='';answer='';})">提交验证</Button></div></Card></div><div v-if="!replay"><h3>课堂互动</h3><div class="danmaku"><p v-for="d in danmaku" :key="d.id"><b>{{d.userName}}</b> {{d.content}}</p><p v-if="!ctx?.config.danmakuEnabled" class="muted">平台已关闭弹幕</p></div><div class="toolbar"><Input v-model:value="dmText" :disabled="!ctx?.config.danmakuEnabled" placeholder="说点什么…" :maxlength="500"/><Button :disabled="!dmText.trim() || !ctx?.config.danmakuEnabled" @click="run(async()=>{await sendDanmaku({roomId:current!.id,content:dmText});dmText='';await interactions();})">发送</Button></div><Card v-for="q in quizzes" :key="q.id" :title="q.question" size="small" class="mt-3"><Select v-if="q.myAnswer==null" v-model:value="quizAnswers[q.id]" style="width:100%" :options="JSON.parse(q.optionsJson).map((s:string,i:number)=>({label:s,value:i}))" placeholder="选择答案"/><Button v-if="q.myAnswer==null" class="mt-2" :disabled="quizAnswers[q.id]==null" @click="run(async()=>{await postLive('quiz/answer',{quizId:q.id,answer:quizAnswers[q.id]});await interactions();})">提交答案</Button><Tag v-else :color="q.myCorrect?'green':'orange'">已作答 · {{q.myCorrect?'回答正确':'回答错误'}}</Tag></Card></div></div></Modal>
+ <Modal v-model:open="homeworkOpen" :title="`${current?.title??''} · 课后作业`" :width="750" :footer="null" wrap-class-name="training-light-modal"><Card v-for="a in assignments" :key="a.id" :title="a.title" class="mb-4"><p class="whitespace-pre-wrap">{{a.content}}</p><p class="muted">{{a.dueAt}} 截止</p><Input.TextArea v-model:value="submissions[a.id]" :rows="4" :disabled="!!a.reviewedAt" :maxlength="10000"/><Button v-if="!a.reviewedAt" class="mt-3" :loading="busy" @click="run(async()=>{await postLive('assignment/submit',{assignmentId:a.id,content:submissions[a.id]});message.success('作业已提交');await openHomework(current!);})">{{a.submissionId?'更新作答':'提交作业'}}</Button><Card v-if="a.reviewedAt" title="我的批阅结果" class="mt-3"><Tag color="green">{{a.score}} 分</Tag><p>{{a.feedback}}</p><small>仅本人和批阅讲师可见</small></Card></Card><Empty v-if="!assignments.length" description="讲师尚未发布作业"/></Modal>
+ <Modal v-model:open="noticeOpen" title="直播消息" :footer="null" wrap-class-name="training-light-modal"><Card v-for="n in notices" :key="n.id" class="mb-3"><p>{{n.content}}</p><small>{{n.createTime}}</small><Button v-if="!n.readAt" type="link" @click="run(async()=>{await postLive('notice/read',{id:n.id});notices=await getLive('notices');})">标记已读</Button></Card><Empty v-if="!notices.length" description="暂无消息"/></Modal>
+</template>
+<style scoped>.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:14px 0}.room-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:20px}.room-card{display:flex;flex-direction:column;padding:16px;background:#fff;border:1px solid #eaeef5;border-radius:12px;box-shadow:0 1px 2px rgb(16 24 40 / 4%);transition:border-color .2s,box-shadow .2s,transform .2s}.room-card:hover{border-color:#d3e0f7;box-shadow:0 10px 24px rgb(16 24 40 / 8%);transform:translateY(-2px)}.cover{margin:-16px -16px 0;height:130px;border-radius:12px 12px 0 0;background:linear-gradient(125deg,#14395b,#458ca6);background-size:cover;background-position:center;display:flex;justify-content:space-between;align-items:flex-start;padding:15px;color:#fff}.room-card h2{font-size:17px;margin:14px 0 8px;color:#1b2437}.muted{color:#788599;font-size:12px;margin:10px 0}.watch-grid{display:grid;grid-template-columns:minmax(0,2fr) minmax(250px,1fr);gap:18px}.danmaku{height:190px;overflow:auto;background:#f4f7fb;color:#24344a;padding:12px;border-radius:8px}@media(max-width:800px){.watch-grid{grid-template-columns:1fr}}
+.toolbar :deep(.ant-input),.toolbar :deep(.ant-input-affix-wrapper){background:#fff;color:#1e293b;border-color:#d7e2f2}
+.toolbar :deep(.ant-input::placeholder),.toolbar :deep(.ant-input-affix-wrapper input::placeholder){color:#8a97ac}
+.toolbar :deep(.ant-select .ant-select-selector){background:#fff!important;color:#1e293b;border-color:#d7e2f2!important}
+.toolbar :deep(.ant-select-selection-item){color:#1e293b}
+.toolbar :deep(.ant-select-arrow){color:#667085}
+.toolbar :deep(.ant-btn){background:#fff;color:#1e293b;border-color:#d7e2f2}
+.toolbar :deep(.ant-btn:hover){background:#f4f8ff;color:#1f4dd6;border-color:#c7d8f4}
+.toolbar :deep(.ant-btn-primary){background:#2f6bff;color:#fff;border-color:#2f6bff}
+.toolbar :deep(.ant-btn-primary:hover){background:#2a5fe0;color:#fff;border-color:#2a5fe0}
+.toolbar :deep(.ant-badge-count,.ant-badge-count,.toolbar :deep(.ant-badge-count)){background:#fff!important;color:#2f6bff!important;box-shadow:0 0 0 1px #2f6bff inset}
+.toolbar :deep(.ant-scroll-number){color:#2f6bff}
+.toolbar :deep(.ant-badge-status-processing){background:#2f6bff}</style>
+<style>
+.training-light-modal .ant-modal-content{background:#fff;color:#1e293b}
+.training-light-modal .ant-modal-header{margin-bottom:12px;background:transparent}
+.training-light-modal .ant-modal-title{color:#1b2437}
+.training-light-modal .ant-modal-close{color:#667085}
+.training-light-modal .ant-card{background:linear-gradient(120deg,#eef4ff 0%,#f7fbff 100%);border-color:#dbe5f4;color:#334155}
+.training-light-modal .ant-card-head{color:#1e293b;border-bottom-color:#dbe5f4}
+.training-light-modal .ant-empty-description{color:#8a97ac}
+.training-light-modal .ant-input,.training-light-modal textarea.ant-input{color:#1e293b;background:#fff;border-color:#d7e2f2}
+.training-light-modal .ant-select-selector{background:#fff!important;border-color:#d7e2f2!important;color:#1e293b}
+.training-light-modal .ant-select-selection-item{color:#1e293b}
+.training-light-modal h3{color:#1e293b}
+.training-light-modal .muted{color:#8a97ac}
+.training-light-modal .danmaku{background:#f4f7fb;color:#24344a}
+</style>

@@ -1,0 +1,6 @@
+id	name	position	title	image_url
+1	首页头条-集团简介	HOME_BANNER	天信管业集团简介	/files/assets/关于天信/集团简介/集团简介_664ef42c8b155817538c380f4d37fd76.png
+2	首页头条-管道防腐	HOME_BANNER	2PE/3PE 外防腐管道	/files/assets/产品图/管道防腐/2PE、3PE外防腐管道_1640944845350640.png
+3	首页头条-技术资料	HOME_BANNER	海洋钢结构防腐蚀技术综述	/files/assets/文章图/防腐保温知识/3PE管道防腐涂层质量控制关键因素分析_1686100699484903.jpg
+4	侧边推荐-荣誉资质	PORTAL_SIDEBAR	企业荣誉资质	/files/assets/关于天信/荣誉资质/荣誉资质_0033ad03a711223f9f2dedc382ce3815.jpg
+5	列表推荐-公司新闻	PORTAL_LIST	公司新闻动态	/files/assets/文章图/通知公告/宝塔采油厂油管修复项目(四季度)成交结果公示_1701069911882505.png

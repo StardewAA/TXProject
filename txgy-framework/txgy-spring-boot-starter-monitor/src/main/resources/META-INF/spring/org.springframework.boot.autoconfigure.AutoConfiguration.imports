@@ -1,0 +1,2 @@
+cn.iocoder.txgy.framework.tracer.config.TxgyTracerAutoConfiguration
+cn.iocoder.txgy.framework.tracer.config.TxgyMetricsAutoConfiguration

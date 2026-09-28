@@ -1,0 +1,2 @@
+FROM mall-trade:business-20260917-1
+COPY target/txgy-module-statistics-server.jar /app/app.jar

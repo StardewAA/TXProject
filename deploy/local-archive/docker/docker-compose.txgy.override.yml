@@ -1,0 +1,17 @@
+services:
+  mysql:
+    image: docker.m.daocloud.io/library/mysql:8.4
+    ports: !override
+      - "127.0.0.1:13307:3306"
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: txgy-project-redis
+    ports: !override
+      - "127.0.0.1:26379:6379"
+
+  nacos:
+    image: docker.m.daocloud.io/nacos/nacos-server:v3.0.3
+
+  ui:
+    image: docker.m.daocloud.io/library/nginx:1.27-alpine

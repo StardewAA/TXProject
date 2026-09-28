@@ -1,0 +1,176 @@
+package cn.iocoder.txgy.module.bpm.service.message;
+
+import cn.iocoder.txgy.framework.web.config.WebProperties;
+import cn.iocoder.txgy.module.bpm.convert.message.BpmMessageConvert;
+import cn.iocoder.txgy.module.bpm.enums.message.BpmMessageEnum;
+import cn.iocoder.txgy.module.bpm.service.message.dto.BpmMessageSendWhenProcessInstanceApproveReqDTO;
+import cn.iocoder.txgy.module.bpm.service.message.dto.BpmMessageSendWhenProcessInstanceRejectReqDTO;
+import cn.iocoder.txgy.module.bpm.service.message.dto.BpmMessageSendWhenTaskCreatedReqDTO;
+import cn.iocoder.txgy.module.bpm.service.message.dto.BpmMessageSendWhenTaskCompletedReqDTO;
+import cn.iocoder.txgy.module.bpm.service.message.dto.BpmMessageSendWhenTaskTimeoutReqDTO;
+import cn.iocoder.txgy.module.system.api.notify.NotifyMessageSendApi;
+import cn.iocoder.txgy.module.system.api.notify.dto.NotifySendSingleToUserReqDTO;
+import cn.iocoder.txgy.module.system.api.sms.SmsSendApi;
+import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.validation.annotation.Validated;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * BPM 消息 Service 实现类
+ *
+ * @author OPENLAB BS
+ */
+@Service
+@Validated
+@Slf4j
+public class BpmMessageServiceImpl implements BpmMessageService {
+
+    private static final String ERP_PURCHASE_PROCESS_KEY = "erp-purchase-order-approval";
+    private static final String ERP_SALE_PROCESS_KEY = "erp-sale-order-approval";
+    private static final String ERP_TASK_ASSIGNED_TEMPLATE = "erp_approval_task_assigned";
+    private static final String ERP_TASK_COMPLETED_TEMPLATE = "erp_approval_task_completed";
+    private static final String ERP_FINISHED_TEMPLATE = "erp_approval_finished";
+    private static final String ERP_REJECTED_TEMPLATE = "erp_approval_rejected";
+
+    @Resource
+    private SmsSendApi smsSendApi;
+
+    @Resource
+    private NotifyMessageSendApi notifyMessageSendApi;
+
+    @Resource
+    private WebProperties webProperties;
+
+    @Override
+    public void sendMessageWhenProcessInstanceApprove(BpmMessageSendWhenProcessInstanceApproveReqDTO reqDTO) {
+        Map<String, Object> templateParams = new HashMap<>();
+        templateParams.put("processInstanceName", reqDTO.getProcessInstanceName());
+        templateParams.put("detailUrl", getProcessInstanceDetailUrl(reqDTO.getProcessInstanceId()));
+        putErpOrderParams(templateParams, reqDTO.getOrderType(), reqDTO.getOrderNo());
+        sendErpNotify(reqDTO.getProcessDefinitionKey(), reqDTO.getStartUserId(),
+                ERP_FINISHED_TEMPLATE, templateParams);
+        sendProcessResultSms(reqDTO.getProcessDefinitionKey(), reqDTO.getProcessInstanceId(),
+                reqDTO.getStartUserId(), BpmMessageEnum.PROCESS_INSTANCE_APPROVE.getSmsTemplateCode(), templateParams);
+    }
+
+    @Override
+    public void sendMessageWhenProcessInstanceReject(BpmMessageSendWhenProcessInstanceRejectReqDTO reqDTO) {
+        Map<String, Object> templateParams = new HashMap<>();
+        templateParams.put("processInstanceName", reqDTO.getProcessInstanceName());
+        templateParams.put("reason", reqDTO.getReason());
+        templateParams.put("detailUrl", getProcessInstanceDetailUrl(reqDTO.getProcessInstanceId()));
+        putErpOrderParams(templateParams, reqDTO.getOrderType(), reqDTO.getOrderNo());
+        sendErpNotify(reqDTO.getProcessDefinitionKey(), reqDTO.getStartUserId(),
+                ERP_REJECTED_TEMPLATE, templateParams);
+        sendProcessResultSms(reqDTO.getProcessDefinitionKey(), reqDTO.getProcessInstanceId(),
+                reqDTO.getStartUserId(), BpmMessageEnum.PROCESS_INSTANCE_REJECT.getSmsTemplateCode(), templateParams);
+    }
+
+    @Override
+    public void sendMessageWhenTaskAssigned(BpmMessageSendWhenTaskCreatedReqDTO reqDTO) {
+        Map<String, Object> templateParams = new HashMap<>();
+        templateParams.put("processInstanceName", reqDTO.getProcessInstanceName());
+        templateParams.put("taskName", reqDTO.getTaskName());
+        templateParams.put("startUserNickname", reqDTO.getStartUserNickname());
+        templateParams.put("detailUrl", getProcessInstanceDetailUrl(reqDTO.getProcessInstanceId()));
+        putErpOrderParams(templateParams, reqDTO.getOrderType(), reqDTO.getOrderNo());
+        // Flowable 已将候选角色/用户解析为最终 assignee，只给该审批账号发送，禁止广播。
+        sendErpNotify(reqDTO.getProcessDefinitionKey(), reqDTO.getAssigneeUserId(),
+                ERP_TASK_ASSIGNED_TEMPLATE, templateParams);
+        smsSendApi.sendSingleSmsToAdmin(BpmMessageConvert.INSTANCE.convert(reqDTO.getAssigneeUserId(),
+                BpmMessageEnum.TASK_ASSIGNED.getSmsTemplateCode(), templateParams)).checkError();
+    }
+
+    @Override
+    public void sendMessageWhenTaskCompleted(BpmMessageSendWhenTaskCompletedReqDTO reqDTO) {
+        Map<String, Object> templateParams = new HashMap<>();
+        templateParams.put("taskName", reqDTO.getTaskName());
+        templateParams.put("result", reqDTO.getResult());
+        templateParams.put("detailUrl", getProcessInstanceDetailUrl(reqDTO.getProcessInstanceId()));
+        putErpOrderParams(templateParams, reqDTO.getOrderType(), reqDTO.getOrderNo());
+        sendErpNotify(reqDTO.getProcessDefinitionKey(), reqDTO.getAssigneeUserId(),
+                ERP_TASK_COMPLETED_TEMPLATE, templateParams);
+    }
+
+    @Override
+    public void sendMessageWhenTaskTimeout(BpmMessageSendWhenTaskTimeoutReqDTO reqDTO) {
+        Map<String, Object> templateParams = new HashMap<>();
+        templateParams.put("processInstanceName", reqDTO.getProcessInstanceName());
+        templateParams.put("taskName", reqDTO.getTaskName());
+        templateParams.put("detailUrl", getProcessInstanceDetailUrl(reqDTO.getProcessInstanceId()));
+        smsSendApi.sendSingleSmsToAdmin(BpmMessageConvert.INSTANCE.convert(reqDTO.getAssigneeUserId(),
+                BpmMessageEnum.TASK_TIMEOUT.getSmsTemplateCode(), templateParams)).checkError();
+    }
+
+    private void sendProcessResultSms(String processKey, String instanceId, Long userId,
+                                      String templateCode, Map<String, Object> params) {
+        try {
+            smsSendApi.sendSingleSmsToAdmin(BpmMessageConvert.INSTANCE.convert(userId, templateCode, params)).checkError();
+        } catch (RuntimeException ex) {
+            // 业务回写必须独立于附属短信服务；库存/状态回调异常仍由原事务传播。
+            // 结果短信默认发给流程发起人（报工人/经办人），这类账号常常没有维护手机号；
+            // 一旦抛出就会导致审批人无法通过或驳回，业务单据永久停在"审批中"。
+            // 因此凡是"审批结果由各自 Listener 回写业务单据"的流程，一律降级为 best-effort。
+            if (!"wms_receipt_approval".equals(processKey)
+                    && !"wms_shipment_approval".equals(processKey)
+                    && !"mes-feedback-approval".equals(processKey)
+                    && !"mes-work-order-approval".equals(processKey)) {
+                throw ex;
+            }
+            log.error("[sendProcessResultSms][结果短信失败，已降级为 best-effort，processKey={}, instanceId={}, templateCode={}]",
+                    processKey, instanceId, templateCode, ex);
+        }
+    }
+
+    private String getProcessInstanceDetailUrl(String taskId) {
+        return webProperties.getAdminUi().getUrl() + "/bpm/process-instance/detail?id=" + taskId;
+    }
+
+    private void sendErpNotify(String processDefinitionKey, Long userId, String templateCode,
+                               Map<String, Object> templateParams) {
+        if (!isErpOrderProcess(processDefinitionKey)) {
+            return;
+        }
+        // system_notify_message.template_params 长度为 255，只传铃铛展示、跳转实际需要的字段。
+        // 原始 templateParams 仍保留完整 detailUrl，继续供现有短信模板使用。
+        Map<String, Object> notifyParams = new HashMap<>();
+        notifyParams.put("orderType", templateParams.get("orderType"));
+        notifyParams.put("orderTypeName", templateParams.get("orderTypeName"));
+        notifyParams.put("orderNo", templateParams.get("orderNo"));
+        notifyParams.put("detailPath", "/erp/approval");
+        if (ERP_TASK_ASSIGNED_TEMPLATE.equals(templateCode)) {
+            notifyParams.put("taskName", templateParams.get("taskName"));
+            notifyParams.put("startUserNickname", templateParams.get("startUserNickname"));
+        } else if (ERP_TASK_COMPLETED_TEMPLATE.equals(templateCode)) {
+            notifyParams.put("taskName", templateParams.get("taskName"));
+            notifyParams.put("result", templateParams.get("result"));
+        } else if (ERP_REJECTED_TEMPLATE.equals(templateCode)) {
+            String reason = String.valueOf(templateParams.get("reason"));
+            notifyParams.put("reason", reason.length() > 80 ? reason.substring(0, 80) : reason);
+        }
+        try {
+            notifyMessageSendApi.sendSingleMessageToAdmin(new NotifySendSingleToUserReqDTO()
+                    .setUserId(userId).setTemplateCode(templateCode).setTemplateParams(notifyParams)).checkError();
+        } catch (Exception ex) {
+            // 通知属于附属能力，模板漏部署或消息服务短暂不可用时，不能回滚正常的订单审批。
+            log.error("[sendErpNotify][ERP 审批站内信发送失败，processDefinitionKey={}, userId={}, templateCode={}]",
+                    processDefinitionKey, userId, templateCode, ex);
+        }
+    }
+
+    private static boolean isErpOrderProcess(String processDefinitionKey) {
+        return ERP_PURCHASE_PROCESS_KEY.equals(processDefinitionKey)
+                || ERP_SALE_PROCESS_KEY.equals(processDefinitionKey);
+    }
+
+    private static void putErpOrderParams(Map<String, Object> templateParams, String orderType, String orderNo) {
+        templateParams.put("orderType", orderType);
+        templateParams.put("orderTypeName", "PURCHASE".equals(orderType) ? "采购订单" : "销售订单");
+        templateParams.put("orderNo", orderNo);
+    }
+
+}

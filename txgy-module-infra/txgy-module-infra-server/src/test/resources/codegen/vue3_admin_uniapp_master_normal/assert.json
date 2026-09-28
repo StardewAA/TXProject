@@ -1,0 +1,67 @@
+[ {
+  "contentPath" : "java/InfraStudentPageReqVO",
+  "filePath" : "txgy-module-infra/txgy-module-infra-server/src/main/java/cn/iocoder/txgy/module/infra/controller/admin/demo/vo/InfraStudentPageReqVO.java"
+}, {
+  "contentPath" : "java/InfraStudentRespVO",
+  "filePath" : "txgy-module-infra/txgy-module-infra-server/src/main/java/cn/iocoder/txgy/module/infra/controller/admin/demo/vo/InfraStudentRespVO.java"
+}, {
+  "contentPath" : "java/InfraStudentSaveReqVO",
+  "filePath" : "txgy-module-infra/txgy-module-infra-server/src/main/java/cn/iocoder/txgy/module/infra/controller/admin/demo/vo/InfraStudentSaveReqVO.java"
+}, {
+  "contentPath" : "java/InfraStudentController",
+  "filePath" : "txgy-module-infra/txgy-module-infra-server/src/main/java/cn/iocoder/txgy/module/infra/controller/admin/demo/InfraStudentController.java"
+}, {
+  "contentPath" : "java/InfraStudentDO",
+  "filePath" : "txgy-module-infra/txgy-module-infra-server/src/main/java/cn/iocoder/txgy/module/infra/dal/dataobject/demo/InfraStudentDO.java"
+}, {
+  "contentPath" : "java/InfraStudentContactDO",
+  "filePath" : "txgy-module-infra/txgy-module-infra-server/src/main/java/cn/iocoder/txgy/module/infra/dal/dataobject/demo/InfraStudentContactDO.java"
+}, {
+  "contentPath" : "java/InfraStudentTeacherDO",
+  "filePath" : "txgy-module-infra/txgy-module-infra-server/src/main/java/cn/iocoder/txgy/module/infra/dal/dataobject/demo/InfraStudentTeacherDO.java"
+}, {
+  "contentPath" : "java/InfraStudentMapper",
+  "filePath" : "txgy-module-infra/txgy-module-infra-server/src/main/java/cn/iocoder/txgy/module/infra/dal/mysql/demo/InfraStudentMapper.java"
+}, {
+  "contentPath" : "java/InfraStudentContactMapper",
+  "filePath" : "txgy-module-infra/txgy-module-infra-server/src/main/java/cn/iocoder/txgy/module/infra/dal/mysql/demo/InfraStudentContactMapper.java"
+}, {
+  "contentPath" : "java/InfraStudentTeacherMapper",
+  "filePath" : "txgy-module-infra/txgy-module-infra-server/src/main/java/cn/iocoder/txgy/module/infra/dal/mysql/demo/InfraStudentTeacherMapper.java"
+}, {
+  "contentPath" : "xml/InfraStudentMapper",
+  "filePath" : "txgy-module-infra/txgy-module-infra-server/src/main/resources/mapper/demo/InfraStudentMapper.xml"
+}, {
+  "contentPath" : "java/InfraStudentServiceImpl",
+  "filePath" : "txgy-module-infra/txgy-module-infra-server/src/main/java/cn/iocoder/txgy/module/infra/service/demo/InfraStudentServiceImpl.java"
+}, {
+  "contentPath" : "java/InfraStudentService",
+  "filePath" : "txgy-module-infra/txgy-module-infra-server/src/main/java/cn/iocoder/txgy/module/infra/service/demo/InfraStudentService.java"
+}, {
+  "contentPath" : "java/InfraStudentServiceImplTest",
+  "filePath" : "txgy-module-infra/txgy-module-infra-server/src/test/java/cn/iocoder/txgy/module/infra/service/demo/InfraStudentServiceImplTest.java"
+}, {
+  "contentPath" : "java/ErrorCodeConstants_手动操作",
+  "filePath" : "txgy-module-infra/txgy-module-infra-api/src/main/java/cn/iocoder/txgy/module/infra/enums/ErrorCodeConstants_手动操作.java"
+}, {
+  "contentPath" : "sql/sql",
+  "filePath" : "sql/sql.sql"
+}, {
+  "contentPath" : "sql/h2",
+  "filePath" : "sql/h2.sql"
+}, {
+  "contentPath" : "ts/index",
+  "filePath" : "txgy-ui-admin-uniapp/src/api/infra/demo/index.ts"
+}, {
+  "contentPath" : "vue/index",
+  "filePath" : "txgy-ui-admin-uniapp/src/pages-infra/demo/index.vue"
+}, {
+  "contentPath" : "vue/search-form",
+  "filePath" : "txgy-ui-admin-uniapp/src/pages-infra/demo/components/search-form.vue"
+}, {
+  "contentPath" : "vue/form/index",
+  "filePath" : "txgy-ui-admin-uniapp/src/pages-infra/demo/form/index.vue"
+}, {
+  "contentPath" : "vue/detail/index",
+  "filePath" : "txgy-ui-admin-uniapp/src/pages-infra/demo/detail/index.vue"
+} ]

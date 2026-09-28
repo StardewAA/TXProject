@@ -1,0 +1,70 @@
+services:
+  mysql:
+    volumes: !override
+      - mysql-data:/var/lib/mysql
+
+  frontend:
+    image: local-frontend:modern
+    ports: !override
+      - "8080:80"
+    volumes:
+      - ./content-files:/usr/share/nginx/html/files:ro
+
+  bpm:
+    environment:
+      JAVA_OPTS: -Xms128m -Xmx384m -Dflowable.database-schema-update=false
+
+  iot:
+    environment:
+      JAVA_OPTS: -Xms64m -Xmx320m -Dtxgy.iot.tdengine.init=false
+
+  iot-gateway:
+    healthcheck:
+      test: ["CMD-SHELL", "test -e /proc/1/exe"]
+
+  cms:
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile.local
+      args:
+        MODULE_PATH: txgy-module-cms/txgy-module-cms-server
+    environment:
+      SERVER_PORT: 48080
+      SPRING_PROFILES_ACTIVE: local
+      JAVA_OPTS: -Dtxgy.search.elasticsearch.enabled=true -Dtxgy.search.elasticsearch.uris=http://host.docker.internal:9200
+      TXGY_DB_HOST: mysql
+      TXGY_DB_PORT: 3306
+      TXGY_DB_NAME: ${MYSQL_DATABASE}
+      TXGY_DB_USERNAME: ${TXGY_DB_USERNAME:-root}
+      TXGY_DB_PASSWORD: ${TXGY_DB_PASSWORD}
+      TXGY_CACHE_REDIS_HOST: redis
+      TXGY_CACHE_REDIS_PORT: 6379
+      CMS_NACOS_ENABLED: "true"
+      NACOS_NAMESPACE: dev
+      NACOS_SERVER_ADDR: nacos:8848
+      TXGY_SEARCH_ES_ENABLED: "true"
+      TXGY_SEARCH_ES_URIS: http://host.docker.internal:9200
+      CMS_RAG_ENABLED: "false"
+      # 如需启用 CMS 的 DashScope RAG，请配置 DASHSCOPE_API_KEY 并把上面改为 "true"
+      CMS_AI_PROVIDER: ai-module
+      CMS_STORAGE_STATIC_FILES_ROOT: /app/content-files
+      SPRING_APPLICATION_JSON: '{"txgy":{"search":{"elasticsearch":{"enabled":true,"uris":["http://host.docker.internal:9200"]}}}}'
+    volumes:
+      - ./content-files:/app/content-files:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    networks:
+      - txgy-dev
+    restart: unless-stopped
+
+
+
+
+
+
+

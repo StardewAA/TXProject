@@ -1,0 +1,28 @@
+70000	0	CMS系统	/cms	NULL	
+70029	70000	智能检索	search	cms/home/index	cms:law:query
+70007	70000	审查管理	review	NULL	
+70011	70000	专家管理	expert	NULL	
+70030	70000	发布管理	publish	cms/publish/index	cms:knowledge:query
+70016	70000	咨询服务	consulting	NULL	
+70025	70000	统计分析	statistics	NULL	
+70008	70007	提交审查	submit	cms/review/parts/submit/index	cms:review:query
+70009	70007	审查复核	record	cms/review/parts/record/index	cms:review:query
+70010	70007	审查报告	report	cms/review/parts/report/index	cms:review:query
+70036	70009	修改并重新提交		NULL	cms:review:submit
+70037	70010	核验官方来源与效力		NULL	cms:review:verify
+70038	70010	修改并重新提交		NULL	cms:review:submit
+70012	70011	专家入驻审核	review	cms/expert/review/index	cms:expert:review
+70013	70011	专家信息维护	info	cms/expert/info/index	cms:expert:info
+70014	70011	咨询订单管理	order	cms/expert/order/index	cms:expert:order
+70015	70011	结算管理	settlement	cms/expert/settlement/index	cms:expert:settlement
+70017	70016	AI 知识库管理	knowledge	cms/consulting/knowledge/index	cms:ai:knowledge
+70018	70016	AI 对话记录	chat	cms/consulting/chat/index	cms:ai:chat
+70019	70016	定制咨询项目	custom-project	cms/consulting/custom-project/index	cms:consulting:custom-project
+70026	70025	内容数据统计	content	cms/statistics/content/index	cms:statistics:content
+70027	70025	检索热词分析	hotword	cms/statistics/hotword/index	cms:statistics:hotword
+70028	70025	咨询数据统计	consult	cms/statistics/consult/index	cms:statistics:consult
+70031	70030	发布已审内容	standard	cms/content/standard/index	cms:knowledge:publish
+70032	70030	下架已发内容		NULL	cms:knowledge:delete
+70035	70030	人工发布或驳回	policy	cms/content/policy/index	cms:review:verify
+70033	70030	重建检索索引		NULL	cms:knowledge:reindex
+70034	70030	提交发布内容		NULL	cms:review:submit

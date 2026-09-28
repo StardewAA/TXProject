@@ -1,0 +1,13 @@
+# report 服务 jar-only 镜像：复用本机 Maven 构建产物，无需容器内联网构建
+# 前置步骤：
+#   1) 本机编译：mvn -pl :txgy-module-report-server -am -Dmaven.test.skip=true package
+#   2) 复制产物：txgy-module-report/txgy-module-report-server/target/*.jar -> deploy/backend/report-app.jar
+#   3) 构建：docker build -f deploy/backend/Dockerfile.report-jar -t deploy-report:latest .
+# 基础镜像 deploy-mes-base:latest 含 JDK25 运行时 + curl（healthcheck 依赖）
+FROM deploy-mes-base:latest
+
+WORKDIR /app
+
+COPY deploy/backend/report-app.jar /app/app.jar
+
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]

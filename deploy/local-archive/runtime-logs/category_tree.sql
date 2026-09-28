@@ -1,0 +1,21 @@
+-- CMS 栏目树：按天信管业官网结构生成（内容管理 → 栏目树）
+DELETE FROM cms_category WHERE tenant_id=1 AND code <> 'finance';
+INSERT INTO cms_category (tenant_id,parent_id,name,code,content_type,sort,visible,status,remark,creator) VALUES (1,0,'产品中心','product','PRODUCT',10,b'1',0,'官网一级栏目','import');
+INSERT INTO cms_category (tenant_id,parent_id,name,code,content_type,sort,visible,status,remark,creator) VALUES (1,0,'新闻资讯','news','NEWS',20,b'1',0,'官网一级栏目','import');
+INSERT INTO cms_category (tenant_id,parent_id,name,code,content_type,sort,visible,status,remark,creator) VALUES (1,0,'关于天信','about','ABOUT',30,b'1',0,'官网一级栏目','import');
+INSERT INTO cms_category (tenant_id,parent_id,name,code,content_type,sort,visible,status,remark,creator) VALUES (1,0,'技术资料','tech','TECH',40,b'1',0,'官网一级栏目','import');
+INSERT INTO cms_category (tenant_id,parent_id,name,code,content_type,sort,visible,status,remark,creator) VALUES (1,34868,'管道防腐','product-管道防腐','PRODUCT',10,b'1',0,'素材 0 项','import');
+INSERT INTO cms_category (tenant_id,parent_id,name,code,content_type,sort,visible,status,remark,creator) VALUES (1,34868,'管道检测','product-管道检测','PRODUCT',20,b'1',0,'素材 0 项','import');
+INSERT INTO cms_category (tenant_id,parent_id,name,code,content_type,sort,visible,status,remark,creator) VALUES (1,34868,'保冷保温','product-保冷保温','PRODUCT',30,b'1',0,'素材 0 项','import');
+INSERT INTO cms_category (tenant_id,parent_id,name,code,content_type,sort,visible,status,remark,creator) VALUES (1,34868,'油管维修','product-油管维修','PRODUCT',40,b'1',0,'素材 0 项','import');
+INSERT INTO cms_category (tenant_id,parent_id,name,code,content_type,sort,visible,status,remark,creator) VALUES (1,34868,'防腐材料','product-防腐材料','PRODUCT',50,b'1',0,'素材 0 项','import');
+INSERT INTO cms_category (tenant_id,parent_id,name,code,content_type,sort,visible,status,remark,creator) VALUES (1,34868,'公司新闻','news-公司新闻','NEWS',60,b'1',0,'素材 0 项','import');
+INSERT INTO cms_category (tenant_id,parent_id,name,code,content_type,sort,visible,status,remark,creator) VALUES (1,34868,'通知公告','news-通知公告','NEWS',70,b'1',0,'素材 0 项','import');
+INSERT INTO cms_category (tenant_id,parent_id,name,code,content_type,sort,visible,status,remark,creator) VALUES (1,34868,'行业动态','news-行业动态','NEWS',80,b'1',0,'素材 0 项','import');
+INSERT INTO cms_category (tenant_id,parent_id,name,code,content_type,sort,visible,status,remark,creator) VALUES (1,34868,'防腐保温知识','news-防腐保温知识','NEWS',90,b'1',0,'素材 0 项','import');
+INSERT INTO cms_category (tenant_id,parent_id,name,code,content_type,sort,visible,status,remark,creator) VALUES (1,34868,'集团简介','about-集团简介','ABOUT',100,b'1',0,'素材 0 项','import');
+INSERT INTO cms_category (tenant_id,parent_id,name,code,content_type,sort,visible,status,remark,creator) VALUES (1,34868,'荣誉资质','about-荣誉资质','ABOUT',110,b'1',0,'素材 0 项','import');
+INSERT INTO cms_category (tenant_id,parent_id,name,code,content_type,sort,visible,status,remark,creator) VALUES (1,34868,'企业文化','about-企业文化','ABOUT',120,b'1',0,'素材 0 项','import');
+INSERT INTO cms_category (tenant_id,parent_id,name,code,content_type,sort,visible,status,remark,creator) VALUES (1,34868,'员工风采','about-员工风采','ABOUT',130,b'1',0,'素材 0 项','import');
+INSERT INTO cms_category (tenant_id,parent_id,name,code,content_type,sort,visible,status,remark,creator) VALUES (1,34868,'厂区风貌','about-厂区风貌','ABOUT',140,b'1',0,'素材 0 项','import');
+INSERT INTO cms_category (tenant_id,parent_id,name,code,content_type,sort,visible,status,remark,creator) VALUES (1,34868,'技术资料','tech-技术资料','TECH',150,b'1',0,'素材 0 项','import');

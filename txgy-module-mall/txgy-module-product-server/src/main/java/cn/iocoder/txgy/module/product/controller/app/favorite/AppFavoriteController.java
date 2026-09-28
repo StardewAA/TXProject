@@ -1,0 +1,121 @@
+package cn.iocoder.txgy.module.product.controller.app.favorite;
+
+import cn.hutool.core.collection.CollUtil;
+import cn.iocoder.txgy.framework.common.exception.ServiceException;
+import cn.iocoder.txgy.framework.common.pojo.CommonResult;
+import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.module.product.controller.app.favorite.vo.AppFavoritePageReqVO;
+import cn.iocoder.txgy.module.product.controller.app.favorite.vo.AppFavoriteReqVO;
+import cn.iocoder.txgy.module.product.controller.app.favorite.vo.AppFavoriteRespVO;
+import cn.iocoder.txgy.module.product.convert.favorite.ProductFavoriteConvert;
+import cn.iocoder.txgy.module.product.dal.dataobject.favorite.ProductFavoriteDO;
+import cn.iocoder.txgy.module.product.dal.dataobject.spu.ProductSpuDO;
+import cn.iocoder.txgy.module.product.service.favorite.ProductFavoriteService;
+import cn.iocoder.txgy.module.product.service.portal.MallPortalCatalogService;
+import cn.iocoder.txgy.module.product.service.spu.ProductSpuService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.annotation.Resource;
+import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
+import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertList;
+import static cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
+
+@Tag(name = "用户 APP - 商品收藏")
+@RestController
+@RequestMapping("/product/favorite")
+public class AppFavoriteController {
+
+    @Resource
+    private ProductFavoriteService productFavoriteService;
+    @Resource
+    private ProductSpuService productSpuService;
+    @Resource
+    private MallPortalCatalogService portalCatalogService;
+    @Resource private cn.iocoder.txgy.module.product.service.review.ProductSpuReviewService reviewService;
+
+    @PostMapping(value = "/create")
+    @Operation(summary = "添加商品收藏")
+    public CommonResult<Long> createFavorite(@RequestBody @Valid AppFavoriteReqVO reqVO) {
+        if (reqVO.getTenantSlug() == null || reqVO.getTenantSlug().isBlank()) {
+            productSpuService.validateSpuList(List.of(reqVO.getSpuId()));
+        } else {
+            // 跨租户收藏只接受门户当前仍公开、可售且经营归属匹配的商品。
+            portalCatalogService.getTenantProduct(reqVO.getTenantSlug(), reqVO.getSpuId());
+        }
+        return success(productFavoriteService.createFavorite(getLoginUserId(), reqVO.getSpuId()));
+    }
+
+    @DeleteMapping(value = "/delete")
+    @Operation(summary = "取消单个商品收藏")
+    public CommonResult<Boolean> deleteFavorite(@RequestBody @Valid AppFavoriteReqVO reqVO) {
+        productFavoriteService.deleteFavorite(getLoginUserId(), reqVO.getSpuId());
+        return success(Boolean.TRUE);
+    }
+
+    @GetMapping(value = "/page")
+    @Operation(summary = "获得商品收藏分页")
+    public CommonResult<PageResult<AppFavoriteRespVO>> getFavoritePage(AppFavoritePageReqVO reqVO) {
+        PageResult<ProductFavoriteDO> favoritePage = productFavoriteService.getFavoritePage(getLoginUserId(), reqVO);
+        if (CollUtil.isEmpty(favoritePage.getList())) {
+            return success(PageResult.empty(favoritePage.getTotal()));
+        }
+
+        // 得到商品 spu 信息
+        List<ProductFavoriteDO> favorites = favoritePage.getList();
+        List<Long> spuIds = convertList(favorites, ProductFavoriteDO::getSpuId);
+        List<ProductSpuDO> spus = productSpuService.getSpuList(spuIds).stream().filter(java.util.Objects::nonNull).toList();
+
+        // 当前租户商品沿用原有字段；跨租户收藏只从门户公开目录回填，不能绕过公开审核边界。
+        PageResult<AppFavoriteRespVO> pageResult = new PageResult<>(favoritePage.getTotal());
+        var spuMap = cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertMap(spus, ProductSpuDO::getId);
+        List<AppFavoriteRespVO> rows = new ArrayList<>(favorites.size());
+        for (ProductFavoriteDO favorite : favorites) {
+            ProductSpuDO localSpu = spuMap.get(favorite.getSpuId());
+            if (localSpu != null) {
+                AppFavoriteRespVO row = ProductFavoriteConvert.INSTANCE.convert(localSpu, favorite);
+                boolean saleable = reviewService.saleable(localSpu);
+                row.setSaleable(saleable);
+                if (!saleable) row.setSpuName("商品暂不可购买").setPicUrl("").setPrice(null)
+                        .setUnavailableReason("商品已下架或正在审核");
+                rows.add(row);
+                continue;
+            }
+            AppFavoriteRespVO row = new AppFavoriteRespVO();
+            row.setId(favorite.getId());
+            row.setSpuId(favorite.getSpuId());
+            try {
+                var product = portalCatalogService.getProduct(favorite.getSpuId());
+                row.setSaleable(Boolean.TRUE).setTenantSlug(product.getTenantSlug())
+                        .setSpuName(product.getSpuName()).setPicUrl(product.getPicUrl()).setPrice(product.getPrice())
+                        .setIntroduction(product.getIntroduction()).setShopName(product.getShopName())
+                        .setSalesCount(product.getSalesCount());
+            } catch (ServiceException ignored) {
+                row.setSaleable(Boolean.FALSE).setSpuName("商品暂不可购买").setPicUrl("").setPrice(null)
+                        .setUnavailableReason("商品已下架或正在审核");
+            }
+            rows.add(row);
+        }
+        pageResult.setList(rows);
+        return success(pageResult);
+    }
+
+    @GetMapping(value = "/exits")
+    @Operation(summary = "检查是否收藏过商品")
+    public CommonResult<Boolean> isFavoriteExists(AppFavoriteReqVO reqVO) {
+        ProductFavoriteDO favorite = productFavoriteService.getFavorite(getLoginUserId(), reqVO.getSpuId());
+        return success(favorite != null);
+    }
+
+    @GetMapping(value = "/get-count")
+    @Operation(summary = "获得商品收藏数量")
+    public CommonResult<Long> getFavoriteCount() {
+        return success(productFavoriteService.getFavoriteCount(getLoginUserId()));
+    }
+
+}

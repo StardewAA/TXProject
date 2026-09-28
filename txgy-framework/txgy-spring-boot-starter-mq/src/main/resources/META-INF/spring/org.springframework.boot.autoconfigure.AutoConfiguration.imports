@@ -1,0 +1,3 @@
+cn.iocoder.txgy.framework.mq.redis.config.TxgyRedisMQProducerAutoConfiguration
+cn.iocoder.txgy.framework.mq.redis.config.TxgyRedisMQConsumerAutoConfiguration
+cn.iocoder.txgy.framework.mq.rabbitmq.config.TxgyRabbitMQAutoConfiguration

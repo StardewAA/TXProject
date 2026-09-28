@@ -1,0 +1,106 @@
+<template>
+  <view class="u-page__item" v-if="tabbarItems.length > 0">
+    <su-tabbar
+      :value="path"
+      :fixed="true"
+      :placeholder="true"
+      :safeAreaInsetBottom="true"
+      :inactiveColor="tabbar.style.color"
+      :activeColor="tabbar.style.activeColor"
+      :midTabBar="tabbar.mode === 2"
+      :customStyle="tabbarStyle"
+    >
+      <su-tabbar-item
+        v-for="(item, index) in tabbarItems"
+        :key="item.text"
+        :text="item.text"
+        :name="item.url"
+        :badge="item.badge"
+        :dot="item.dot"
+        :badgeStyle="tabbar.badgeStyle"
+        :isCenter="getTabbarCenter(index)"
+        :centerImage="sheep.$url.cdn(item.iconUrl)"
+        @click="sheep.$router.go(navigationTarget(item.url))"
+      >
+        <template v-slot:active-icon>
+<s-menu-icon class="u-page__item__slot-icon" :src="sheep.$url.cdn(item.activeIconUrl)" :label="item.text" />
+        </template>
+        <template v-slot:inactive-icon>
+<s-menu-icon class="u-page__item__slot-icon" :src="sheep.$url.cdn(item.iconUrl)" :label="item.text" style="filter: grayscale(1); opacity: .65" />
+        </template>
+      </su-tabbar-item>
+    </su-tabbar>
+  </view>
+</template>
+
+<script setup>
+  import { computed, unref } from 'vue';
+  import sheep from '@/sheep';
+  import SuTabbar from '@/sheep/ui/su-tabbar/su-tabbar.vue';
+  import { filterMarketingMenuItems } from '@/sheep/helper/simplified-marketing';
+  import { platformNavigationTarget } from '@/sheep/helper/tenant-navigation.mjs';
+
+  const tabbar = computed(() => {
+    return sheep.$store('app').template.basic?.tabbar;
+  });
+  // 基础 tabbar 也可能来自旧装修数据，统一过滤已下线的复杂营销入口。
+  const tabbarItems = computed(() => filterMarketingMenuItems(tabbar.value?.items));
+  const navigationTarget = (url) => {
+    // #ifdef H5
+    return platformNavigationTarget(url, window.location.href);
+    // #endif
+    // #ifndef H5
+    return url;
+    // #endif
+  };
+
+  const tabbarStyle = computed(() => {
+    const backgroundStyle = tabbar.value.style;
+    if (backgroundStyle.bgType === 'color') {
+      return { background: backgroundStyle.bgColor };
+    }
+    if (backgroundStyle.bgType === 'img')
+      return {
+        background: `url(${sheep.$url.cdn(
+          backgroundStyle.bgImg,
+        )}) no-repeat top center / 100% auto`,
+      };
+  });
+
+  const getTabbarCenter = (index) => {
+    if (unref(tabbar)?.mode !== 2) return false;
+    return tabbarItems.value.length % 2 > 0
+      ? Math.ceil(tabbarItems.value.length / 2) === index + 1
+      : false;
+  };
+
+  const props = defineProps({
+    path: String,
+    default: '',
+  });
+</script>
+
+<style lang="scss">
+  .u-page {
+    padding: 0;
+
+    &__item {
+      &__title {
+        color: var(--textSize);
+        background-color: #fff;
+        padding: 15px;
+        font-size: 15px;
+
+        &__slot-title {
+          color: var(--textSize);
+          font-size: 14px;
+        }
+      }
+
+      &__slot-icon {
+        width: 25px;
+        height: 25px;
+      }
+    }
+  }
+</style>

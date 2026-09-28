@@ -1,0 +1,11 @@
+FROM m.daocloud.io/docker.io/library/nginx:1.27-alpine
+
+# webdist 由 buildx 的独立构建上下文提供；H5 生产构建已在宿主机完成，
+# 此处只封装静态文件，避免 Docker Desktop 再次承受 Node 构建峰值。
+COPY deploy/uniapp/nginx-mall.conf /etc/nginx/conf.d/default.conf
+COPY --from=webdist / /usr/share/nginx/html/
+
+EXPOSE 80
+
+HEALTHCHECK --interval=15s --timeout=5s --retries=10 \
+  CMD wget -q -O /dev/null http://127.0.0.1/ || exit 1

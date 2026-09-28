@@ -1,0 +1,7 @@
+70029	智能检索	search	
+70040	内容管理	content	
+70007	审查管理	review	
+70011	专家管理	expert	\0
+70030	发布管理	publish	
+70016	咨询服务	consulting	\0
+70025	统计分析	statistics	\0

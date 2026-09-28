@@ -1,0 +1,476 @@
+package cn.iocoder.txgy.module.mes.service.pro.workorder;
+
+import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.util.ObjUtil;
+import cn.hutool.json.JSONUtil;
+import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
+import cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils;
+import cn.iocoder.txgy.module.bpm.api.task.BpmProcessInstanceApi;
+import cn.iocoder.txgy.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.workorder.vo.MesProWorkOrderPageReqVO;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.workorder.vo.MesProWorkOrderSaveReqVO;
+import cn.iocoder.txgy.module.mes.dal.dataobject.md.item.MesMdItemBatchConfigDO;
+import cn.iocoder.txgy.module.mes.dal.dataobject.md.item.MesMdItemDO;
+import cn.iocoder.txgy.module.mes.dal.dataobject.pro.feedback.MesProFeedbackDO;
+import cn.iocoder.txgy.module.mes.dal.dataobject.pro.workorder.MesProWorkOrderDO;
+import cn.iocoder.txgy.module.mes.dal.mysql.pro.feedback.MesProFeedbackMapper;
+import cn.iocoder.txgy.module.mes.dal.mysql.pro.project.MesProProjectMapper;
+import cn.iocoder.txgy.module.mes.dal.mysql.pro.workorder.MesProWorkOrderMapper;
+import cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderStatusEnum;
+import cn.iocoder.txgy.module.mes.enums.wm.BarcodeBizTypeEnum;
+import cn.iocoder.txgy.module.mes.service.erp.integration.MesErpProductionProgressService;
+import cn.iocoder.txgy.module.mes.service.md.item.MesMdItemBatchConfigService;
+import cn.iocoder.txgy.module.mes.service.md.item.MesMdItemService;
+import cn.iocoder.txgy.module.mes.service.pro.project.MesProProjectService;
+import cn.iocoder.txgy.module.mes.service.pro.route.MesProRouteProductService;
+import cn.iocoder.txgy.module.mes.service.pro.task.MesProTaskService;
+import cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderWmsStatusEnum;
+import cn.iocoder.txgy.module.mes.enums.wms.MesWmsIntegrationOrderTypeEnum;
+import cn.iocoder.txgy.module.mes.service.wm.barcode.MesWmBarcodeService;
+import cn.iocoder.txgy.module.mes.service.wms.integration.MesWmsIntegrationPayloadBuilder;
+import cn.iocoder.txgy.module.mes.service.wms.integration.MesWmsIntegrationService;
+import cn.iocoder.txgy.module.wms.api.integration.dto.WmsOrderRequestDTO;
+import jakarta.annotation.Resource;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.validation.annotation.Validated;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
+import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
+import static cn.iocoder.txgy.module.mes.enums.ErrorCodeConstants.*;
+
+/**
+ * MES 生产工单 Service 实现类
+ *
+ * @author OPENLAB BS
+ */
+@Service
+@Validated
+public class MesProWorkOrderServiceImpl implements MesProWorkOrderService {
+
+    /**
+     * 生产工单审批流程标识：与 BPM「流程模型」中配置的 key 保持一致
+     */
+    public static final String BPM_PROCESS_DEFINITION_KEY = "mes-work-order-approval";
+
+    @Resource
+    private MesProWorkOrderMapper workOrderMapper;
+    @Resource
+    private MesProProjectMapper projectMapper;
+
+    @Resource
+    private MesProProjectService projectService;
+
+    @Resource
+    private MesProWorkOrderBomService workOrderBomService;
+    @Resource
+    private MesMdItemService itemService;
+    @Resource
+    private MesMdItemBatchConfigService itemBatchConfigService;
+    @Resource
+    private MesWmBarcodeService barcodeService;
+    @Resource
+    private MesProTaskService taskService;
+    @Resource
+    private MesProRouteProductService routeProductService;
+    @Resource
+    private MesProFeedbackMapper feedbackMapper;
+    @Resource
+    private MesErpProductionProgressService erpProductionProgressService;
+    @Resource
+    private MesWmsIntegrationService mesWmsIntegrationService;
+    @Resource
+    private MesWmsIntegrationPayloadBuilder wmsPayloadBuilder;
+    @Resource
+    private BpmProcessInstanceApi bpmProcessInstanceApi;
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long createWorkOrder(MesProWorkOrderSaveReqVO createReqVO) {
+        // 1. 校验数据
+        validateWorkOrderSaveData(null, createReqVO);
+
+        // 2.1 设置默认值
+        if (createReqVO.getParentId() == null) {
+            createReqVO.setParentId(MesProWorkOrderDO.PARENT_ID_NULL);
+        }
+        // 2.2 插入工单
+        MesProWorkOrderDO workOrder = BeanUtils.toBean(createReqVO, MesProWorkOrderDO.class);
+        workOrder.setStatus(MesProWorkOrderStatusEnum.PREPARE.getStatus());
+        workOrderMapper.insert(workOrder);
+
+        // 3. 自动生成 BOM：根据产品 BOM 生成工单 BOM
+        workOrderBomService.generateWorkOrderBom(workOrder.getId(), createReqVO, false);
+
+        // 4. 自动生成条码
+        barcodeService.autoGenerateBarcode(BarcodeBizTypeEnum.WORKORDER.getValue(),
+                workOrder.getId(), workOrder.getCode(), workOrder.getName());
+        return workOrder.getId();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateWorkOrder(MesProWorkOrderSaveReqVO updateReqVO) {
+        // 1.1 校验存在 + 只有草稿状态才能编辑
+        MesProWorkOrderDO oldWorkOrder = validateWorkOrderExists(updateReqVO.getId());
+        if (ObjUtil.notEqual(oldWorkOrder.getStatus(), MesProWorkOrderStatusEnum.PREPARE.getStatus())) {
+            throw exception(PRO_WORK_ORDER_NOT_PREPARE);
+        }
+        // 1.2 校验数据
+        validateWorkOrderSaveData(updateReqVO.getId(), updateReqVO);
+
+        // 2. 判断产品或数量是否变更，如果变更则重新生成 BOM（updated=true 会先清理旧数据）
+        boolean productChanged = ObjUtil.notEqual(oldWorkOrder.getProductId(), updateReqVO.getProductId());
+        boolean quantityChanged = oldWorkOrder.getQuantity().compareTo(updateReqVO.getQuantity()) != 0;
+        if (productChanged || quantityChanged) {
+            workOrderBomService.generateWorkOrderBom(updateReqVO.getId(), updateReqVO, true);
+        }
+
+        // 3. 更新
+        MesProWorkOrderDO updateObj = BeanUtils.toBean(updateReqVO, MesProWorkOrderDO.class);
+        workOrderMapper.updateById(updateObj);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteWorkOrder(Long id) {
+        // 1.1 校验存在
+        MesProWorkOrderDO workOrder = validateWorkOrderExists(id);
+        // 1.2 只能删除草稿状态的工单
+        if (ObjUtil.notEqual(workOrder.getStatus(), MesProWorkOrderStatusEnum.PREPARE.getStatus())) {
+            throw exception(PRO_WORK_ORDER_NOT_PREPARE);
+        }
+        // 1.3 校验是否有子工单
+        Long childCount = workOrderMapper.selectCount(MesProWorkOrderDO::getParentId, id);
+        if (childCount > 0) {
+            throw exception(PRO_WORK_ORDER_HAS_CHILDREN);
+        }
+
+        // 2. 删除工单 + BOM
+        workOrderMapper.deleteById(id);
+        workOrderBomService.deleteWorkOrderBomByWorkOrderId(id);
+    }
+
+    @Override
+    public MesProWorkOrderDO validateWorkOrderExists(Long id) {
+        MesProWorkOrderDO workOrder = workOrderMapper.selectById(id);
+        if (workOrder == null) {
+            throw exception(PRO_WORK_ORDER_NOT_EXISTS);
+        }
+        return workOrder;
+    }
+
+    @Override
+    public MesProWorkOrderDO getWorkOrder(Long id) {
+        return workOrderMapper.selectById(id);
+    }
+
+    @Override
+    public MesProWorkOrderDO getWorkOrder(String code) {
+        return workOrderMapper.selectByCode(code);
+    }
+
+    @Override
+    public PageResult<MesProWorkOrderDO> getWorkOrderPage(MesProWorkOrderPageReqVO pageReqVO) {
+        return workOrderMapper.selectPage(pageReqVO);
+    }
+
+    @Override
+    public List<MesProWorkOrderDO> getWorkOrderList(Collection<Long> ids) {
+        if (CollUtil.isEmpty(ids)) {
+            return Collections.emptyList();
+        }
+        return workOrderMapper.selectByIds(ids);
+    }
+
+    @Override
+    public MesProWorkOrderDO validateWorkOrderConfirmed(Long id) {
+        MesProWorkOrderDO workOrder = validateWorkOrderExists(id);
+        // v2.2 状态机：报工前提改为"已下发/生产中"（方法名保留以兼容既有调用方）
+        if (ObjUtil.notEqual(workOrder.getStatus(), MesProWorkOrderStatusEnum.ISSUED.getStatus())
+                && ObjUtil.notEqual(workOrder.getStatus(), MesProWorkOrderStatusEnum.IN_PRODUCTION.getStatus())) {
+            throw exception(PRO_WORK_ORDER_NOT_ISSUED);
+        }
+        return workOrder;
+    }
+
+    @Override
+    public void confirmWorkOrder(Long id) {
+        // 1.1 校验存在
+        MesProWorkOrderDO workOrder = validateWorkOrderExists(id);
+        // 1.2 只有草稿状态才能确认
+        if (ObjUtil.notEqual(workOrder.getStatus(), MesProWorkOrderStatusEnum.PREPARE.getStatus())) {
+            throw exception(PRO_WORK_ORDER_NOT_PREPARE);
+        }
+
+        // 2. 更新状态为已确认
+        workOrderMapper.updateById(new MesProWorkOrderDO().setId(id)
+                .setStatus(MesProWorkOrderStatusEnum.CONFIRMED.getStatus()));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void submitWorkOrder(Long id) {
+        // 1. 校验存在 + 只有已确认状态才能提交审批
+        MesProWorkOrderDO workOrder = validateWorkOrderExists(id);
+        if (ObjUtil.notEqual(workOrder.getStatus(), MesProWorkOrderStatusEnum.CONFIRMED.getStatus())) {
+            throw exception(PRO_WORK_ORDER_NOT_CONFIRMED);
+        }
+
+        // 2. 状态置为审批中
+        workOrderMapper.updateById(new MesProWorkOrderDO().setId(id)
+                .setStatus(MesProWorkOrderStatusEnum.APPROVING.getStatus()));
+
+        // 3. 发起 BPM 审批流程（参照 MesProFeedbackServiceImpl#submitFeedback）。审批结果由 bpm-server 的
+        //    MesWorkOrderStatusListener 转发回 MES，经工单审批结果任务表异步消费后回写状态。
+        MesMdItemDO product = workOrder.getProductId() == null ? null : itemService.getItem(workOrder.getProductId());
+        Map<String, Object> variables = Map.of(
+                "workOrderId", String.valueOf(id),
+                "workOrderCode", workOrder.getCode() != null ? workOrder.getCode() : "",
+                "productCode", product != null && product.getCode() != null ? product.getCode() : "",
+                "quantity", workOrder.getQuantity() != null ? workOrder.getQuantity() : BigDecimal.ZERO);
+        String processInstanceId = bpmProcessInstanceApi.createProcessInstance(
+                        SecurityFrameworkUtils.getLoginUserId(),
+                        new BpmProcessInstanceCreateReqDTO()
+                                .setProcessDefinitionKey(BPM_PROCESS_DEFINITION_KEY)
+                                .setBusinessKey(String.valueOf(id))
+                                .setVariables(variables)).getCheckedData();
+        workOrderMapper.updateById(new MesProWorkOrderDO().setId(id)
+                .setProcessInstanceId(processInstanceId));
+    }
+
+    @Override
+    public void approveWorkOrder(Long id) {
+        // 1. 校验存在；仅"审批中"的工单需要处理，其余状态幂等返回，避免覆盖人工处理结果
+        MesProWorkOrderDO workOrder = validateWorkOrderExists(id);
+        if (ObjUtil.notEqual(workOrder.getStatus(), MesProWorkOrderStatusEnum.APPROVING.getStatus())) {
+            return;
+        }
+        // 2. 审批通过：置为已批准，此后方可下发（下发给 WMS 申请领料）
+        workOrderMapper.updateById(new MesProWorkOrderDO().setId(id)
+                .setStatus(MesProWorkOrderStatusEnum.APPROVED.getStatus()));
+    }
+
+    @Override
+    public void rejectWorkOrder(Long id) {
+        // 1. 校验存在；仅"审批中"的工单需要处理，其余状态幂等返回
+        MesProWorkOrderDO workOrder = validateWorkOrderExists(id);
+        if (ObjUtil.notEqual(workOrder.getStatus(), MesProWorkOrderStatusEnum.APPROVING.getStatus())) {
+            return;
+        }
+        // 2. 驳回：退回"已确认"，清空流程实例编号，允许修改后重新提交审批
+        workOrderMapper.updateById(new MesProWorkOrderDO().setId(id)
+                .setStatus(MesProWorkOrderStatusEnum.CONFIRMED.getStatus())
+                .setProcessInstanceId(""));
+    }
+
+    @Override
+    public void issueWorkOrder(Long id) {
+        // 1.1 校验存在 + 只有审批通过（已批准）的工单才能下发
+        MesProWorkOrderDO workOrder = validateWorkOrderExists(id);
+        if (ObjUtil.notEqual(workOrder.getStatus(), MesProWorkOrderStatusEnum.APPROVED.getStatus())) {
+            throw exception(PRO_WORK_ORDER_NOT_APPROVED);
+        }
+        // 1.2 校验产品已绑定工艺路线（没有路线，下发后无法拆分任务）
+        if (routeProductService.getRouteProductByItemId(workOrder.getProductId()) == null) {
+            throw exception(PRO_WORK_ORDER_ROUTE_REQUIRED);
+        }
+
+        // 2. 更新状态为已下发，记录下发人/时间（v2.2 状态机）
+        workOrderMapper.updateById(new MesProWorkOrderDO().setId(id)
+                .setStatus(MesProWorkOrderStatusEnum.ISSUED.getStatus())
+                .setIssueBy(SecurityFrameworkUtils.getLoginUserId())
+                .setIssueTime(LocalDateTime.now()));
+
+        // 3. 向 WMS 申请生产领料（MES↔WMS 集成：异步发送，开关未开则仅落任务不发送）
+        applyWmsShipment(workOrder);
+    }
+
+    @Override
+    public void markInProductionIfIssued(Long id) {
+        // 非"已下发"状态不处理，天然幂等（重复报工无副作用）
+        MesProWorkOrderDO workOrder = validateWorkOrderExists(id);
+        if (ObjUtil.notEqual(workOrder.getStatus(), MesProWorkOrderStatusEnum.ISSUED.getStatus())) {
+            return;
+        }
+        workOrderMapper.updateById(new MesProWorkOrderDO().setId(id)
+                .setStatus(MesProWorkOrderStatusEnum.IN_PRODUCTION.getStatus()));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void finishWorkOrder(Long id) {
+        // 1. 校验存在 + 已确认/已下发/生产中状态才能完成（v2.2 状态机）
+        MesProWorkOrderDO workOrder = validateWorkOrderExists(id);
+        if (ObjUtil.notEqual(workOrder.getStatus(), MesProWorkOrderStatusEnum.CONFIRMED.getStatus())
+                && ObjUtil.notEqual(workOrder.getStatus(), MesProWorkOrderStatusEnum.ISSUED.getStatus())
+                && ObjUtil.notEqual(workOrder.getStatus(), MesProWorkOrderStatusEnum.IN_PRODUCTION.getStatus())) {
+            throw exception(PRO_WORK_ORDER_NOT_CONFIRMED);
+        }
+
+        // 2. 级联完成所有关联任务
+        taskService.finishTaskByOrderId(id);
+
+        // 3. 更新工单状态为已完成
+        workOrderMapper.updateById(new MesProWorkOrderDO().setId(id)
+                .setStatus(MesProWorkOrderStatusEnum.FINISHED.getStatus())
+                .setFinishDate(LocalDateTime.now()));
+
+        // 4. 回写项目状态：工单完工后重算项目进度
+        if (workOrder.getProjectId() != null) {
+            projectService.refreshProjectStatus(workOrder.getProjectId());
+        }
+
+        // 5. ERP 来源工单：回传完工进度到 ERP 销售订单行（事务提交后执行，失败不影响完工）
+        erpProductionProgressService.reportProgressAfterCommit(id);
+
+        // 6. 向 WMS 申请成品入库（MES↔WMS 集成：异步发送，开关未开则仅落任务不发送）
+        applyWmsReceipt(workOrder);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void cancelWorkOrder(Long id) {
+        // 1.1 校验存在 + 可取消状态（v2.2 状态机决策①）
+        MesProWorkOrderDO workOrder = validateWorkOrderExists(id);
+        if (ObjUtil.equal(workOrder.getStatus(), MesProWorkOrderStatusEnum.CONFIRMED.getStatus())) {
+            // 已确认：随时可取消（现状规则）
+        } else if (ObjUtil.equal(workOrder.getStatus(), MesProWorkOrderStatusEnum.ISSUED.getStatus())) {
+            // 已下发：仅限下发后 24 小时内，且不能有报工记录
+            if (workOrder.getIssueTime() == null
+                    || workOrder.getIssueTime().plusHours(24).isBefore(LocalDateTime.now())) {
+                throw exception(PRO_WORK_ORDER_CANCEL_TIMEOUT);
+            }
+            if (feedbackMapper.selectCount(MesProFeedbackDO::getWorkOrderId, id) > 0) {
+                throw exception(PRO_WORK_ORDER_HAS_FEEDBACK);
+            }
+        } else {
+            throw exception(PRO_WORK_ORDER_CANCEL_NOT_ALLOWED);
+        }
+
+        // 2. 级联取消所有关联任务
+        taskService.cancelTaskByOrderId(id);
+
+        // 3. 更新工单状态为已取消
+        workOrderMapper.updateById(new MesProWorkOrderDO().setId(id)
+                .setStatus(MesProWorkOrderStatusEnum.CANCELED.getStatus())
+                .setCancelDate(LocalDateTime.now()));
+
+        // 4. 回写项目状态：工单取消后重算项目进度
+        if (workOrder.getProjectId() != null) {
+            projectService.refreshProjectStatus(workOrder.getProjectId());
+        }
+    }
+
+    // ==================== 校验方法 ====================
+
+    private void validateWorkOrderSaveData(Long id, MesProWorkOrderSaveReqVO reqVO) {
+        // 1. 校验编码唯一
+        validateWorkOrderCodeUnique(id, reqVO.getCode());
+        // 2. 校验产品存在
+        itemService.validateItemExists(reqVO.getProductId());
+        // 3. 校验所属项目存在（如果挂接了项目）
+        if (reqVO.getProjectId() != null && projectMapper.selectById(reqVO.getProjectId()) == null) {
+            throw exception(PRO_PROJECT_NOT_EXISTS);
+        }
+        // 4. 校验批次配置（如果产品有 clientFlag=true，则 clientId 必填）
+        MesMdItemBatchConfigDO batchConfig = itemBatchConfigService.getItemBatchConfigByItemId(reqVO.getProductId());
+        if (batchConfig != null && Boolean.TRUE.equals(batchConfig.getClientFlag()) && reqVO.getClientId() == null) {
+            throw exception(MD_CLIENT_NOT_EXISTS);
+        }
+    }
+
+    private void validateWorkOrderCodeUnique(Long id, String code) {
+        if (code == null) {
+            return;
+        }
+        MesProWorkOrderDO workOrder = workOrderMapper.selectByCode(code);
+        if (workOrder == null) {
+            return;
+        }
+        if (ObjUtil.notEqual(workOrder.getId(), id)) {
+            throw exception(PRO_WORK_ORDER_CODE_DUPLICATE);
+        }
+    }
+
+    @Override
+    public void updateProducedQuantity(Long id, BigDecimal incrQuantityProduced) {
+        // 校验工单存在
+        validateWorkOrderExists(id);
+        // 更新数量
+        workOrderMapper.updateProducedQuantity(id, incrQuantityProduced);
+    }
+
+    @Override
+    public Long getWorkOrderCountByVendorId(Long vendorId) {
+        return workOrderMapper.selectCountByVendorId(vendorId);
+    }
+
+    @Override
+    public void updateWmsShipmentResult(Long id, String wmsShipmentOrderNo, Integer wmsShipmentStatus) {
+        workOrderMapper.updateById(new MesProWorkOrderDO().setId(id)
+                .setWmsShipmentOrderNo(wmsShipmentOrderNo).setWmsShipmentStatus(wmsShipmentStatus));
+    }
+
+    @Override
+    public void updateWmsReceiptResult(Long id, String wmsReceiptOrderNo, Integer wmsReceiptStatus) {
+        workOrderMapper.updateById(new MesProWorkOrderDO().setId(id)
+                .setWmsReceiptOrderNo(wmsReceiptOrderNo).setWmsReceiptStatus(wmsReceiptStatus));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void resumeWorkOrder(String code) {
+        MesProWorkOrderDO workOrder = getWorkOrder(code);
+        if (workOrder == null) {
+            throw exception(PRO_WORK_ORDER_NOT_EXISTS);
+        }
+        // 仅已下发/生产中的工单可恢复（缺料挂起态），其余状态不允许
+        if (!MesProWorkOrderStatusEnum.ISSUED.getStatus().equals(workOrder.getStatus())
+                && !MesProWorkOrderStatusEnum.IN_PRODUCTION.getStatus().equals(workOrder.getStatus())) {
+            throw exception(PRO_WORK_ORDER_RESUME_NOT_ALLOWED);
+        }
+        // 取消旧的生产领料集成任务后，重新向 WMS 申请领料（设计 7.2）
+        mesWmsIntegrationService.cancelTask(MesWmsIntegrationOrderTypeEnum.PRODUCTION_SHIPMENT, workOrder.getId());
+        applyWmsShipment(workOrder);
+    }
+
+    /**
+     * 向 WMS 申请生产领料（MES↔WMS 集成）
+     * <p>createTask 内部已做幂等（同工单 + 同业务类型不重复建任务），重复下发工单不会重复申请。</p>
+     */
+    private void applyWmsShipment(MesProWorkOrderDO workOrder) {
+        // 领料申请版本 +1：保证同一工单多次领料（含缺料恢复后的重新申请）的
+        // requestId / eventVersion / WMS 出库单号彼此不同，避免被 WMS 幂等校验或唯一键拒绝。
+        int eventVersion = (workOrder.getWmsShipmentVersion() == null ? 0 : workOrder.getWmsShipmentVersion()) + 1;
+        workOrderMapper.updateById(new MesProWorkOrderDO().setId(workOrder.getId())
+                .setWmsShipmentVersion(eventVersion));
+        workOrder.setWmsShipmentVersion(eventVersion);
+        String businessChainNo = "BC-MES-" + workOrder.getCode();
+        WmsOrderRequestDTO payload = wmsPayloadBuilder.buildShipmentPayload(workOrder, businessChainNo, eventVersion);
+        mesWmsIntegrationService.createTask(MesWmsIntegrationOrderTypeEnum.PRODUCTION_SHIPMENT,
+                workOrder.getId(), workOrder.getCode(), businessChainNo, null, JSONUtil.toJsonStr(payload));
+        // 标记工单领料申请中（终态由 MesWmsProductionShipmentResultHandler 回写）
+        updateWmsShipmentResult(workOrder.getId(), null, MesProWorkOrderWmsStatusEnum.APPLYING.getStatus());
+    }
+
+    /**
+     * 向 WMS 申请成品入库（MES↔WMS 集成）
+     */
+    private void applyWmsReceipt(MesProWorkOrderDO workOrder) {
+        String businessChainNo = "BC-MES-" + workOrder.getCode();
+        WmsOrderRequestDTO payload = wmsPayloadBuilder.buildReceiptPayload(workOrder, businessChainNo);
+        mesWmsIntegrationService.createTask(MesWmsIntegrationOrderTypeEnum.PRODUCTION_RECEIPT,
+                workOrder.getId(), workOrder.getCode(), businessChainNo, null, JSONUtil.toJsonStr(payload));
+        // 标记工单入库申请中（终态由 MesWmsProductionReceiptResultHandler 回写）
+        updateWmsReceiptResult(workOrder.getId(), null, MesProWorkOrderWmsStatusEnum.APPLYING.getStatus());
+    }
+
+}

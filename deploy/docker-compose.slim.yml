@@ -1,0 +1,48 @@
+# 精简部署覆盖文件：只启动 MySQL/Redis/Nacos + gateway + system + mes + ai + frontend
+# 用法: docker compose -f docker-compose.yml -f docker-compose.slim.yml up -d --build
+name: txgy-slim
+
+services:
+  # 本机已装 MySQL 占用 3306，覆盖端口为 3307（容器间通信仍用内部网络 3306，不受影响）
+  mysql:
+    ports: !override
+      - "3307:3306"
+
+  # MES 制造执行系统：使用专用快速构建（仅编译 mes-server 及其依赖，避免全仓全量编译）
+  # context: .. 覆盖主文件远程改的 jars 模式（远程要求宿主机先打 jar；slim 走源码容器内编译）
+  mes:
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile.mes
+    environment:
+      JAVA_OPTS: -Xms256m -Xmx1024m
+
+  # AI 服务（含 MES AI 权限助手）：使用专用快速构建（仅编译 ai-server 及其依赖）
+  # dns: 固定公共 DNS——容器继承宿主机 resolv.conf，宿主机开机初期外网未就绪时
+  #      会出现外网域名解析失败（DeepSeek/视觉模型 API 全部 UnknownHostException）
+  ai:
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile.ai
+    dns:
+      - 223.5.5.5
+      - 114.114.114.114
+    environment:
+      JAVA_OPTS: -Xms256m -Xmx1024m
+
+  # 商城促销/客服服务：只编译 promotion-server 及其 reactor 依赖，避免被无关 ERP 模块阻断。
+  promotion:
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile.promotion
+
+  # Windows Docker Desktop 上 nacos 获取本机 IP 失败（InetUtils.refreshIp NPE），改用 hostname 模式
+  nacos:
+    environment:
+      PREFER_HOST_MODE: hostname
+
+  # 前端：使用完整构建 Dockerfile（本机无 dist，需在容器内构建）
+  frontend:
+    build:
+      context: ..
+      dockerfile: deploy/frontend/Dockerfile
