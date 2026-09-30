@@ -1,0 +1,19 @@
+# Only the admin source and its Nginx configuration enter this build context.
+**
+!txgy-ui-admin-vben
+!txgy-ui-admin-vben/**
+!deploy
+!deploy/frontend
+!deploy/frontend/nginx.conf
+**/node_modules
+**/dist
+**/dist-facl*
+**/dist.bak
+**/dist.old
+**/.pnpm-store
+**/.turbo
+**/.git
+**/.env
+**/.env.local
+**/.env.*.local
+**/*.log

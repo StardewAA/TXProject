@@ -1,0 +1,23 @@
+# 前端覆盖层：把 PC / H5 / admin 三个前端切到本轮回评整改构建出的补丁镜像。
+#
+# 用法（在 file-acl-rollout 之后叠加，且必须带 --no-build）：
+#   docker compose -p deploy \
+#     -f deploy/docker-compose.yml \
+#     -f deploy/docker-compose.mall-rollout.yml \
+#     -f deploy/docker-compose.mall-android-rollout.yml \
+#     -f deploy/docker-compose.file-acl-rollout.yml \
+#     -f deploy/docker-compose.file-acl-frontend.yml \
+#     up -d --no-build mall-pc mall-h5 frontend
+#
+# 说明：第二轮复评整改只有 H5 有前端改动（私有图带 token 读取），因此 H5 指向 -2；
+# PC 与 admin 的改动在上一轮完成且本轮未再变更，保持 -1（避免指向不存在的镜像）。
+services:
+  mall-pc:
+    image: txgy-mall-pc:file-acl-20260924-1
+    pull_policy: never
+  mall-h5:
+    image: txgy-mall-h5:file-acl-20260924-4
+    pull_policy: never
+  frontend:
+    image: txgy-mall-admin:file-acl-20260924-2
+    pull_policy: never

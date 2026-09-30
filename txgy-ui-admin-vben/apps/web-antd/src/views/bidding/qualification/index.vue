@@ -1,0 +1,2884 @@
+<script setup lang="ts">
+/* 企业资质（菜单终态 60005200 / component bidding/qualification/index / componentName QualificationIndex）
+ *  权限：页面 bidding:qualification:query；动作 create / renew / approve / reject / alert-run / material:query
+ *
+ * 三页签：
+ *   ① 资质台账      GET /bidding/qualification/page（筛选：entId/序列/状态/关键字/临近到期天数）
+ *                  + 详情抽屉 GET /get（含绑定证照摘要与最近一次达标核查）
+ *                  + 延续申报 POST /renew（乐观锁回传列表 version）
+ *   ② 延续申报台账  GET /bidding/qualification/apply/page + 审批通过 POST /approve / 退回 POST /reject
+ *   ③ 材料完备性    GET /bidding/enterprise-material/completeness（字段逐字对齐 RespVO）
+ *
+ * 字典口径（契约 §0.5，禁止自造中文枚举）：一律 dictLabel/dictTag 优先、缺字典回落原始 code。
+ *   已注册：qual_status、qual_apply_type、qual_apply_status、qual_serial（2026-09-20 新增）、
+ *   material_category / material_result / material_status、safety_permit_status、safety_risk_flag、risk_level。
+ *   非字典：qual_grade —— 其值域由**现行标准库数据**决定（后端 /bidding/qualification/standard/options
+ *   口径为"取自现行标准库，不固化字典"），页面原样展示；登记成字典反而制造第二套编码。
+ *   注意：字典类型名以 bidding_dict_data 为准 —— 申报类型/状态为 qual_apply_type / qual_apply_status（曾误写 apply_*）。
+ * 时间口径：LocalDate（issueDate/validTo/submitDate/dueDate/newValidTo）为 'yyyy-MM-dd' 字符串；
+ *   仅 latestReview.reviewedAt 是 LocalDateTime（epoch 毫秒）→ 过 fmtDateTime。 */
+import { computed, h, onMounted, reactive, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
+
+import { useAccess } from '@vben/access';
+import { IconifyIcon } from '@vben/icons';
+import { useAccessStore } from '@vben/stores';
+
+import { message, Modal } from 'ant-design-vue';
+
+import { type CertificateApi, getCertificatePage, getMaterialCompleteness } from '#/api/bidding/certificate';
+import { uploadBiddingFile } from '#/api/bidding/file';
+import { getPersonnelProfilePage } from '#/api/bidding/personnel';
+import {
+  approveQualificationRenew,
+  changePermitStatus,
+  createQualification,
+  createQualificationAsset,
+  createQualificationPerformance,
+  createQualificationStaff,
+  createQualificationStandard,
+  createSafetyPermit,
+  exportQualifications,
+  getQualificationAlertPage,
+  getQualificationApplyPage,
+  getQualificationAssetPage,
+  getQualificationPage,
+  getQualificationPerformancePage,
+  getQualificationPermitPage,
+  getQualificationReviewPage,
+  getQualificationStaffPage,
+  getQualificationStats,
+  getStandardOptions,
+  getStandardPage,
+  handleQualificationAlert,
+  importQualifications,
+  QualificationApi,
+  rejectQualificationRenew,
+  runComplianceReview,
+  runQualificationAlertScan,
+  submitQualificationRenew,
+  updateQualification,
+} from '#/api/bidding/qualification';
+import { APPLY_STATUS_OPTIONS, APPLY_TYPE_OPTIONS } from '#/api/bidding/qualification';
+import { fetchSubjectProfile } from '#/api/bidding/subject';
+
+import CaSignEntry, { type CaSignFile } from '../ca/CaSignEntry.vue';
+import { fmtDate, fmtDateTime } from '../certificate/format';
+import { useCertMeta } from '../certificate/useCertMeta';
+import AttrFilter from '../components/AttrFilter.vue';
+import CopyText from '../components/CopyText.vue';
+import MaterialItemsTable from '../components/MaterialItemsTable.vue';
+import { materialResultFallback } from '../components/materialMeta';
+// 安许风险联动（企业侧区块）：原为独立页，现按三台账 IA 嵌入本页「安许风险与规则」页签
+//   2026-09-30 收口：safety-risk 页按主体拆到 panels/，本页只 import 企业侧面板（不再有区块开关）
+import EnterpriseSafetyPanels from '../safety-risk/panels/EnterpriseSafetyPanels.vue';
+
+import '../certificate/cert.css';
+
+const { hasAccessByCodes } = useAccess();
+const accessStore = useAccessStore();
+const router = useRouter();
+const { dictLabel, dictOptions, dictTag } = useCertMeta();
+
+function can(code: string): boolean {
+  const codes = accessStore.accessCodes ?? [];
+  if (codes.length === 0) return true;
+  return codes.includes('*') || codes.includes('*:*:*') || hasAccessByCodes([code]);
+}
+
+/** 字典优先、缺字典回退 code（不发明中文枚举） */
+function tagOf(dictType: string, code?: null | string) {
+  if (!code) return { color: 'default', label: '—' };
+  if (dictOptions(dictType).length > 0) return dictTag(dictType, code);
+  return { color: 'default', label: code };
+}
+function textOf(dictType: string, code?: null | string) {
+  if (!code) return '—';
+  if (dictOptions(dictType).length > 0) return dictLabel(dictType, code);
+  return code;
+}
+
+const activeKey = ref('ledger');
+
+/* ================= ① 资质台账 ================= */
+const query = reactive<QualificationApi.PageReq>({
+  pageNo: 1,
+  pageSize: 10,
+  entId: undefined,
+  qualSerial: undefined,
+  qualStatus: undefined,
+  keyword: undefined,
+  expiringInDays: undefined,
+});
+const rows = ref<QualificationApi.Qualification[]>([]);
+const total = ref(0);
+const loading = ref(false);
+
+/* 资质下拉（不让用户手填无从得知的 qualId）：候选取当前主体资质台账 */
+const qualOptions = ref<Array<{ label: string; value: number }>>([]);
+const qualOptionsLoading = ref(false);
+async function loadQualOptions(): Promise<void> {
+  if (!query.entId) {
+    qualOptions.value = [];
+    return;
+  }
+  qualOptionsLoading.value = true;
+  try {
+    const page = await getQualificationPage({ entId: query.entId, pageNo: 1, pageSize: 200 });
+    qualOptions.value = (page.list ?? []).map((q) => ({
+      label: (q.certNo || '') + '（' + q.qualSerial + '/' + (q.qualCategory || '—') + '/' + (q.qualGrade || '—') + '）',
+      value: q.id,
+    }));
+  } catch {
+    qualOptions.value = [];
+  } finally {
+    qualOptionsLoading.value = false;
+  }
+}
+
+async function load() {
+  loading.value = true;
+  try {
+    const page = await getQualificationPage({ ...query });
+    rows.value = page.list ?? [];
+    total.value = page.total ?? 0;
+  } catch {
+    rows.value = [];
+    total.value = 0;
+  } finally {
+    loading.value = false;
+  }
+}
+function resetQuery() {
+  // 企业主体由「主体档案」自动带出，是查询必填上下文；重置筛选项时不清空它
+  query.qualSerial = undefined;
+  query.qualStatus = undefined;
+  query.keyword = undefined;
+  query.expiringInDays = undefined;
+  query.companyId = undefined;
+  query.validToFrom = undefined;
+  query.validToTo = undefined;
+  query.pageNo = 1;
+  activeStat.value = undefined;
+  void load();
+}
+
+const ledgerColumns = [
+  { title: '资质名称', key: 'qualName', width: 240, ellipsis: true },
+  { title: '所属企业', dataIndex: 'companyName', key: 'companyName', width: 190, ellipsis: true },
+  { title: '资质等级', dataIndex: 'qualGrade', key: 'qualGrade', width: 110 },
+  { title: '发证机关', dataIndex: 'issuingAuthority', key: 'issuingAuthority', width: 170, ellipsis: true },
+  { title: '资质证书编号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '资质证书编号' }),  dataIndex: 'certNo', key: 'certNo', width: 200 },
+  { title: '序列', dataIndex: 'qualSerial', key: 'qualSerial', width: 130 },
+  { title: '状态', dataIndex: 'qualStatus', key: 'qualStatus', width: 130 },
+  { title: '有效期至', dataIndex: 'validTo', key: 'validTo', width: 120 },
+  { title: '剩余天数', dataIndex: 'daysToExpire', key: 'daysToExpire', width: 110 },
+  { title: '关联人员', key: 'staffCount', width: 150, ellipsis: true },
+  { title: '在途申报', dataIndex: 'hasPendingApply', key: 'hasPendingApply', width: 100 },
+  { title: '操作', key: 'action', width: 190, fixed: 'right' as const },
+];
+
+function daysColor(d?: null | number) {
+  if (d === null || d === undefined) return 'default';
+  if (d < 0) return 'red';
+  if (d <= 30) return 'orange';
+  return 'green';
+}
+
+/* ===== 详情：跳独立页（用户 2026-09-28 口径：查看不再渲染在表格下方） =====
+ * tab=files 时详情页直接落到「文件版本」，让"这条资质的证书文件在哪、能不能传"一步可达。 */
+function goDetail(row: QualificationApi.Qualification, tab?: 'files') {
+  void router.push({
+    path: `/bidding/qualification/detail/${row.id}`,
+    query: tab ? { tab } : {},
+  });
+}
+
+/** 行内「更多」分发：与详情页/页头按钮共用同一批函数，不复制逻辑 */
+function onRowAction(key: number | string, row: QualificationApi.Qualification): void {
+  switch (key) {
+    case 'edit': {
+      openEdit(row);
+      break;
+    }
+    case 'element': {
+      openElement(row);
+      break;
+    }
+    case 'renew': {
+      openRenew(row);
+      break;
+    }
+    case 'review': {
+      confirmReview(row);
+      break;
+    }
+    default: {
+      break;
+    }
+  }
+}
+
+/* ===== 延续申报 ===== */
+const renewOpen = ref(false);
+const renewSaving = ref(false);
+const renewForm = reactive<{ dueDate?: string; qualificationId: number; remark?: string; version: number }>({
+  qualificationId: 0,
+  version: 0,
+});
+const renewRow = ref<null | QualificationApi.Qualification>(null);
+
+function openRenew(row: QualificationApi.Qualification) {
+  if (row.version === undefined) {
+    message.warning('该行缺少 version（乐观锁），请刷新后重试');
+    return;
+  }
+  if (row.hasPendingApply) {
+    message.warning('该资质已有在途延续申报，请先在「延续申报台账」处理');
+    return;
+  }
+  renewRow.value = row;
+  Object.assign(renewForm, { qualificationId: row.id, version: row.version, dueDate: undefined, remark: undefined });
+  renewOpen.value = true;
+}
+
+async function submitRenew() {
+  renewSaving.value = true;
+  try {
+    await submitQualificationRenew({ ...renewForm });
+    message.success('延续申报已提交');
+    renewOpen.value = false;
+    refreshAfterWrite();
+  } catch {
+    // §0.4 静默：失败详情由请求层呈现
+  } finally {
+    renewSaving.value = false;
+  }
+}
+
+/* ================= ② 延续申报台账 ================= */
+const applyQuery = reactive<QualificationApi.ApplyPageReq>({
+  pageNo: 1,
+  pageSize: 10,
+  entId: undefined,
+  qualId: undefined,
+  applyType: undefined,
+  status: undefined,
+});
+const applyRows = ref<QualificationApi.ApplyRecord[]>([]);
+const applyTotal = ref(0);
+const applyLoading = ref(false);
+
+async function loadApplies() {
+  applyLoading.value = true;
+  try {
+    const page = await getQualificationApplyPage({ ...applyQuery, entId: query.entId });
+    applyRows.value = page.list ?? [];
+    applyTotal.value = page.total ?? 0;
+  } catch {
+    applyRows.value = [];
+    applyTotal.value = 0;
+  } finally {
+    applyLoading.value = false;
+  }
+}
+
+const applyColumns = [
+  { title: '申报单号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '申报单号' }),  dataIndex: 'id', key: 'id', width: 110 },
+  { title: '资质', dataIndex: 'qualId', key: 'qualId', width: 90 },
+  { title: '申报类型', dataIndex: 'applyType', key: 'applyType', width: 120 },
+  { title: '目标等级', dataIndex: 'targetGrade', key: 'targetGrade', width: 100 },
+  { title: '提交日期', dataIndex: 'submitDate', key: 'submitDate', width: 120 },
+  { title: '申请延续至', dataIndex: 'dueDate', key: 'dueDate', width: 120 },
+  { title: '状态', dataIndex: 'status', key: 'status', width: 130 },
+  { title: '结果文号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '结果文号' }),  dataIndex: 'resultNo', key: 'resultNo', width: 140 },
+  { title: '新证书编号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '新证书编号' }),  dataIndex: 'newCertNo', key: 'newCertNo', width: 170 },
+  { title: '新有效期至', dataIndex: 'newValidTo', key: 'newValidTo', width: 120 },
+  { title: '备注', dataIndex: 'remark', key: 'remark', ellipsis: true },
+  { title: '操作', key: 'action', width: 150, fixed: 'right' as const },
+];
+
+/** 可审批的状态（终态 ISSUED/REJECTED 不再受理；与 QualificationApplyStatusEnum 一致） */
+const AUDITABLE = new Set(['ACCEPTED', 'APPROVED', 'REVIEWING', 'SUBMITTED']);
+function auditable(r: QualificationApi.ApplyRecord) {
+  return AUDITABLE.has(r.status);
+}
+
+const approveOpen = ref(false);
+const approveSaving = ref(false);
+const approveFormRef = ref();
+const approveForm = reactive<QualificationApi.ApproveReq>({ applyId: 0, version: 0, newValidTo: '' });
+const approveRules = {
+  newValidTo: [{ required: true, message: '延续后有效期不能为空', trigger: 'change' }],
+};
+
+function openApprove(r: QualificationApi.ApplyRecord) {
+  if (r.version === undefined) {
+    message.warning('该申报单缺少 version（乐观锁），请刷新后重试');
+    return;
+  }
+  Object.assign(approveForm, {
+    applyId: r.id,
+    version: r.version,
+    resultNo: r.resultNo,
+    newCertNo: r.newCertNo,
+    newValidTo: r.newValidTo ?? r.dueDate ?? '',
+  });
+  approveOpen.value = true;
+}
+
+async function submitApprove() {
+  try {
+    await approveFormRef.value?.validate();
+  } catch {
+    return;
+  }
+  approveSaving.value = true;
+  try {
+    await approveQualificationRenew({ ...approveForm });
+    message.success('审批通过，主档已回写 VALID + 新有效期');
+    approveOpen.value = false;
+    refreshAfterWrite();
+  } catch {
+    // 静默
+  } finally {
+    approveSaving.value = false;
+  }
+}
+
+function confirmReject(r: QualificationApi.ApplyRecord) {
+  if (r.version === undefined) {
+    message.warning('该申报单缺少 version（乐观锁），请刷新后重试');
+    return;
+  }
+  let remark = '';
+  Modal.confirm({
+    title: `退回延续申报 #${r.id}`,
+    okText: '退回',
+    content: () =>
+      // 退回理由必填：后端 remark 可空，但业务上必须留痕
+      h('textarea', {
+        class: 'ant-input',
+        placeholder: '退回理由（必填，将写入 remark）',
+        rows: 3,
+        style: 'width:100%',
+        onInput: (e: any) => {
+          remark = e.target.value;
+        },
+      }),
+    okType: 'danger',
+    async onOk() {
+      if (!remark.trim()) {
+        message.warning('请填写退回理由');
+        throw new Error('remark required');
+      }
+      await rejectQualificationRenew({ applyId: r.id, version: r.version as number, remark: remark.trim() });
+      message.success('已退回，主档还原 VALID');
+      refreshAfterWrite();
+    },
+  });
+}
+
+/* ================= ③ 材料完备性 ================= */
+const completenessQuery = reactive<{ asOf?: string; entId?: number }>({ entId: undefined, asOf: undefined });
+const completeness = ref<CertificateApi.MaterialCompleteness | null>(null);
+const completenessLoading = ref(false);
+const completenessError = ref('');
+
+/* 结论标签：字典 material_result 优先，缺字典用 ../components/materialMeta 的统一兜底
+ * （RISK 的原两处叫法不一致问题见该文件顶部说明；文案只此一份，证书域自查页也用它）。 */
+const resultTag = computed(() => {
+  const r = completeness.value?.result;
+  if (!r) return { color: 'default', label: '—' };
+  if (dictOptions('material_result').length > 0) return dictTag('material_result', r);
+  return materialResultFallback(r);
+});
+
+/* 逐项明细的列定义已统一到 ../components/MaterialItemsTable.vue（原本页列与证书域自查页的列已分叉：
+ * 本页多一列「类型 code」、且「匹配记录」与对方「取数来源」同义不同名）。本页需要那列时用
+ * :show-type-code="true" 打开，不再各自维护一份 columns。 */
+
+async function loadCompleteness(silent = false) {
+  const entId = completenessQuery.entId ?? query.entId;
+  if (!entId) {
+    if (!silent) message.warning('未取到企业主体：请先在「主体档案」完善企业档案（统一社会信用代码），系统会自动带出');
+    return;
+  }
+  completenessLoading.value = true;
+  completenessError.value = '';
+  completeness.value = null;
+  try {
+    completeness.value = await getMaterialCompleteness(entId, completenessQuery.asOf);
+  } catch (error: any) {
+    // 1060107013「企业材料不完备」是业务结论：优先用 data 渲染，无 data 才当错误
+    const data = error?.data ?? error?.response?.data?.data;
+    if (data?.result) {
+      completeness.value = data;
+    } else {
+      completenessError.value = error?.msg ?? error?.message ?? '完备性自查失败';
+    }
+  } finally {
+    completenessLoading.value = false;
+  }
+}
+
+/* ================= 建档 / 预警扫描 ================= */
+const formOpen = ref(false);
+const saving = ref(false);
+const formRef = ref();
+const createdId = ref<null | number>(null);
+/* ===== 录入方式：本期仅「手工录入」可用，其余方式留位 =====
+   用户口径：后续可能有其他录入方式，需要把位置空出来；
+   契约请求 §4：source_channel 由后端注册预留值，本期后端固定 MANUAL、前端不传值。
+   后端就绪后：把对应 code 从"暂未开放"移出即可启用本项，无需改结构。 */
+const RESERVED_ENTRY_CHANNELS = ['API', 'IMPORT', 'OFFICIAL_SYNC'];
+const entryChannel = ref('MANUAL');
+const entryChannelOptions = computed(() => {
+  const options: { disabled?: boolean; label: string; value: string }[] = [
+    { label: '手工录入', value: 'MANUAL' },
+  ];
+  const dict = dictOptions('source_channel') as { label?: unknown; value?: unknown }[];
+  for (const item of dict) {
+    const value = String(item.value ?? '');
+    if (!value || value === 'MANUAL' || options.some((o) => o.value === value)) continue;
+    options.push({ disabled: true, label: String(item.label ?? value) + '（暂未开放）', value });
+  }
+  // 字典尚未注册预留值时，用占位项保证"位置"可见（不自造中文枚举，仅提示待后端注册）
+  if (dict.length === 0) {
+    for (const code of RESERVED_ENTRY_CHANNELS) {
+      options.push({ disabled: true, label: code + '（暂未开放，待后端注册字典）', value: code });
+    }
+  }
+  return options;
+});
+
+const form = reactive<QualificationApi.SaveReq>({
+  entId: undefined as unknown as number,
+  qualSerial: 'CONSTRUCTION',
+  qualCategory: '',
+  qualGrade: '',
+  certNo: '',
+});
+const rules = {
+  entId: [{ required: true, message: '企业主体不能为空', trigger: 'change' }],
+  qualSerial: [{ required: true, message: '资质序列不能为空', trigger: 'change' }],
+  qualCategory: [{ required: true, message: '资质类别不能为空', trigger: 'blur' }],
+  qualGrade: [{ required: true, message: '资质等级不能为空', trigger: 'blur' }],
+  certNo: [{ required: true, message: '资质证书编号不能为空（租户内唯一）', trigger: 'blur' }],
+};
+
+/* 关联证照下拉（不让用户手填无从得知的 certificate_info id）：按证照名称/编号检索选择 */
+const certLinkOptions = ref<Array<{ label: string; value: number }>>([]);
+const certLinkLoading = ref(false);
+let certLinkSearching = false;
+async function loadCertLinkOptions(keyword?: string): Promise<void> {
+  if (certLinkSearching) return;
+  certLinkSearching = true;
+  certLinkLoading.value = true;
+  try {
+    const page = await getCertificatePage({ certName: keyword ?? '', pageNo: 1, pageSize: 20 });
+    certLinkOptions.value = (page.list ?? []).map((c) => ({
+      label: (c.certName || '') + (c.certNo ? '（' + c.certNo + '）' : ''),
+      value: Number(c.id),
+    }));
+  } catch {
+    certLinkOptions.value = [];
+  } finally {
+    certLinkLoading.value = false;
+    certLinkSearching = false;
+  }
+}
+
+function onCreate() {
+  Object.assign(form, {
+    id: undefined,
+    version: undefined,
+    entId: query.entId ?? (undefined as unknown as number),
+    qualSerial: 'CONSTRUCTION',
+    qualCategory: '',
+    qualGrade: '',
+    certNo: '',
+    issuingAuthority: undefined,
+    issueDate: undefined,
+    validTo: undefined,
+    approvalScope: undefined,
+    bindedCertId: undefined,
+    remark: undefined,
+  });
+  createdId.value = null;
+  certLinkOptions.value = [];
+  void loadCertLinkOptions('');
+  formOpen.value = true;
+}
+
+async function submit() {
+  try {
+    await formRef.value?.validate();
+  } catch {
+    return;
+  }
+  saving.value = true;
+  try {
+    createdId.value = await createQualification({ ...form });
+    message.success(`资质建档成功（id=${createdId.value}）`);
+    formOpen.value = false;
+    refreshAfterWrite();
+  } catch {
+    // 静默
+  } finally {
+    saving.value = false;
+  }
+}
+
+const scanning = ref(false);
+const scanHits = ref<null | number>(null);
+const scanAt = ref<null | number>(null);
+
+async function doScan() {
+  scanning.value = true;
+  try {
+    scanHits.value = await runQualificationAlertScan();
+    scanAt.value = Date.now();
+    message.success('预警扫描已执行');
+  } catch {
+    // 静默
+  } finally {
+    scanning.value = false;
+  }
+}
+
+/* ===== 要素录入（人员 / 业绩 / 资产装备，权限 bidding:qualification:element） ===== */
+const elementOpen = ref(false);
+const elementSaving = ref(false);
+const elementTab = ref('staff');
+const elementIds = reactive<{ entId: number; qualId: number }>({ entId: 0, qualId: 0 });
+const staffForm = reactive<QualificationApi.StaffSaveReq>({ entId: 0, personName: '', qualId: 0 });
+const perfForm = reactive<QualificationApi.PerformanceSaveReq>({ entId: 0, projectName: '', qualId: 0 });
+const assetForm = reactive<QualificationApi.AssetSaveReq>({ entId: 0, name: '' });
+/* 资质人员姓名：**优先从员工档案选**（本模块已有员工档案，手打易与档案对不上），
+ * 但保留手填能力——资质申报里的"拟聘人员"可能尚未建档，故用 AutoComplete 而非 Select。
+ * 注：后端 StaffSaveReqVO 只有 personName（无 personId），所以这里只回填姓名，不伪造关联 ID。 */
+const personNameOptions = ref<Array<{ label: string; value: string }>>([]);
+let personNameLoaded = false;
+async function loadPersonNameOptions(): Promise<void> {
+  if (personNameLoaded) return;
+  personNameLoaded = true;
+  try {
+    const res = await getPersonnelProfilePage({ pageNo: 1, pageSize: 200 });
+    personNameOptions.value = (res?.list ?? [])
+      .map((p) => p.personName)
+      .filter((n): n is string => !!n)
+      .map((n) => ({ label: n, value: n }));
+  } catch {
+    personNameOptions.value = [];
+    personNameLoaded = false; // 失败允许下次重试
+  }
+}
+
+function openElement(row: QualificationApi.Qualification) {
+  Object.assign(elementIds, { entId: row.entId, qualId: row.id });
+  Object.assign(staffForm, {
+    bindedCertId: undefined,
+    entId: row.entId,
+    isFullTime: undefined,
+    major: undefined,
+    personName: '',
+    qualId: row.id,
+    regNo: undefined,
+    regValidTo: undefined,
+    staffRole: undefined,
+    titleLevel: undefined,
+  });
+  Object.assign(perfForm, {
+    completionDate: undefined,
+    contractAmount: undefined,
+    entId: row.entId,
+    evidenceFileIds: undefined,
+    isPlatformVerified: undefined,
+    ownerName: undefined,
+    projectName: '',
+    projectType: undefined,
+    qualId: row.id,
+    qualityResult: undefined,
+    role: undefined,
+  });
+  Object.assign(assetForm, {
+    assetType: undefined,
+    entId: row.entId,
+    evidenceFileIds: undefined,
+    name: '',
+    quantity: undefined,
+    spec: undefined,
+    statYear: undefined,
+    valueAmount: undefined,
+  });
+  elementEvidenceFiles.value = [];
+  elementTab.value = 'staff';
+  elementOpen.value = true;
+}
+
+/** 证据文件：直接上传收集 fileId（用户不手填无从得知的文件编号；后端 evidenceFileIds 为 String 列存 JSON） */
+interface ElementEvidence {
+  fileId: number;
+  name: string;
+  /** 访问地址（上传响应带回，仅即时预览/签章用） */
+  url?: string;
+}
+const elementEvidenceFiles = ref<ElementEvidence[]>([]);
+const elementEvidenceUploading = ref(false);
+async function onPickElementEvidence(file: File): Promise<boolean> {
+  elementEvidenceUploading.value = true;
+  try {
+    const uploaded = await uploadBiddingFile(file, 'bidding/qualification');
+    if (!uploaded?.fileId) {
+      message.warning('证据文件上传失败（未取得文件编号），请重试');
+      return false;
+    }
+    elementEvidenceFiles.value = [...elementEvidenceFiles.value, { fileId: uploaded.fileId, name: uploaded.name || file.name, url: uploaded.url }];
+    message.success('证据文件已上传');
+  } catch {
+    // 失败原因由请求层 toast 后端 msg
+  } finally {
+    elementEvidenceUploading.value = false;
+  }
+  return false;
+}
+function removeElementEvidence(i: number) {
+  elementEvidenceFiles.value = elementEvidenceFiles.value.filter((_, idx) => idx !== i);
+}
+/** 证据文件 → 待签名文件（资质证据属资格预审申请材料，第40条(三)可电子签名；url 由上传带回） */
+function signFileOf(f: ElementEvidence): CaSignFile {
+  return { url: f.url, fileName: f.name, fileId: f.fileId };
+}
+function onEvidenceSigned(rec: { digestHex?: string; signatureValue?: string; }): void {
+  if (rec.signatureValue) message.success('证据文件 CA 签名完成：' + (rec.digestHex?.slice(0, 12) ?? '') + '…');
+}
+function currentEvidenceIds(): string | undefined {
+  const ids = elementEvidenceFiles.value.map((f) => f.fileId);
+  return ids.length > 0 ? JSON.stringify(ids) : undefined;
+}
+
+async function submitElement() {
+  if (elementTab.value === 'staff' && !staffForm.personName?.trim()) {
+    message.warning('人员姓名不能为空');
+    return;
+  }
+  if (elementTab.value === 'performance' && !perfForm.projectName?.trim()) {
+    message.warning('项目名称不能为空');
+    return;
+  }
+  if (elementTab.value === 'asset' && !assetForm.name?.trim()) {
+    message.warning('资产/装备名称不能为空');
+    return;
+  }
+  elementSaving.value = true;
+  try {
+    if (elementTab.value === 'staff') {
+      await createQualificationStaff({ ...staffForm });
+    } else if (elementTab.value === 'performance') {
+      await createQualificationPerformance({ ...perfForm, evidenceFileIds: currentEvidenceIds() });
+    } else {
+      await createQualificationAsset({ ...assetForm, evidenceFileIds: currentEvidenceIds() });
+    }
+    message.success('要素已录入');
+    elementOpen.value = false;
+    refreshAfterWrite();
+  } catch {
+    // 静默：§0.4 错误结构由请求层呈现
+  } finally {
+    elementSaving.value = false;
+  }
+}
+
+/* ===== 达标核查执行（权限 bidding:qualification:review） ===== */
+const reviewType = ref('SELF');
+
+function confirmReview(row: QualificationApi.Qualification) {
+  Modal.confirm({
+    title: `执行达标核查：资质 #${row.id}`,
+    okText: '开始核查',
+    content: `按当前生效标准复算要素差额，核查类型 ${reviewType.value}；核查只返回主键，结论请在「详情 → 最近一次达标核查」回读。`,
+    async onOk() {
+      const id = await runComplianceReview({ qualId: row.id, reviewType: reviewType.value });
+      message.success(`核查已执行（主键 ${id}）`);
+      void loadReviews();
+    },
+  });
+}
+
+/* ===== 安许建档（权限 bidding:qualification:permit） ===== */
+const permitOpen = ref(false);
+const permitSaving = ref(false);
+const permitForm = reactive<QualificationApi.PermitCreateReq>({ entId: 0, permitNo: '' });
+
+function openPermit() {
+  Object.assign(permitForm, {
+    bindedCertId: undefined,
+    entId: query.entId ?? 0,
+    issueDate: undefined,
+    issuingAuthority: undefined,
+    legalPerson: undefined,
+    permitNo: '',
+    remark: undefined,
+    validTo: undefined,
+  });
+  certLinkOptions.value = [];
+  void loadCertLinkOptions('');
+  permitOpen.value = true;
+}
+
+async function submitPermit() {
+  if (!permitForm.entId || !permitForm.permitNo?.trim()) {
+    message.warning('企业主体与安全生产许可证编号不能为空');
+    return;
+  }
+  permitSaving.value = true;
+  try {
+    const id = await createSafetyPermit({ ...permitForm });
+    message.success(`安许建档成功（id=${id}）`);
+    permitOpen.value = false;
+    refreshAfterWrite();
+  } catch {
+    // 静默
+  } finally {
+    permitSaving.value = false;
+  }
+}
+
+/* ================= 契约 §2：页签 ③ 标准与要素 / ④ 安许证与预警 ================= */
+
+/** 写操作成功后：当前页签与顶部完备性卡片必须同时失效重拉（契约 §2 ①），避免列表已更新而卡片仍是旧结论 */
+function refreshAfterWrite() {
+  void load();
+  void loadApplies();
+  void loadCompleteness(true);
+  if (activeKey.value === 'standard') {
+    void loadStd();
+    void loadElements();
+    void loadReviews();
+  }
+  if (activeKey.value === 'safety') {
+    void loadPermits();
+    void loadAlerts();
+  }
+}
+
+/* ===== ③ 资质标准 ===== */
+const stdQuery = reactive<QualificationApi.StandardPageReq>({ onlyEffective: true, pageNo: 1, pageSize: 10 });
+const stdRows = ref<QualificationApi.Standard[]>([]);
+const stdTotal = ref(0);
+const stdLoading = ref(false);
+const stdLoaded = ref(false);
+const stdOptions = ref<null | QualificationApi.StandardOptions>(null);
+
+/** 序列 / 类别 / 等级 / 版本候选一律来自 /standard/options，前端不硬编码枚举（契约 §0.5） */
+const stdSerialOptions = computed(() =>
+  (stdOptions.value?.serials ?? []).map((s) => ({ label: s.qualSerial ?? '', value: s.qualSerial ?? '' })),
+);
+const stdCategoryOptions = computed(() => {
+  const hit = stdOptions.value?.serials?.find((s) => s.qualSerial === stdQuery.qualSerial);
+  return (hit?.categories ?? []).map((c) => ({ label: c.qualCategory ?? '', value: c.qualCategory ?? '' }));
+});
+const stdGradeOptions = computed(() => {
+  const hit = stdOptions.value?.serials?.find((s) => s.qualSerial === stdQuery.qualSerial);
+  const cat = hit?.categories?.find((c) => c.qualCategory === stdQuery.qualCategory);
+  return (cat?.grades ?? []).map((g) => ({ label: g, value: g }));
+});
+const stdVersionOptions = computed(() =>
+  (stdOptions.value?.stdVersions ?? []).map((v) => ({ label: v, value: v })),
+);
+
+async function loadStdOptions() {
+  if (stdOptions.value) return;
+  try {
+    stdOptions.value = await getStandardOptions();
+  } catch {
+    // 静默：选项拉不到时下拉为空，不影响列表
+  }
+}
+
+async function loadStd() {
+  stdLoading.value = true;
+  try {
+    const page = await getStandardPage({ ...stdQuery });
+    stdRows.value = page.list ?? [];
+    stdTotal.value = page.total ?? 0;
+    stdLoaded.value = true;
+  } catch {
+    // 静默
+  } finally {
+    stdLoading.value = false;
+  }
+}
+function onStdPage(p: number) {
+  stdQuery.pageNo = p;
+  void loadStd();
+}
+
+const stdColumns = [
+  { title: '标准版本', dataIndex: 'stdVersion', key: 'stdVersion', width: 130 },
+  { title: '序列', dataIndex: 'qualSerial', key: 'qualSerial', width: 150 },
+  { title: '类别', dataIndex: 'qualCategory', key: 'qualCategory', width: 130 },
+  { title: '等级', dataIndex: 'qualGrade', key: 'qualGrade', width: 110 },
+  { title: '人员要求', dataIndex: 'reqStaff', key: 'reqStaff', ellipsis: true },
+  { title: '业绩要求', dataIndex: 'reqPerformance', key: 'reqPerformance', ellipsis: true },
+  { title: '资产要求', dataIndex: 'reqAssets', key: 'reqAssets', ellipsis: true, width: 160 },
+  { title: '生效起', dataIndex: 'effectiveFrom', key: 'effectiveFrom', width: 115 },
+  { title: '生效止', dataIndex: 'effectiveTo', key: 'effectiveTo', width: 115 },
+  { title: '生效中', key: 'isEffective', width: 90 },
+  { title: '来源', dataIndex: 'sourceRef', key: 'sourceRef', width: 140, ellipsis: true },
+];
+
+const stdFormOpen = ref(false);
+const stdSaving = ref(false);
+const stdForm = reactive<QualificationApi.StandardCreateReq>({
+  qualCategory: '',
+  qualGrade: '',
+  qualSerial: '',
+  stdVersion: '',
+});
+
+function openStandard() {
+  Object.assign(stdForm, {
+    effectiveFrom: undefined,
+    effectiveTo: undefined,
+    qualCategory: '',
+    qualGrade: '',
+    qualSerial: '',
+    reqAssets: undefined,
+    reqEquipment: undefined,
+    reqPerformance: undefined,
+    reqStaff: undefined,
+    sourceRef: undefined,
+    stdVersion: '',
+  });
+  void loadStdOptions();
+  stdFormOpen.value = true;
+}
+
+async function submitStandard() {
+  if (!stdForm.qualSerial || !stdForm.qualCategory || !stdForm.qualGrade || !stdForm.stdVersion) {
+    message.warning('序列 / 类别 / 等级 / 标准版本不能为空');
+    return;
+  }
+  stdSaving.value = true;
+  try {
+    const id = await createQualificationStandard({ ...stdForm });
+    message.success(`标准已登记（id=${id}）`);
+    stdFormOpen.value = false;
+    stdOptions.value = null; // 新序列/等级可能新增候选，下次进页签重拉
+    refreshAfterWrite();
+  } catch {
+    // 静默
+  } finally {
+    stdSaving.value = false;
+  }
+}
+
+/* ===== ③ 要素台账（人员 / 业绩 / 资产装备） ===== */
+const elemQualId = ref<number | undefined>(undefined);
+const elemTabKey = ref('staff');
+const elemLoading = ref(false);
+const elemTotal = ref(0);
+const elemPage = reactive({ pageNo: 1, pageSize: 10 });
+const elemRows = ref<Array<QualificationApi.Asset | QualificationApi.Performance | QualificationApi.Staff>>([]);
+
+const STAFF_COLUMNS = [
+  { title: '姓名', dataIndex: 'personName', key: 'personName', width: 110 },
+  { title: '岗位角色', dataIndex: 'staffRole', key: 'staffRole', width: 170 },
+  { title: '专业', dataIndex: 'major', key: 'major', width: 130 },
+  { title: '职称等级', dataIndex: 'titleLevel', key: 'titleLevel', width: 110 },
+  { title: '注册号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '注册号' }),  dataIndex: 'regNo', key: 'regNo', width: 140 },
+  { title: '全职', key: 'isFullTime', width: 80 },
+  { title: '社保状态', dataIndex: 'socialSecurityStatus', key: 'socialSecurityStatus', width: 110 },
+  { title: '继续教育学时', key: 'eduHours', width: 130 },
+  { title: '注册有效期至', dataIndex: 'regValidTo', key: 'regValidTo', width: 130 },
+  { title: '绑定证照', key: 'bindedCertId', width: 100 },
+];
+const PERFORMANCE_COLUMNS = [
+  { title: '项目名称', dataIndex: 'projectName', key: 'projectName', width: 220 },
+  { title: '项目类型', dataIndex: 'projectType', key: 'projectType', width: 130 },
+  { title: '角色', dataIndex: 'role', key: 'role', width: 100 },
+  { title: '合同金额', dataIndex: 'contractAmount', key: 'contractAmount', width: 130 },
+  { title: '竣工日期', dataIndex: 'completionDate', key: 'completionDate', width: 120 },
+  { title: '质量结论', dataIndex: 'qualityResult', key: 'qualityResult', width: 120 },
+  { title: '业主', dataIndex: 'ownerName', key: 'ownerName', width: 160 },
+  { title: '平台可核验', key: 'isPlatformVerified', width: 110 },
+  { title: '规模指标', dataIndex: 'scaleMetrics', key: 'scaleMetrics', ellipsis: true },
+];
+const ASSET_COLUMNS = [
+  { title: '名称', dataIndex: 'name', key: 'name', width: 200 },
+  { title: '资产类型', dataIndex: 'assetType', key: 'assetType', width: 150 },
+  { title: '规格型号', dataIndex: 'spec', key: 'spec', width: 160 },
+  { title: '数量', dataIndex: 'quantity', key: 'quantity', width: 100 },
+  { title: '价值金额', dataIndex: 'valueAmount', key: 'valueAmount', width: 130 },
+  { title: '统计年份', dataIndex: 'statYear', key: 'statYear', width: 100 },
+  { title: '证据文件', dataIndex: 'evidenceFileIds', key: 'evidenceFileIds', ellipsis: true },
+];
+const elemColumns = computed(() => {
+  if (elemTabKey.value === 'performance') return PERFORMANCE_COLUMNS;
+  if (elemTabKey.value === 'asset') return ASSET_COLUMNS;
+  return STAFF_COLUMNS;
+});
+
+async function loadElements() {
+  elemLoading.value = true;
+  try {
+    const params: QualificationApi.ElementPageReq = { ...elemPage, entId: query.entId, qualId: elemQualId.value };
+    if (elemTabKey.value === 'performance') {
+      const page = await getQualificationPerformancePage(params);
+      elemRows.value = page.list ?? [];
+      elemTotal.value = page.total ?? 0;
+    } else if (elemTabKey.value === 'asset') {
+      const page = await getQualificationAssetPage(params);
+      elemRows.value = page.list ?? [];
+      elemTotal.value = page.total ?? 0;
+    } else {
+      const page = await getQualificationStaffPage(params);
+      elemRows.value = page.list ?? [];
+      elemTotal.value = page.total ?? 0;
+    }
+  } catch {
+    // 静默
+  } finally {
+    elemLoading.value = false;
+  }
+}
+function onElemPage(p: number) {
+  elemPage.pageNo = p;
+  void loadElements();
+}
+function switchElemTab() {
+  elemPage.pageNo = 1;
+  void loadElements();
+}
+
+/* ===== ③ 达标核查历史 ===== */
+const reviewQuery = reactive<QualificationApi.ReviewPageReq>({ pageNo: 1, pageSize: 10 });
+const reviewRows = ref<QualificationApi.Review[]>([]);
+const reviewTotal = ref(0);
+const reviewLoading = ref(false);
+/** 核查结论建议值（QualificationReviewResultEnum 未登记字典，命中字典时优先用字典） */
+const REVIEW_RESULT_FALLBACK: Record<string, { color: string; label: string }> = {
+  FAIL: { color: 'red', label: '不达标' },
+  PARTIAL: { color: 'orange', label: '部分达标' },
+  PASS: { color: 'green', label: '达标' },
+};
+/** 核查结论 → 标签（字典 risk_level/material_result 不覆盖核查结论，故用建议值兜底） */
+function reviewResultTag(v?: null | string) {
+  return REVIEW_RESULT_FALLBACK[v ?? ''] ?? { color: 'default', label: v ?? '—' };
+}
+
+const reviewResultOptions = computed(() =>
+  Object.keys(REVIEW_RESULT_FALLBACK).map((k) => ({ label: REVIEW_RESULT_FALLBACK[k]!.label, value: k })),
+);
+const reviewColumns = [
+  { title: '核查时间', key: 'reviewedAt', width: 165 },
+  { title: '资质', dataIndex: 'qualId', key: 'qualId', width: 100 },
+  { title: '标准版本', dataIndex: 'stdVersion', key: 'stdVersion', width: 130 },
+  { title: '核查类型', dataIndex: 'reviewType', key: 'reviewType', width: 120 },
+  { title: '结论', key: 'reviewResult', width: 110 },
+  { title: '核查人', dataIndex: 'reviewer', key: 'reviewer', width: 100 },
+  { title: '关联申报单', dataIndex: 'linkedApplyId', key: 'linkedApplyId', width: 110 },
+  { title: '差额明细', dataIndex: 'diffItems', key: 'diffItems', ellipsis: true },
+];
+
+async function loadReviews() {
+  reviewLoading.value = true;
+  try {
+    const page = await getQualificationReviewPage({ ...reviewQuery, entId: query.entId });
+    reviewRows.value = page.list ?? [];
+    reviewTotal.value = page.total ?? 0;
+  } catch {
+    // 静默
+  } finally {
+    reviewLoading.value = false;
+  }
+}
+function onReviewPage(p: number) {
+  reviewQuery.pageNo = p;
+  void loadReviews();
+}
+
+/* ===== ④ 安许证台账 ===== */
+const permitQuery = reactive<QualificationApi.PermitPageReq>({ pageNo: 1, pageSize: 10 });
+const permitRows = ref<QualificationApi.Permit[]>([]);
+const permitTotal = ref(0);
+const permitLoading = ref(false);
+const permitLoaded = ref(false);
+const permitColumns = [
+  { title: '许可证编号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '许可证编号' }),  dataIndex: 'permitNo', key: 'permitNo', width: 200 },
+  { title: '发证机关', dataIndex: 'issuingAuthority', key: 'issuingAuthority', width: 160 },
+  { title: '发证日期', dataIndex: 'issueDate', key: 'issueDate', width: 115 },
+  { title: '有效期至', dataIndex: 'validTo', key: 'validTo', width: 115 },
+  { title: '剩余天数', key: 'daysToExpire', width: 100 },
+  { title: '状态', key: 'permitStatus', width: 120 },
+  { title: '风险', key: 'riskFlag', width: 120 },
+  { title: '宽限至', key: 'graceExpireAt', width: 165 },
+  { title: '法定代表人', dataIndex: 'legalPerson', key: 'legalPerson', width: 120 },
+  { title: '操作', key: 'action', width: 110, fixed: 'right' as const },
+];
+
+async function loadPermits() {
+  permitLoading.value = true;
+  try {
+    const page = await getQualificationPermitPage({ ...permitQuery, entId: query.entId });
+    permitRows.value = page.list ?? [];
+    permitTotal.value = page.total ?? 0;
+    permitLoaded.value = true;
+  } catch {
+    // 静默
+  } finally {
+    permitLoading.value = false;
+  }
+}
+function onPermitPage(p: number) {
+  permitQuery.pageNo = p;
+  void loadPermits();
+}
+
+/** 状态流转候选：逐条对应 SafetyPermitStatusEnum.TRANSITIONS，避免提交必然被拒的目标 */
+const PERMIT_TRANSITIONS: Record<string, string[]> = {
+  EXPIRED: ['SUSPENDED', 'REVOKED'],
+  EXPIRING_SOON: ['VALID', 'SUSPENDED', 'REVOKED', 'EXPIRED'],
+  REVOKED: [],
+  SUSPENDED: ['VALID', 'EXPIRING_SOON', 'REVOKED'],
+  VALID: ['EXPIRING_SOON', 'SUSPENDED', 'REVOKED'],
+};
+const permitStatusOpen = ref(false);
+const permitStatusSaving = ref(false);
+const permitStatusRow = ref<null | QualificationApi.Permit>(null);
+const permitStatusForm = reactive<QualificationApi.PermitStatusChangeReq>({
+  permitId: 0,
+  targetStatus: '',
+  version: 0,
+});
+/** 安许状态码表（逐字取自 SafetyPermitStatusEnum） */
+const PERMIT_STATUS_OPTIONS = ['VALID', 'EXPIRING_SOON', 'EXPIRED', 'SUSPENDED', 'REVOKED'].map((s) => ({
+  label: s,
+  value: s,
+}));
+
+const permitTargetOptions = computed(() =>
+  (PERMIT_TRANSITIONS[permitStatusRow.value?.permitStatus ?? ''] ?? []).map((s) => ({ label: s, value: s })),
+);
+
+function openPermitStatus(row: QualificationApi.Permit) {
+  if (row.version === undefined) {
+    message.warning('该行缺少 version（乐观锁），请刷新后重试');
+    return;
+  }
+  permitStatusRow.value = row;
+  Object.assign(permitStatusForm, { permitId: row.id, reason: undefined, targetStatus: '', version: row.version });
+  permitStatusOpen.value = true;
+}
+
+async function submitPermitStatus() {
+  if (!permitStatusForm.targetStatus) {
+    message.warning('请选择目标状态');
+    return;
+  }
+  if (permitStatusForm.targetStatus === 'REVOKED' && !permitStatusForm.reason?.trim()) {
+    message.warning('吊销必须填写原因');
+    return;
+  }
+  permitStatusSaving.value = true;
+  try {
+    await changePermitStatus({ ...permitStatusForm });
+    message.success('安许状态已流转');
+    permitStatusOpen.value = false;
+    refreshAfterWrite();
+  } catch {
+    // 静默：非法迁移由后端返回 §0.4 错误
+  } finally {
+    permitStatusSaving.value = false;
+  }
+}
+
+/* ===== ④ 预警清单 ===== */
+const alertQuery = reactive<QualificationApi.AlertPageReq>({ pageNo: 1, pageSize: 10 });
+const alertRows = ref<QualificationApi.Alert[]>([]);
+const alertTotal = ref(0);
+const alertLoading = ref(false);
+const alertColumns = [
+  { title: '触发时间', key: 'triggeredAt', width: 165 },
+  { title: '来源', dataIndex: 'refType', key: 'refType', width: 130 },
+  { title: '来源对象', dataIndex: 'refName', key: 'refName', width: 220 },
+  { title: '预警类型', dataIndex: 'alertType', key: 'alertType', width: 140 },
+  { title: '级别', key: 'alertLevel', width: 100 },
+  { title: '内容', dataIndex: 'alertMessage', key: 'alertMessage', ellipsis: true },
+  { title: '通知', key: 'notify', width: 150 },
+  { title: '已处理', key: 'handled', width: 110 },
+  { title: '处理说明', dataIndex: 'handleNote', key: 'handleNote', width: 160, ellipsis: true },
+  { title: '操作', key: 'operation', width: 110, fixed: 'right' },
+];
+/* AttrFilter 的选项值只接受 string | number，而接口 handled 是 boolean，
+ * 故用一层计算属性做「文字选项(string) ↔ 查询入参(boolean)」的转换。 */
+const handledOptions = [
+  { label: '未处理', value: 'false' },
+  { label: '已处理', value: 'true' },
+];
+const handledFilter = computed<string>({
+  get: () => (alertQuery.handled === undefined ? '' : String(alertQuery.handled)),
+  set: (v) => {
+    alertQuery.handled = v === '' ? undefined : v === 'true';
+  },
+});
+
+async function loadAlerts() {
+  alertLoading.value = true;
+  try {
+    const page = await getQualificationAlertPage({ ...alertQuery, entId: query.entId });
+    alertRows.value = page.list ?? [];
+    alertTotal.value = page.total ?? 0;
+  } catch {
+    // 静默
+  } finally {
+    alertLoading.value = false;
+  }
+}
+function onAlertPage(p: number) {
+  alertQuery.pageNo = p;
+  void loadAlerts();
+}
+
+/* ===== 预警处理（销账）=====
+ * 权限：bidding:qualification:alert-handle（后端变更通知-给前端.md §15：2026-09-26 拍板拆分，
+ *   与"执行预警扫描"的 alert-run 分离——处理预警 ≠ 补跑扫描；后端 handleAlert 的 @PreAuthorize 已切换，
+ *   菜单 60005215「预警处理」已登记）。扫描按钮保持 alert-run 不变。
+ * CAS：version 取自清单行，后端不一致即拒绝，说明已被他人处理；失败后**只重拉清单**，
+ *   不自动重试（重试会覆盖他人处理备注）。 */
+const alertHandleOpen = ref(false);
+const alertHandleRow = ref<null | QualificationApi.Alert>(null);
+const alertHandleNote = ref('');
+const alertHandleSaving = ref(false);
+
+function openAlertHandle(row: QualificationApi.Alert) {
+  alertHandleRow.value = row;
+  alertHandleNote.value = '';
+  alertHandleOpen.value = true;
+}
+
+async function submitAlertHandle() {
+  const row = alertHandleRow.value;
+  if (!row) return;
+  // 版本号是 CAS 的前置条件：拿不到就**明确拒绝**，绝不发一个假版本（要么恒冲突、要么绕过并发控制）
+  const version = row.version;
+  if (version === undefined || version === null) {
+    message.warning('该预警未下发版本号，无法处理：请刷新清单，仍无版本号请联系后端确认 version 是否下发');
+    return;
+  }
+  alertHandleSaving.value = true;
+  try {
+    await handleQualificationAlert({
+      alertId: row.id,
+      handleNote: alertHandleNote.value.trim() || undefined,
+      version,
+    });
+    message.success('预警已标记为处理');
+    alertHandleOpen.value = false;
+    await loadAlerts();
+    refreshAfterWrite();
+  } catch {
+    // 后端错误由请求层 toast（含 CAS 冲突的提示）；此处重拉清单让用户看到"被别人处理过"的真实状态
+    alertHandleOpen.value = false;
+    await loadAlerts();
+  } finally {
+    alertHandleSaving.value = false;
+  }
+}
+
+/* ===== 页签懒加载 + 主体切换全页重拉（契约 §2：页签切换不重拉已加载数据；主体切换全页重拉） ===== */
+const noQueryPerm = computed(() => !can('bidding:qualification:query'));
+
+watch(activeKey, (k) => {
+  if (k === 'standard') {
+    void loadStdOptions();
+    if (!stdLoaded.value) {
+      void loadStd();
+      void loadElements();
+      void loadReviews();
+    }
+  }
+  if (k === 'safety' && !permitLoaded.value) {
+    void loadPermits();
+    void loadAlerts();
+  }
+});
+
+watch(
+  () => query.entId,
+  () => {
+    elemQualId.value = undefined;
+    stdLoaded.value = false;
+    permitLoaded.value = false;
+    applyQuery.entId = query.entId;
+    refreshAfterWrite();
+  },
+);
+
+/* ===== 本企业：普通租户只能看自己，无需也不应"选企业" =====
+   口径依据：07-主体域前端交付-业务口径说明（企业主体=法人/其他组织，uscc 是唯一键）；
+   主体档案 GET /bidding/subject/profile/get 返回本租户档案（含 id/subjectName/uscc），
+   故前端直接取本企业（投标人档案优先，回退招标人），不提供企业选择器；
+   平台跨租户查看走审查任务中心（任务条）或按企业名称搜索，不经本页。 */
+const subjectLoading = ref(false);
+const currentSubject = ref<null | { id: number; label: string }>(null);
+
+/** 自动带出本企业：台账筛选 / 材料完备性 / 新建表单统一用同一主体，用户无感 */
+async function loadCurrentSubject(): Promise<void> {
+  subjectLoading.value = true;
+  try {
+    // 契约《主体档案合并一租户一档》：投标/招标共用同一份企业档案，单次无类型调用
+    const profile = await fetchSubjectProfile().catch(() => null);
+    if (profile?.id !== undefined && profile?.id !== null && profile.subjectName) {
+      const label = profile.uscc ? profile.subjectName + '（' + profile.uscc + '）' : profile.subjectName;
+      currentSubject.value = { id: Number(profile.id), label };
+      if (!query.entId) {
+        query.entId = Number(profile.id);
+        completenessQuery.entId = Number(profile.id);
+      }
+      void loadQualOptions(); // 延续申报页签的资质下拉：候选取当前主体资质台账
+    }
+  } finally {
+    subjectLoading.value = false;
+  }
+}
+
+onMounted(async () => {
+  // 资质接口的 entId 是必填项：先完成本租户主体自动带出，再发首屏查询，避免空 entId 请求触发校验错误。
+  await loadCurrentSubject();
+  if (!query.entId) {
+    return;
+  }
+  void load();
+  void loadApplies();
+  void loadStats();
+});
+
+/* ================= 平台审查中心入口 =================
+   审查模型（2026-09-20 重构）：企业录入证照/资质后自动触发审查任务，由超管公司在
+   「平台审查中心」（/certificate/review-center，菜单 60005600）统一筛选与审查；
+   租户在共享界面只读查看本企业任务与结果。本页不再提供逐条审查队列。
+   契约：docs/电子证照前前端契约/后端变更请求-平台审查任务中心-2026-09-20.md */
+function goReviewCenter(): void {
+  void router.push('/certificate/review-center');
+}
+
+/* ================= 2026-09-18 原型改造新增（看板 / 批量导入导出 / 编辑 / 所属企业） =================
+ * 契约出处：docs/电子证照前前端契约/后端接口契约-资质证书五页改造-2026-09-18.md
+ * 以下能力后端尚未实现，前端按契约先行接入；未就绪时请求层提示、页面保留空态（不白屏）。 */
+
+/** 字典由「系统字典」模块维护，本模块只读消费；此按钮仅做跳转，不改字典 */
+const DICT_MANAGE_PATH = '/system/dict';
+function goDict(): void {
+  void router.push(DICT_MANAGE_PATH);
+}
+
+/* ===== 页头操作收敛（2026-09-28）：主操作留在明面，低频动作走「更多」 ===== */
+const refreshing = ref(false);
+/** 统一刷新：台账 / 申报 / 统计 / 完备性一次拉齐，避免用户逐个页签点刷新 */
+async function refreshAll(): Promise<void> {
+  refreshing.value = true;
+  try {
+    await Promise.all([
+      load(),
+      loadApplies(),
+      loadStats(),
+      completeness.value ? loadCompleteness(true) : Promise.resolve(),
+    ]);
+  } finally {
+    refreshing.value = false;
+  }
+}
+
+/** 「更多」菜单分发：菜单项与按钮共用同一批函数，不复制逻辑 */
+function onMoreAction(info: { key: number | string }): void {
+  switch (info.key) {
+    case 'completeness': {
+      void loadCompleteness();
+      break;
+    }
+    case 'dict': {
+      goDict();
+      break;
+    }
+    /* import 由外层 a-upload 直接触发 onPickImportFile，此处不处理 */
+    case 'export': {
+      void doExport();
+      break;
+    }
+    case 'permit': {
+      openPermit();
+      break;
+    }
+    case 'review': {
+      goReviewCenter();
+      break;
+    }
+    case 'scan': {
+      void doScan();
+      break;
+    }
+    default: {
+      break;
+    }
+  }
+}
+
+/** 看板统计（GET /bidding/qualification/stats）：后端未就绪时为 null，卡片显示「—」而非猜测 */
+const stats = ref<null | QualificationApi.Stats>(null);
+const statsLoading = ref(false);
+async function loadStats(): Promise<void> {
+  statsLoading.value = true;
+  try {
+    stats.value = await getQualificationStats({ entId: query.entId });
+  } catch {
+    stats.value = null;
+  } finally {
+    statsLoading.value = false;
+  }
+}
+
+/** 点卡片 → 写入对应筛选后重查（保证"卡片数字 = 点击后列表条数"） */
+const activeStat = ref<string | undefined>(undefined);
+function applyStat(kind: string): void {
+  activeStat.value = kind;
+  query.pageNo = 1;
+  query.expiringInDays = undefined;
+  if (kind === 'ALL') {
+    query.qualStatus = undefined;
+  } else if (kind === 'VALID') {
+    query.qualStatus = 'VALID';
+  } else if (kind === 'EXPIRING') {
+    query.qualStatus = 'EXPIRING_SOON';
+  } else if (kind === 'EXPIRED') {
+    query.qualStatus = 'EXPIRED';
+  }
+  void load();
+}
+
+/** 批量导入：先经 /bidding/file/upload 取 fileId，再取行级回执 */
+const importing = ref(false);
+async function onPickImportFile(file: File): Promise<boolean> {
+  importing.value = true;
+  try {
+    const up = await uploadBiddingFile(file, 'bidding/qualification');
+    if (!up?.fileId) {
+      message.warning('文件上传失败（未取得文件编号），请重试');
+      return false;
+    }
+    const res = await importQualifications({ fileId: up.fileId });
+    const ok = res?.successCount ?? 0;
+    const fail = res?.failCount ?? 0;
+    if (fail > 0) {
+      Modal.info({
+        title: `导入完成：成功 ${ok} 行，失败 ${fail} 行`,
+        okText: '知道了',
+        content: () =>
+          h(
+            'div',
+            { style: 'max-height:320px;overflow:auto' },
+            (res?.failures ?? [])
+              .slice(0, 50)
+              .map((f) => h('div', `第 ${f.rowNum ?? '?'} 行：${f.message ?? '未知原因'}`)),
+          ),
+      });
+    } else {
+      message.success(`导入完成，成功 ${ok} 行`);
+    }
+    refreshAfterWrite();
+    void loadStats();
+  } catch {
+    // 模板不符 / 后端未实现等，错误由请求层提示
+  } finally {
+    importing.value = false;
+  }
+  return false;
+}
+
+/** 批量导出：按当前筛选导出（文件流） */
+const exporting = ref(false);
+async function doExport(): Promise<void> {
+  exporting.value = true;
+  try {
+    await exportQualifications({ ...query });
+    message.success('导出已开始，请留意浏览器下载');
+  } catch {
+    // 错误由请求层提示
+  } finally {
+    exporting.value = false;
+  }
+}
+
+/** 资质主档编辑——补原有缺口（后端此前只有 create、无 update，原型"编辑"按钮无从落地）。
+ *  乐观锁：version 缺失时明确拒绝，不发假版本。 */
+const editOpen = ref(false);
+const editSaving = ref(false);
+const editForm = reactive<QualificationApi.SaveReq>({
+  entId: 0,
+  qualSerial: 'CONSTRUCTION',
+  qualCategory: '',
+  qualGrade: '',
+  certNo: '',
+});
+function openEdit(row: QualificationApi.Qualification) {
+  if (row.version === undefined) {
+    message.warning('该行缺少 version（乐观锁），请刷新后重试');
+    return;
+  }
+  Object.assign(editForm, {
+    id: row.id,
+    version: row.version,
+    entId: row.entId,
+    qualSerial: row.qualSerial,
+    qualCategory: row.qualCategory,
+    qualGrade: row.qualGrade,
+    certNo: row.certNo,
+    issuingAuthority: row.issuingAuthority,
+    issueDate: row.issueDate ?? undefined,
+    validTo: row.validTo ?? undefined,
+    remark: row.remark,
+  });
+  certLinkOptions.value = [];
+  void loadCertLinkOptions('');
+  editOpen.value = true;
+}
+async function submitEdit() {
+  if (!editForm.qualSerial || !editForm.qualCategory || !editForm.qualGrade || !editForm.certNo) {
+    message.warning('序列 / 类别 / 等级 / 证书编号不能为空');
+    return;
+  }
+  editSaving.value = true;
+  try {
+    await updateQualification({ ...editForm });
+    message.success('已保存');
+    editOpen.value = false;
+    refreshAfterWrite();
+  } catch {
+    // 乐观锁冲突等由请求层提示
+  } finally {
+    editSaving.value = false;
+  }
+}
+</script>
+
+<template>
+  <!-- 契约 §1.1 ①：页面本身无 query 权限时显示无权限提示，而不是空白页 -->
+  <div v-if="noQueryPerm" class="ct-page">
+    <a-result
+      status="403"
+      title="无权限访问"
+      sub-title="当前账号缺少 bidding:qualification:query；请联系管理员在「电子资质」菜单下授权。"
+    />
+  </div>
+  <div v-else class="ct-page">
+    <div class="ct-head">
+      <div>
+        <div class="ct-title">企业资质</div>
+        <div class="ct-sub">资质台账 · 延续申报审批 · 标准与要素台账 · 安许证与预警 · 完备性自查</div>
+      </div>
+      <div class="ct-actions">
+        <span class="ct-id" style="margin-right: 4px">{{ currentSubject?.label || (subjectLoading ? '加载中…' : '未取到主体档案') }}</span>
+        <!-- 高频两件事留在明面：建档 + 刷新；其余低频动作收进「更多」，避免一排按钮互相抢注意力 -->
+        <a-button v-if="can('bidding:qualification:create')" type="primary" @click="onCreate">企业资质建档</a-button>
+        <a-button :loading="refreshing" @click="refreshAll">刷新</a-button>
+        <a-dropdown>
+          <a-button>
+            更多
+            <IconifyIcon icon="lucide:chevron-down" class="ml-1 inline-block align-middle" />
+          </a-button>
+          <template #overlay>
+            <a-menu @click="onMoreAction">
+              <a-menu-item v-if="can('bidding:qualification:material:query')" key="completeness">
+                材料完备性自查
+              </a-menu-item>
+              <!-- 导入需要文件选择器：直接把 a-upload 包在菜单项外层，保留原生选择文件行为 -->
+              <a-upload
+                v-if="can('bidding:qualification:import')"
+                :before-upload="onPickImportFile"
+                :disabled="importing"
+                :show-upload-list="false"
+              >
+                <a-menu-item key="import">
+                  批量导入{{ importing ? '（上传中…）' : '' }}
+                </a-menu-item>
+              </a-upload>
+              <a-menu-item v-if="can('bidding:qualification:export')" key="export">
+                批量导出{{ exporting ? '（导出中…）' : '' }}
+              </a-menu-item>
+              <a-menu-item v-if="can('bidding:qualification:permit')" key="permit">安许建档</a-menu-item>
+              <a-menu-item v-if="can('bidding:qualification:alert-run')" key="scan">执行预警扫描</a-menu-item>
+              <a-menu-item v-if="can('bidding:review:approve') || can('bidding:review:reject')" key="review">
+                平台审查中心
+              </a-menu-item>
+              <a-menu-divider />
+              <a-menu-item key="dict">配置字典</a-menu-item>
+            </a-menu>
+          </template>
+        </a-dropdown>
+        <!-- 原本铺满屏的「字典口径」长说明收进这里：需要时点开看，不需要时不占版面 -->
+        <a-popover title="字典与口径说明" placement="bottomRight" :overlay-style="{ maxWidth: '560px' }">
+          <a-button type="text">
+            <IconifyIcon icon="lucide:info" class="mr-1 inline-block align-middle" />
+            口径
+          </a-button>
+          <template #content>
+            <div class="qual-note">
+              <p>
+                已注册字典（中文名 + 标签色）：<code>qual_status</code> 台账状态、
+                <code>qual_apply_type</code> / <code>qual_apply_status</code> 申报类型与状态、
+                <code>qual_serial</code> 序列、<code>material_result</code> /
+                <code>material_status</code> / <code>material_category</code>、
+                <code>safety_permit_status</code>、<code>safety_risk_flag</code>、<code>risk_level</code>。
+              </p>
+              <p>
+                <code>qual_grade</code> <strong>不是字典</strong>：值域由现行标准库数据决定
+                （<code>/bidding/qualification/standard/options</code>），故原样展示；登记成字典会制造第二套编码。
+                本页一律字典优先、缺字典回落 code。
+              </p>
+              <p class="qual-note-weak">
+                仍缺：资质主档状态流转（Service 有 changeStatus，Controller 未暴露）、要素记录的编辑/删除（仅 create + page）。
+              </p>
+            </div>
+          </template>
+        </a-popover>
+      </div>
+    </div>
+
+    <!-- 顶部常驻：材料完备性结论卡片（契约 §2：不随页签隐藏；写操作成功后与页签同时失效重拉） -->
+    <div class="ct-panel mb-3">
+      <div class="ct-panel-t">材料完备性结论</div>
+      <div class="ct-panel-b">
+        <a-space class="mb-2" wrap>
+          <a-date-picker
+            v-model:value="completenessQuery.asOf"
+            placeholder="核验基准日（可空=今天）"
+            value-format="YYYY-MM-DD"
+            style="width: 200px"
+          />
+          <a-button
+            v-if="can('bidding:qualification:material:query')"
+            type="primary"
+            :loading="completenessLoading"
+            @click="loadCompleteness()"
+          >
+            自查
+          </a-button>
+          <span class="ct-panel-meta">可填未来日期，预演「投标截止日是否仍有效」；逐项明细见页签 ⑤</span>
+        </a-space>
+        <a-spin :spinning="completenessLoading">
+          <a-alert v-if="completenessError" type="error" show-icon :message="completenessError" />
+          <template v-else-if="completeness">
+            <a-space wrap>
+              <a-tag :color="resultTag.color">结论：{{ resultTag.label }}</a-tag>
+              <a-tag>必备材料 {{ completeness.readyCount }} / {{ completeness.requiredCount }}</a-tag>
+              <a-tag :color="(completeness.missingItems?.length ?? 0) > 0 ? 'red' : 'default'">
+                缺失/过期 {{ completeness.missingItems?.length ?? 0 }} 项
+              </a-tag>
+              <a-tag :color="(completeness.expiringItems?.length ?? 0) > 0 ? 'orange' : 'default'">
+                临近到期 {{ completeness.expiringItems?.length ?? 0 }} 项
+              </a-tag>
+            </a-space>
+            <!-- 2026-09-28 用户口径："结论直接在下方给列表，明显显示哪些有哪些没有" ——
+                 不再要求用户切到页签⑤才看得到逐项明细；两处共用 MaterialItemsTable，口径同源不漂移。 -->
+            <MaterialItemsTable
+              class="mt-3"
+              :data="completeness"
+              :scroll-x="1250"
+              empty-text="无逐项明细：自查未返回逐项结果，可重新执行「自查」"
+            />
+          </template>
+          <div v-else class="ct-empty">企业主体由「主体档案」自动带出；点「自查」按身份类 / 资质类 / 实力类逐项核对齐备情况</div>
+        </a-spin>
+      </div>
+    </div>
+
+    <a-tabs v-model:active-key="activeKey">
+      <a-tab-pane key="ledger" tab="① 资质台账">
+        <!-- 数据看板：全库统计（GET /bidding/qualification/stats），点卡片联动下方表格筛选 -->
+        <div class="ct-kpis" :class="{ 'is-loading': statsLoading }">
+          <div class="ct-kpi k-blue" :class="{ 'is-active': activeStat === 'ALL' }" @click="applyStat('ALL')">
+            <div class="k-label">资质总数</div>
+            <div class="k-num">{{ stats?.total ?? '—' }}</div>
+            <div class="k-note">全库企业资质</div>
+          </div>
+          <div class="ct-kpi k-green" :class="{ 'is-active': activeStat === 'VALID' }" @click="applyStat('VALID')">
+            <div class="k-label">正常</div>
+            <div class="k-num">{{ stats?.valid ?? '—' }}</div>
+            <div class="k-note">有效（VALID）</div>
+          </div>
+          <div class="ct-kpi k-orange" :class="{ 'is-active': activeStat === 'EXPIRING' }" @click="applyStat('EXPIRING')">
+            <div class="k-label">临期预警</div>
+            <div class="k-num">{{ stats?.expiring ?? '—' }}</div>
+            <div class="k-note">即将到期 / 延续中</div>
+          </div>
+          <div class="ct-kpi k-red" :class="{ 'is-active': activeStat === 'EXPIRED' }" @click="applyStat('EXPIRED')">
+            <div class="k-label">异常 / 过期</div>
+            <div class="k-num">{{ stats?.expired ?? '—' }}</div>
+            <div class="k-note">过期 / 吊销 / 限制</div>
+          </div>
+          <div class="ct-kpi">
+            <div class="k-label">未关联人员</div>
+            <div class="k-num">{{ stats?.unlinkedStaff ?? '—' }}</div>
+            <div class="k-note">无绑定人员配置（口径待后端确认）</div>
+          </div>
+        </div>
+
+        <div class="ct-panel">
+          <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
+            <span class="ct-panel-meta">主体在页首选择 →</span>
+            <AttrFilter label="关键字"><a-input v-model:value="query.keyword" placeholder="关键字（证书编号/机关）" style="width: 200px" allow-clear @press-enter="load" /></AttrFilter>
+            <AttrFilter v-model="query.qualSerial" label="资质序列" :options="QualificationApi.QUAL_SERIAL_OPTIONS" @change="load" />
+            <AttrFilter v-model="query.qualStatus" label="台账状态" :options="dictOptions('qual_status')" @change="load" />
+            <AttrFilter label="有效期至（从）">
+              <a-date-picker v-model:value="query.validToFrom" value-format="YYYY-MM-DD" placeholder="起始日" style="width: 150px" @change="load" />
+            </AttrFilter>
+            <AttrFilter label="有效期至（到）">
+              <a-date-picker v-model:value="query.validToTo" value-format="YYYY-MM-DD" placeholder="截止日" style="width: 150px" @change="load" />
+            </AttrFilter>
+            <AttrFilter label="到期窗口"><a-input-number v-model:value="query.expiringInDays" :min="1" placeholder="N 天内到期" style="width: 140px" /></AttrFilter>
+            <AttrFilter v-model="reviewType" label="核查类型" :options="QualificationApi.REVIEW_TYPE_OPTIONS" />
+            <div class="mt-2 flex flex-wrap items-center gap-2"><a-button type="primary" @click="load">查询</a-button> <a-button @click="resetQuery">重置</a-button></div>
+          </div>
+          <div class="ct-panel-b">
+            <a-table
+              class="ct-table"
+              :columns="ledgerColumns"
+              :data-source="rows"
+              :loading="loading"
+              :pagination="{
+                current: query.pageNo,
+                pageSize: query.pageSize,
+                total,
+                showSizeChanger: true,
+                showTotal: (t: number) => `共 ${t} 条`,
+              }"
+              :scroll="{ x: 2100 }"
+              row-key="id"
+              size="middle"
+              @change="(p: any) => { query.pageNo = p.current; query.pageSize = p.pageSize; void load(); }"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'qualName'">
+                  <div style="font-weight: 700">{{ textOf('qual_serial', record.qualSerial) }} · {{ record.qualCategory }}</div>
+                  <div class="ct-panel-meta">{{ record.qualGrade }}</div>
+                </template>
+                <template v-else-if="column.key === 'companyName'">
+                  {{ record.companyName || '—' }}
+                </template>
+                <template v-else-if="column.key === 'qualSerial'">{{ textOf('qual_serial', record.qualSerial) }}</template>
+                <template v-else-if="column.key === 'qualStatus'">
+                  <a-tag :color="tagOf('qual_status', record.qualStatus).color">
+                    {{ tagOf('qual_status', record.qualStatus).label }}
+                  </a-tag>
+                </template>
+                <template v-else-if="column.key === 'validTo'">{{ record.validTo ? fmtDate(record.validTo) : '长期' }}</template>
+                <template v-else-if="column.key === 'daysToExpire'">
+                  <a-tag v-if="record.daysToExpire !== null && record.daysToExpire !== undefined" :color="daysColor(record.daysToExpire)">
+                    {{ record.daysToExpire }} 天
+                  </a-tag>
+                  <span v-else>—</span>
+                </template>
+                <template v-else-if="column.key === 'staffCount'">
+                  <template v-if="record.staffCount !== null && record.staffCount !== undefined">
+                    <a-tag :color="record.staffCount > 0 ? 'green' : 'orange'">{{ record.staffCount }} 人</a-tag>
+                    <div v-if="record.staffNames" class="ct-panel-meta">{{ record.staffNames }}</div>
+                  </template>
+                  <span v-else class="ct-panel-meta">—</span>
+                </template>
+                <template v-else-if="column.key === 'hasPendingApply'">
+                  <a-tag v-if="record.hasPendingApply" color="processing">在途</a-tag>
+                  <span v-else>—</span>
+                </template>
+                <template v-else-if="column.key === 'action'">
+                  <!-- 用户第 3 条（操作项挤在一起）：只留高频的「查看 / 文件」在明面，
+                       其余动作（编辑 / 延续申报 / 要素录入 / 达标核查）收进「更多」下拉承载。 -->
+                  <a-space size="small">
+                    <a @click="goDetail(record)">查看</a>
+                    <a @click="goDetail(record, 'files')">文件</a>
+                    <a-dropdown>
+                      <a @click.prevent>
+                        更多
+                        <IconifyIcon icon="lucide:chevron-down" class="inline-block align-middle" />
+                      </a>
+                      <template #overlay>
+                        <a-menu @click="({ key }: { key: number | string }) => onRowAction(key, record)">
+                          <!-- 判权码必须与后端一致：PUT /bidding/qualification/update 的 @PreAuthorize 用的是
+                               bidding:qualification:create（不是 :update）。原先写 :update 导致该码既没在 system_menu
+                               注册、后端也不校验 → 「编辑」对普通角色**永远不可见**（由 sql/tools/check-permission-coverage.js 报出）。 -->
+                          <a-menu-item v-if="can('bidding:qualification:create')" key="edit">编辑</a-menu-item>
+                          <a-menu-item v-if="can('bidding:qualification:renew')" key="renew">延续申报</a-menu-item>
+                          <a-menu-item v-if="can('bidding:qualification:element')" key="element">要素录入</a-menu-item>
+                          <a-menu-item v-if="can('bidding:qualification:review')" key="review">达标核查</a-menu-item>
+                        </a-menu>
+                      </template>
+                    </a-dropdown>
+                  </a-space>
+                </template>
+              </template>
+              <template #emptyText><div class="ct-empty">暂无资质记录：先在页首确认/选择企业主体（由主体档案自动带出），或点右上「资质建档」录入</div></template>
+            </a-table>
+          </div>
+        </div>
+      </a-tab-pane>
+
+      <a-tab-pane key="apply" tab="② 延续申报台账">
+        <div class="ct-panel">
+          <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
+            <span class="ct-panel-meta">主体在页首选择 →</span>
+            <AttrFilter label="资质"><a-select v-model:value="applyQuery.qualId" :loading="qualOptionsLoading" :options="qualOptions" show-search option-filter-prop="label" allow-clear placeholder="选择资质（下拉取自当前主体资质台账）" style="width: 300px" /></AttrFilter>
+            <AttrFilter v-model="applyQuery.applyType" label="申报类型" :options="APPLY_TYPE_OPTIONS" @change="loadApplies" />
+            <AttrFilter v-model="applyQuery.status" label="申报状态" :options="APPLY_STATUS_OPTIONS" @change="loadApplies" />
+            <div class="mt-2 flex flex-wrap items-center gap-2"><a-button type="primary" @click="loadApplies">查询</a-button></div>
+          </div>
+          <div class="ct-panel-b">
+            <a-table
+              class="ct-table"
+              :columns="applyColumns"
+              :data-source="applyRows"
+              :loading="applyLoading"
+              :pagination="{
+                current: applyQuery.pageNo,
+                pageSize: applyQuery.pageSize,
+                total: applyTotal,
+                showSizeChanger: true,
+                showTotal: (t: number) => `共 ${t} 条`,
+              }"
+              :scroll="{ x: 1650 }"
+              row-key="id"
+              size="middle"
+              @change="(p: any) => { applyQuery.pageNo = p.current; applyQuery.pageSize = p.pageSize; void loadApplies(); }"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'applyType'">{{ textOf('qual_apply_type', record.applyType) }}</template>
+                <template v-else-if="column.key === 'status'">
+                  <a-tag :color="tagOf('qual_apply_status', record.status).color">
+                    {{ tagOf('qual_apply_status', record.status).label }}
+                  </a-tag>
+                </template>
+                <template v-else-if="column.key === 'submitDate'">{{ record.submitDate ? fmtDate(record.submitDate) : '—' }}</template>
+                <template v-else-if="column.key === 'dueDate'">{{ record.dueDate ? fmtDate(record.dueDate) : '—' }}</template>
+                <template v-else-if="column.key === 'newValidTo'">
+                  {{ record.newValidTo ? fmtDate(record.newValidTo) : '—' }}
+                </template>
+                <template v-else-if="column.key === 'action'">
+                  <a-space v-if="auditable(record)" size="small">
+                    <a v-if="can('bidding:qualification:approve')" @click="openApprove(record)">审批通过</a>
+                    <a v-if="can('bidding:qualification:reject')" class="ct-danger" @click="confirmReject(record)">退回</a>
+                  </a-space>
+                  <span v-else class="ct-panel-meta">已终态</span>
+                </template>
+              </template>
+              <template #emptyText><div class="ct-empty">无申报单（在「资质台账」对某条资质点「延续申报」即可发起）</div></template>
+            </a-table>
+          </div>
+        </div>
+      </a-tab-pane>
+
+      <a-tab-pane key="standard" tab="③ 标准与要素">
+        <div class="ct-panel">
+          <div class="ct-panel-t">资质标准（序列 / 类别 / 等级 → 人员·业绩·资产要求）</div>
+          <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
+            <AttrFilter v-model="stdQuery.qualSerial" label="序列" :options="stdSerialOptions" @change="stdQuery.qualCategory = undefined; stdQuery.qualGrade = undefined" />
+            <AttrFilter v-model="stdQuery.qualCategory" label="类别" :options="stdCategoryOptions" @change="stdQuery.qualGrade = undefined" />
+            <AttrFilter v-model="stdQuery.qualGrade" label="等级" :options="stdGradeOptions" />
+            <AttrFilter v-model="stdQuery.stdVersion" label="标准版本" :options="stdVersionOptions" />
+            <a-checkbox v-model:checked="stdQuery.onlyEffective">仅生效中</a-checkbox>
+            <a-button v-if="can('bidding:qualification:standard')" @click="openStandard">标准登记</a-button>
+            <span class="ct-panel-meta">候选来自 /standard/options，不硬编码枚举</span>
+            <div class="mt-2 flex flex-wrap items-center gap-2"><a-button type="primary" @click="loadStd">查询</a-button></div>
+          </div>
+          <div class="ct-panel-b">
+            <a-table
+              class="ct-table"
+              :columns="stdColumns"
+              :data-source="stdRows"
+              :loading="stdLoading"
+              :pagination="{
+                current: stdQuery.pageNo,
+                pageSize: stdQuery.pageSize,
+                total: stdTotal,
+                showSizeChanger: false,
+                onChange: onStdPage,
+              }"
+              row-key="id"
+              size="small"
+              :scroll="{ x: 1500 }"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'isEffective'">
+                  <a-tag :color="record.isEffective ? 'green' : 'default'">
+                    {{ record.isEffective ? '生效中' : '已失效' }}
+                  </a-tag>
+                </template>
+                <template v-else-if="column.key === 'effectiveTo'">{{ record.effectiveTo || '长期' }}</template>
+              </template>
+              <template #emptyText><div class="ct-empty">按序列/类别/等级筛选，或先登记一条标准</div></template>
+            </a-table>
+          </div>
+        </div>
+
+        <div class="ct-panel mt-3">
+          <div class="ct-panel-t">要素台账（人员配置 / 工程业绩 / 资产技术装备）</div>
+          <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
+            <AttrFilter label="资质（空=按主体查全部）">
+<a-select
+              v-model:value="elemQualId"
+              :loading="qualOptionsLoading"
+              :options="qualOptions"
+              show-search
+              option-filter-prop="label"
+              allow-clear
+              placeholder="选择资质（下拉取自当前主体资质台账）"
+              style="width: 320px"
+/>
+</AttrFilter>
+            <a-button type="primary" @click="loadElements">查询</a-button>
+            <a-radio-group v-model:value="elemTabKey" button-style="solid" @change="switchElemTab">
+              <a-radio-button value="staff">人员配置</a-radio-button>
+              <a-radio-button value="performance">工程业绩</a-radio-button>
+              <a-radio-button value="asset">资产/技术装备</a-radio-button>
+            </a-radio-group>
+            <span class="ct-panel-meta">录入入口在「① 资质台账」行内「要素录入」</span>
+          </div>
+          <div class="ct-panel-b">
+            <a-table
+              class="ct-table"
+              :columns="elemColumns"
+              :data-source="elemRows"
+              :loading="elemLoading"
+              :pagination="{
+                current: elemPage.pageNo,
+                pageSize: elemPage.pageSize,
+                total: elemTotal,
+                showSizeChanger: false,
+                onChange: onElemPage,
+              }"
+              row-key="id"
+              size="small"
+              :scroll="{ x: 1400 }"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'isFullTime'">
+                  <a-tag :color="record.isFullTime ? 'green' : 'default'">
+                    {{ record.isFullTime ? '全职' : '非全职' }}
+                  </a-tag>
+                </template>
+                <template v-else-if="column.key === 'isPlatformVerified'">
+                  <a-tag :color="record.isPlatformVerified ? 'green' : 'default'">
+                    {{ record.isPlatformVerified ? '可核验' : '未核验' }}
+                  </a-tag>
+                </template>
+                <template v-else-if="column.key === 'eduHours'">
+                  {{ record.eduHours ?? '—' }} / {{ record.eduHoursRequired ?? '—' }}
+                </template>
+                <template v-else-if="column.key === 'bindedCertId'">{{ record.bindedCertId ?? '—' }}</template>
+              </template>
+              <template #emptyText><div class="ct-empty">该主体/资质下暂无要素记录</div></template>
+            </a-table>
+          </div>
+        </div>
+
+        <div class="ct-panel mt-3">
+          <div class="ct-panel-t">达标核查历史</div>
+          <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
+            <AttrFilter label="资质（空=全部）">
+<a-select
+              v-model:value="reviewQuery.qualId"
+              :loading="qualOptionsLoading"
+              :options="qualOptions"
+              show-search
+              option-filter-prop="label"
+              allow-clear
+              placeholder="选择资质（下拉取自当前主体资质台账）"
+              style="width: 320px"
+/>
+</AttrFilter>
+            <AttrFilter v-model="reviewQuery.reviewResult" label="核查结论" :options="reviewResultOptions" />
+            <a-button type="primary" @click="loadReviews">查询</a-button>
+            <span class="ct-panel-meta">结论在「① 台账」行内「达标核查」执行后产生</span>
+          </div>
+          <div class="ct-panel-b">
+            <a-table
+              class="ct-table"
+              :columns="reviewColumns"
+              :data-source="reviewRows"
+              :loading="reviewLoading"
+              :pagination="{
+                current: reviewQuery.pageNo,
+                pageSize: reviewQuery.pageSize,
+                total: reviewTotal,
+                showSizeChanger: false,
+                onChange: onReviewPage,
+              }"
+              row-key="id"
+              size="small"
+              :scroll="{ x: 1300 }"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'reviewedAt'">{{ fmtDateTime(record.reviewedAt) }}</template>
+                <template v-else-if="column.key === 'reviewResult'">
+                  <a-tag :color="reviewResultTag(record.reviewResult).color">
+                    {{ reviewResultTag(record.reviewResult).label }}
+                  </a-tag>
+                </template>
+              </template>
+              <template #emptyText><div class="ct-empty">暂无核查记录：在「① 台账」行点「达标核查」后产生留痕</div></template>
+            </a-table>
+          </div>
+        </div>
+      </a-tab-pane>
+
+      <a-tab-pane key="safety" tab="④ 安许证与预警">
+        <div class="ct-panel">
+          <div class="ct-panel-t">安许证台账</div>
+          <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
+            <AttrFilter v-model="permitQuery.permitStatus" label="状态" :options="PERMIT_STATUS_OPTIONS" />
+            <AttrFilter label="到期窗口">
+<a-input-number
+              v-model:value="permitQuery.expiringInDays"
+              :min="1"
+              placeholder="N 天内到期"
+              style="width: 140px"
+/>
+</AttrFilter>
+            <AttrFilter label="编号 / 法人关键字"><a-input v-model:value="permitQuery.keyword" placeholder="编号 / 法人关键字" style="width: 190px" /></AttrFilter>
+            <div class="mt-2 flex flex-wrap items-center gap-2"><a-button type="primary" @click="loadPermits">查询</a-button> <a-button v-if="can('bidding:qualification:permit')" @click="openPermit">安许建档</a-button></div>
+          </div>
+          <div class="ct-panel-b">
+            <a-table
+              class="ct-table"
+              :columns="permitColumns"
+              :data-source="permitRows"
+              :loading="permitLoading"
+              :pagination="{
+                current: permitQuery.pageNo,
+                pageSize: permitQuery.pageSize,
+                total: permitTotal,
+                showSizeChanger: false,
+                onChange: onPermitPage,
+              }"
+              row-key="id"
+              size="small"
+              :scroll="{ x: 1500 }"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'daysToExpire'">
+                  <span :style="{ color: daysColor(record.daysToExpire) }">
+                    {{ record.daysToExpire ?? '长期' }}
+                  </span>
+                </template>
+                <template v-else-if="column.key === 'permitStatus'">
+                  <a-tag :color="dictOptions('safety_permit_status').length > 0 ? dictTag('safety_permit_status', record.permitStatus).color : 'default'">
+                    {{ dictOptions('safety_permit_status').length > 0 ? dictLabel('safety_permit_status', record.permitStatus) : record.permitStatus }}
+                  </a-tag>
+                </template>
+                <template v-else-if="column.key === 'riskFlag'">
+                  <a-tag v-if="record.riskFlag" :color="dictOptions('safety_risk_flag').length > 0 ? dictTag('safety_risk_flag', record.riskFlag).color : 'default'">
+                    {{ dictOptions('safety_risk_flag').length > 0 ? dictLabel('safety_risk_flag', record.riskFlag) : record.riskFlag }}
+                  </a-tag>
+                  <span v-else>未评估</span>
+                </template>
+                <template v-else-if="column.key === 'graceExpireAt'">
+                  {{ record.graceExpireAt ? fmtDateTime(record.graceExpireAt) : '—' }}
+                </template>
+                <template v-else-if="column.key === 'action'">
+                  <a
+                    v-if="can('bidding:qualification:permit') && (PERMIT_TRANSITIONS[record.permitStatus] ?? []).length > 0"
+                    @click="openPermitStatus(record)"
+                  >
+                    状态流转
+                  </a>
+                  <span v-else class="ct-panel-meta">—</span>
+                </template>
+              </template>
+              <template #emptyText><div class="ct-empty">该主体下暂无安许证，可点「安许建档」新增</div></template>
+            </a-table>
+          </div>
+        </div>
+
+        <div class="ct-panel mt-3">
+          <div class="ct-panel-t">到期 / 风险预警清单（QUAL / SAFETY_PERMIT / STAFF 三源）</div>
+          <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
+            <AttrFilter v-model="alertQuery.refType" label="来源类型" :options="QualificationApi.ALERT_REF_TYPE_OPTIONS" />
+            <AttrFilter v-model="alertQuery.alertLevel" label="级别" :options="dictOptions('risk_level')" />
+            <AttrFilter v-model="handledFilter" label="处理状态" :options="handledOptions" />
+            <a-button v-if="can('bidding:qualification:alert-run')" :loading="scanning" @click="doScan">
+              执行一次扫描
+            </a-button>
+            <span class="ct-panel-meta">同日幂等（refType:refId:yyyyMMdd）</span>
+            <div class="mt-2 flex flex-wrap items-center gap-2"><a-button type="primary" @click="loadAlerts">查询</a-button></div>
+          </div>
+          <div class="ct-panel-b">
+            <div v-if="scanHits !== null" class="mb-2">
+              <a-tag color="processing">本轮命中 {{ scanHits }} 条</a-tag>
+              <span class="ct-panel-meta" style="margin-left: 8px">执行时间 {{ fmtDateTime(scanAt) }}</span>
+            </div>
+            <a-table
+              class="ct-table"
+              :columns="alertColumns"
+              :data-source="alertRows"
+              :loading="alertLoading"
+              :pagination="{
+                current: alertQuery.pageNo,
+                pageSize: alertQuery.pageSize,
+                total: alertTotal,
+                showSizeChanger: false,
+                onChange: onAlertPage,
+              }"
+              row-key="id"
+              size="small"
+              :scroll="{ x: 1400 }"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'triggeredAt'">{{ fmtDateTime(record.triggeredAt) }}</template>
+                <template v-else-if="column.key === 'alertLevel'">
+                  <a-tag :color="dictOptions('risk_level').length > 0 ? dictTag('risk_level', record.alertLevel).color : 'default'">
+                    {{ dictOptions('risk_level').length > 0 ? dictLabel('risk_level', record.alertLevel) : record.alertLevel }}
+                  </a-tag>
+                </template>
+                <template v-else-if="column.key === 'notify'">
+                  {{ record.notifyChannel || '—' }}
+                  <span v-if="record.notifyStatus" class="ct-panel-meta">（{{ record.notifyStatus }}）</span>
+                </template>
+                <template v-else-if="column.key === 'handled'">
+                  <a-tag :color="record.handled ? 'green' : 'orange'">
+                    {{ record.handled ? '已处理' : '未处理' }}
+                  </a-tag>
+                  <span v-if="record.handled && (record.handledBy || record.handledAt)" class="ct-panel-meta">
+                    {{ record.handledBy ? `#${record.handledBy}` : '' }}{{ record.handledAt ? ` ${fmtDateTime(record.handledAt)}` : '' }}
+                  </span>
+                </template>
+                <template v-else-if="column.key === 'operation'">
+                  <a-button
+                    v-if="!record.handled && can('bidding:qualification:alert-handle')"
+                    size="small"
+                    type="link"
+                    @click="openAlertHandle(record)"
+                  >
+                    标记已处理
+                  </a-button>
+                  <span v-else>—</span>
+                </template>
+              </template>
+              <template #emptyText><div class="ct-empty">暂无预警记录，可点「执行一次扫描」</div></template>
+            </a-table>
+          </div>
+        </div>
+      </a-tab-pane>
+
+      <a-tab-pane key="safety-risk" tab="⑤ 安许风险与规则">
+        <!-- 2026-09-28 三台账重组：原独立页「安许风险联动」(菜单 60005500) 的企业侧能力并入本台账。
+             归属依据（判据一 主实体原则）：安许 A/B/C 风险、风险工单、阈值规则都围绕**企业持有的安许证**，
+             与「企业资质」同属一个实体族，故不再单独占一个菜单。
+             员工侧能力（多岗兼任校验 / 人员风险）归「员工证件台账」；项目关键岗位归项目台账。
+             实现方式：直接挂企业侧面板 EnterpriseSafetyPanels（safety-risk 已按主体拆到 panels/，
+             组件内只含企业侧区块：①风险卡片 + 风险大盘/工单 + 规则配置），实现只有一份。 -->
+        <EnterpriseSafetyPanels />
+      </a-tab-pane>
+
+      <a-tab-pane key="material" tab="⑥ 完备性明细与扫描">
+        <div class="ct-panel">
+          <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
+            <AttrFilter label="本企业"><span class="ct-id">{{ currentSubject?.label || '加载中…' }}</span></AttrFilter>
+            <AttrFilter label="核验基准日（可空=今天）">
+<a-date-picker
+              v-model:value="completenessQuery.asOf"
+              placeholder="核验基准日（可空=今天）"
+              value-format="YYYY-MM-DD"
+              style="width: 210px"
+/>
+</AttrFilter>
+            <a-button
+              v-if="can('bidding:qualification:material:query')"
+              type="primary"
+              :loading="completenessLoading"
+              @click="loadCompleteness"
+            >
+              自查
+            </a-button>
+            <span class="ct-panel-meta">可填未来日期，预演「投标截止日是否仍有效」</span>
+          </div>
+          <div class="ct-panel-b">
+            <a-spin :spinning="completenessLoading">
+              <a-alert v-if="completenessError" type="error" show-icon :message="completenessError" />
+              <template v-else-if="completeness">
+                <a-descriptions :column="3" size="small" bordered class="mb-3">
+                  <a-descriptions-item label="企业主体">{{ currentSubject?.label || completeness.entId || '—' }}</a-descriptions-item>
+                  <a-descriptions-item label="基准日">{{ completenessQuery.asOf || '今天' }}</a-descriptions-item>
+                  <a-descriptions-item label="结论">
+                    <a-tag :color="resultTag.color">{{ resultTag.label }}</a-tag>
+                  </a-descriptions-item>
+                  <a-descriptions-item label="必备材料">
+                    {{ completeness.readyCount }} / {{ completeness.requiredCount }} 已齐备
+                  </a-descriptions-item>
+                  <a-descriptions-item label="缺失/过期">{{ completeness.missingItems?.length ?? 0 }} 项</a-descriptions-item>
+                  <a-descriptions-item label="临近到期">
+                    {{ completeness.expiringItems?.length ?? 0 }} 项
+                  </a-descriptions-item>
+                </a-descriptions>
+
+                <!-- 两条汇总提示 + 逐项明细：与证书域自查页共用 MaterialItemsTable（列/状态兜底/空态文案同源）
+                     本页保留「类型 code」列（排查用）→ show-type-code -->
+                <MaterialItemsTable
+                  :data="completeness"
+                  :scroll-x="1250"
+                  :show-type-code="true"
+                  empty-text="无逐项明细：自查未返回逐项结果，可重新执行「自查」"
+                />
+              </template>
+              <div v-else class="ct-empty">企业主体由「主体档案」自动带出：点「自查」返回身份类 / 资质类 / 实力类三档结论</div>
+            </a-spin>
+          </div>
+        </div>
+
+        <div class="ct-panel mt-3">
+          <div class="ct-panel-t">资质到期预警扫描</div>
+          <div class="ct-panel-b">
+            <a-space>
+              <a-button v-if="can('bidding:qualification:alert-run')" :loading="scanning" @click="doScan">
+                执行一次 QUAL_EXPIRY 扫描
+              </a-button>
+              <span class="ct-panel-meta">同日幂等（后端 @Idempotent，按 LocalDate.now() 扫三源）</span>
+            </a-space>
+            <div v-if="scanHits !== null" class="mt-3">
+              <a-tag color="processing">命中 {{ scanHits }} 条</a-tag>
+              <span class="ct-panel-meta" style="margin-left: 8px">执行时间 {{ fmtDateTime(scanAt) }}</span>
+            </div>
+          </div>
+        </div>
+      </a-tab-pane>
+    </a-tabs>
+
+    <!-- 预警处理（销账）-->
+    <a-modal
+      v-model:open="alertHandleOpen"
+      :confirm-loading="alertHandleSaving"
+      title="标记预警已处理"
+      :width="560"
+      @ok="submitAlertHandle"
+    >
+      <div class="mb-2">
+        <div class="ct-panel-meta">预警</div>
+        <div>{{ alertHandleRow?.refName || '—' }} · {{ alertHandleRow?.alertMessage || '—' }}</div>
+      </div>
+      <a-textarea
+        v-model:value="alertHandleNote"
+        :rows="3"
+        maxlength="200"
+        placeholder="处理说明（选填，例：已换证，新证书编号 XXX）"
+        show-count
+      />
+      <div class="ct-tip">
+        处理含版本校验：若该预警已被他人处理，本次提交会被拒绝且<strong>不会覆盖他人的处理说明</strong>，
+        页面会自动刷新显示最新状态。
+      </div>
+    </a-modal>
+
+    <!-- 延续申报 -->
+    <a-modal
+      v-model:open="renewOpen"
+      :title="`延续申报：${renewRow?.certNo ?? ''}`"
+      :width="620"
+      :confirm-loading="renewSaving"
+      ok-text="提交申报"
+      cancel-text="取消"
+      destroy-on-close
+      @ok="submitRenew"
+    >
+      <a-descriptions :column="1" size="small" class="mb-3">
+        <a-descriptions-item label="资质 id / version">
+          {{ renewForm.qualificationId }} / {{ renewForm.version }}
+        </a-descriptions-item>
+        <a-descriptions-item label="当前有效期至">
+          {{ renewRow?.validTo ? fmtDate(renewRow.validTo) : '长期' }}
+        </a-descriptions-item>
+      </a-descriptions>
+      <a-form layout="vertical">
+        <a-form-item label="申请延续至（可空，由审批时确定）">
+          <a-date-picker v-model:value="renewForm.dueDate" value-format="YYYY-MM-DD" style="width: 100%" />
+        </a-form-item>
+        <a-form-item label="申报说明">
+          <a-textarea v-model:value="renewForm.remark" :rows="3" />
+        </a-form-item>
+      </a-form>
+      <div class="ct-tip">提交后主档置 PENDING_RENEW、生成 SUBMITTED 申报单；同一资质存在在途申报时请勿重复提交。</div>
+    </a-modal>
+
+    <!-- 审批通过 -->
+    <a-modal
+      v-model:open="approveOpen"
+      :title="`审批通过：申报单 #${approveForm.applyId}`"
+      :width="620"
+      :confirm-loading="approveSaving"
+      ok-text="通过并回写主档"
+      cancel-text="取消"
+      destroy-on-close
+      @ok="submitApprove"
+    >
+      <a-form ref="approveFormRef" :model="approveForm" :rules="approveRules" layout="vertical">
+        <a-form-item label="延续后有效期（必填）" name="newValidTo">
+          <a-date-picker v-model:value="approveForm.newValidTo" value-format="YYYY-MM-DD" style="width: 100%" />
+        </a-form-item>
+        <a-form-item label="结果文号">
+          <a-input v-model:value="approveForm.resultNo" />
+        </a-form-item>
+        <a-form-item label="新证书编号">
+          <a-input v-model:value="approveForm.newCertNo" />
+        </a-form-item>
+      </a-form>
+      <div class="ct-tip">审批通过后：申报单 APPROVED→ISSUED，主档回写 VALID 与 new_valid_to。</div>
+    </a-modal>
+
+    <!-- 资质建档 -->
+    <a-modal
+      v-model:open="formOpen"
+      title="资质建档"
+      :width="860"
+      :confirm-loading="saving"
+      ok-text="建档"
+      cancel-text="取消"
+      destroy-on-close
+      @ok="submit"
+    >
+      <a-alert
+        v-if="createdId"
+        type="success"
+        show-icon
+        class="mb-3"
+        :message="`已创建，资质 id=${createdId}`"
+      />
+      <a-form ref="formRef" :model="form" :rules="rules" layout="horizontal">
+        <!-- ① 归属与标识（主体 / 录入方式 / 序列 / 编号） -->
+        <div class="ct-sheet">
+          <div class="ct-sheet-group">归属与标识<span class="ct-sg-note">主体 / 序列 / 编号；本期仅支持「手工录入」</span></div>
+          <div class="ct-sheet-row">
+            <div class="ct-sheet-cell">
+              <a-form-item label="企业主体" name="entId">
+                <a-input :value="currentSubject?.label || '加载中…'" disabled />
+              </a-form-item>
+            </div>
+            <div class="ct-sheet-cell">
+              <a-form-item label="录入方式">
+                <a-select v-model:value="entryChannel" :options="entryChannelOptions" disabled />
+              </a-form-item>
+            </div>
+            <div class="ct-sheet-cell">
+              <a-form-item label="资质序列" name="qualSerial">
+                <a-select v-model:value="form.qualSerial" :options="QualificationApi.QUAL_SERIAL_OPTIONS" />
+              </a-form-item>
+            </div>
+          </div>
+          <div class="ct-sheet-row">
+            <div class="ct-sheet-cell ct-sheet-wide">
+              <a-form-item label="资质证书编号" name="certNo">
+                <a-input v-model:value="form.certNo" placeholder="租户内唯一（UK 判重）" />
+              </a-form-item>
+            </div>
+          </div>
+        </div>
+
+        <!-- ② 资质信息（元数据） -->
+        <div class="ct-sheet">
+          <div class="ct-sheet-group">资质信息<span class="ct-sg-note">类别 / 等级 / 机关</span></div>
+          <div class="ct-sheet-row">
+            <div class="ct-sheet-cell">
+              <a-form-item label="资质类别" name="qualCategory">
+                <a-input v-model:value="form.qualCategory" placeholder="如：市政公用工程施工总承包" />
+              </a-form-item>
+            </div>
+            <div class="ct-sheet-cell">
+              <a-form-item label="资质等级" name="qualGrade">
+                <a-input v-model:value="form.qualGrade" placeholder="如：一级（对齐国标表110）" />
+              </a-form-item>
+            </div>
+            <div class="ct-sheet-cell">
+              <a-form-item label="发证/许可机关" name="issuingAuthority">
+                <a-input v-model:value="form.issuingAuthority" />
+              </a-form-item>
+            </div>
+          </div>
+          <div class="ct-sheet-row">
+            <div class="ct-sheet-cell">
+              <a-form-item label="发证日期" name="issueDate">
+                <a-date-picker v-model:value="form.issueDate" value-format="YYYY-MM-DD" style="width: 100%" />
+              </a-form-item>
+            </div>
+            <div class="ct-sheet-cell">
+              <a-form-item label="有效期至" name="validTo">
+                <a-date-picker v-model:value="form.validTo" value-format="YYYY-MM-DD" style="width: 100%" placeholder="空=长期" />
+              </a-form-item>
+            </div>
+            <div class="ct-sheet-cell">
+              <a-form-item label="关联证照" name="bindedCertId">
+                <a-select
+                  v-model:value="form.bindedCertId"
+                  :options="certLinkOptions"
+                  :loading="certLinkLoading"
+                  show-search
+                  option-filter-prop="label"
+                  :filter-option="false"
+                  allow-clear
+                  placeholder="按名称/编号检索（可空）"
+                  style="width: 100%"
+                  @search="loadCertLinkOptions"
+                />
+              </a-form-item>
+            </div>
+          </div>
+        </div>
+
+        <!-- ③ 范围与备注（自由文本最后） -->
+        <div class="ct-sheet">
+          <div class="ct-sheet-group">范围与备注</div>
+          <div class="ct-sheet-row">
+            <div class="ct-sheet-cell ct-sheet-wide">
+              <a-form-item label="批准承包/承揽范围" name="approvalScope">
+                <a-input v-model:value="form.approvalScope" />
+              </a-form-item>
+            </div>
+          </div>
+          <div class="ct-sheet-row">
+            <div class="ct-sheet-cell ct-sheet-wide">
+              <a-form-item label="备注" name="remark"><a-textarea v-model:value="form.remark" :rows="2" /></a-form-item>
+            </div>
+          </div>
+        </div>
+      </a-form>
+    </a-modal>
+
+    <!-- 资质标准登记 -->
+    <a-modal
+      v-model:open="stdFormOpen"
+      title="资质标准登记"
+      :width="840"
+      :confirm-loading="stdSaving"
+      ok-text="登记"
+      cancel-text="取消"
+      destroy-on-close
+      @ok="submitStandard"
+    >
+      <a-form layout="horizontal">
+        <!-- ① 序列/类别/等级（枚举联动） -->
+        <div class="ct-sheet">
+          <div class="ct-sheet-group">标准标识<span class="ct-sg-note">序列 / 类别 / 等级 / 版本</span></div>
+          <div class="ct-sheet-row">
+            <div class="ct-sheet-cell">
+              <a-form-item label="序列（必填）">
+                <a-select
+                  v-model:value="stdForm.qualSerial"
+                  :options="stdSerialOptions"
+                  @change="stdForm.qualCategory = ''; stdForm.qualGrade = ''"
+                />
+              </a-form-item>
+            </div>
+            <div class="ct-sheet-cell">
+              <a-form-item label="类别（必填）">
+                <a-select
+                  v-model:value="stdForm.qualCategory"
+                  :options="stdCategoryOptions"
+                  @change="stdForm.qualGrade = ''"
+                />
+              </a-form-item>
+            </div>
+            <div class="ct-sheet-cell">
+              <a-form-item label="等级（必填）">
+                <a-select v-model:value="stdForm.qualGrade" :options="stdGradeOptions" />
+              </a-form-item>
+            </div>
+          </div>
+          <div class="ct-sheet-row">
+            <div class="ct-sheet-cell">
+              <a-form-item label="标准版本（必填）"><a-input v-model:value="stdForm.stdVersion" /></a-form-item>
+            </div>
+            <div class="ct-sheet-cell">
+              <a-form-item label="生效起">
+                <a-date-picker v-model:value="stdForm.effectiveFrom" value-format="YYYY-MM-DD" style="width: 100%" />
+              </a-form-item>
+            </div>
+            <div class="ct-sheet-cell">
+              <a-form-item label="生效止">
+                <a-date-picker v-model:value="stdForm.effectiveTo" value-format="YYYY-MM-DD" style="width: 100%" placeholder="空=长期" />
+              </a-form-item>
+            </div>
+          </div>
+        </div>
+
+        <!-- ② 达标要求（自由文本，两列排布） -->
+        <div class="ct-sheet">
+          <div class="ct-sheet-group">达标要求<span class="ct-sg-note">人员 / 业绩 / 资产 / 设备</span></div>
+          <div class="ct-sheet-row">
+            <div class="ct-sheet-cell">
+              <a-form-item label="人员要求"><a-textarea v-model:value="stdForm.reqStaff" :rows="2" /></a-form-item>
+            </div>
+            <div class="ct-sheet-cell">
+              <a-form-item label="业绩要求"><a-textarea v-model:value="stdForm.reqPerformance" :rows="2" /></a-form-item>
+            </div>
+          </div>
+          <div class="ct-sheet-row">
+            <div class="ct-sheet-cell">
+              <a-form-item label="资产要求"><a-textarea v-model:value="stdForm.reqAssets" :rows="2" /></a-form-item>
+            </div>
+            <div class="ct-sheet-cell">
+              <a-form-item label="设备要求"><a-textarea v-model:value="stdForm.reqEquipment" :rows="2" /></a-form-item>
+            </div>
+          </div>
+          <div class="ct-sheet-row">
+            <div class="ct-sheet-cell ct-sheet-wide">
+              <a-form-item label="来源依据">
+                <a-input v-model:value="stdForm.sourceRef" placeholder="如：建市〔2014〕159 号《建筑业企业资质标准》" />
+              </a-form-item>
+            </div>
+          </div>
+        </div>
+      </a-form>
+      <div class="ct-tip">
+        序列 / 类别 / 等级候选来自 <code>/standard/options</code>；同一「序列+类别+等级+版本」重复登记由后端判重（§0.7）。
+      </div>
+    </a-modal>
+
+    <!-- 安许状态流转（permitId + version 乐观锁；目标状态只列 SafetyPermitStatusEnum 允许的迁移） -->
+    <a-modal
+      v-model:open="permitStatusOpen"
+      title="安许状态流转"
+      :width="640"
+      :confirm-loading="permitStatusSaving"
+      ok-text="提交"
+      cancel-text="取消"
+      destroy-on-close
+      @ok="submitPermitStatus"
+    >
+      <a-descriptions :column="2" size="small" class="mb-3">
+        <a-descriptions-item label="许可证编号">{{ permitStatusRow?.permitNo ?? '—' }}</a-descriptions-item>
+        <a-descriptions-item label="当前状态">{{ permitStatusRow?.permitStatus ?? '—' }}</a-descriptions-item>
+        <a-descriptions-item label="乐观锁 version">{{ permitStatusForm.version }}</a-descriptions-item>
+        <a-descriptions-item label="企业主体">{{ permitStatusRow?.entId ?? '—' }}</a-descriptions-item>
+      </a-descriptions>
+      <a-form layout="vertical">
+        <a-form-item label="目标状态（只列合法迁移）">
+          <a-select v-model:value="permitStatusForm.targetStatus" :options="permitTargetOptions" placeholder="请选择" />
+        </a-form-item>
+        <a-form-item label="原因（吊销必填）">
+          <a-textarea v-model:value="permitStatusForm.reason" :rows="3" placeholder="如：安全条件复核不合格 / 企业申请注销" />
+        </a-form-item>
+      </a-form>
+      <div class="ct-tip">
+        version 过期（并发改写）会按 §0.4 返回 <code>fieldErrors</code>，请刷新台账后重试；非法迁移由后端拒绝。
+      </div>
+    </a-modal>
+
+    <!-- 要素录入：人员 / 业绩 / 资产装备（每次提交一项） -->
+    <a-modal
+      v-model:open="elementOpen"
+      :title="`要素录入：资质 #${elementIds.qualId}`"
+      :width="900"
+      :confirm-loading="elementSaving"
+      ok-text="提交当前页签"
+      cancel-text="取消"
+      destroy-on-close
+      @ok="submitElement"
+    >
+      <a-descriptions :column="2" size="small" class="mb-3">
+        <a-descriptions-item label="企业主体">{{ currentSubject?.label || elementIds.entId || '—' }}</a-descriptions-item>
+        <a-descriptions-item label="资质">{{ elementIds.qualId }}</a-descriptions-item>
+      </a-descriptions>
+      <a-tabs v-model:active-key="elementTab">
+        <a-tab-pane key="staff" tab="资质人员">
+          <a-form layout="horizontal">
+            <div class="ct-sheet">
+              <div class="ct-sheet-group">人员<span class="ct-sg-note">姓名 / 岗位角色 / 专业</span></div>
+              <div class="ct-sheet-row">
+                <div class="ct-sheet-cell">
+                  <a-form-item label="姓名（必填）">
+                    <a-auto-complete
+                      v-model:value="staffForm.personName"
+                      :options="personNameOptions"
+                      placeholder="从员工档案选择，或直接输入（拟聘人员）"
+                      allow-clear
+                      @focus="loadPersonNameOptions"
+                    />
+                  </a-form-item>
+                </div>
+                <div class="ct-sheet-cell">
+                  <a-form-item label="岗位角色">
+                    <a-select v-model:value="staffForm.staffRole" :options="QualificationApi.STAFF_ROLE_OPTIONS" allow-clear />
+                  </a-form-item>
+                </div>
+                <div class="ct-sheet-cell">
+                  <a-form-item label="专业"><a-input v-model:value="staffForm.major" /></a-form-item>
+                </div>
+              </div>
+              <div class="ct-sheet-row">
+                <div class="ct-sheet-cell">
+                  <a-form-item label="注册号"><a-input v-model:value="staffForm.regNo" /></a-form-item>
+                </div>
+                <div class="ct-sheet-cell">
+                  <a-form-item label="职称等级"><a-input v-model:value="staffForm.titleLevel" /></a-form-item>
+                </div>
+                <div class="ct-sheet-cell">
+                  <a-form-item label="是否全职"><a-switch v-model:checked="staffForm.isFullTime" /></a-form-item>
+                </div>
+              </div>
+              <div class="ct-sheet-row">
+                <div class="ct-sheet-cell">
+                  <a-form-item label="注册有效期至">
+                    <a-date-picker v-model:value="staffForm.regValidTo" value-format="YYYY-MM-DD" style="width: 100%" />
+                  </a-form-item>
+                </div>
+                <div class="ct-sheet-cell ct-sheet-wide">
+                  <a-form-item label="关联证照（可空）">
+                    <a-select
+                      v-model:value="staffForm.bindedCertId"
+                      :options="certLinkOptions"
+                      :loading="certLinkLoading"
+                      show-search
+                      option-filter-prop="label"
+                      :filter-option="false"
+                      allow-clear
+                      placeholder="按证照名称/编号检索选择"
+                      style="width: 100%"
+                      @search="loadCertLinkOptions"
+                    />
+                  </a-form-item>
+                </div>
+              </div>
+            </div>
+          </a-form>
+        </a-tab-pane>
+
+        <a-tab-pane key="performance" tab="工程业绩">
+          <a-form layout="horizontal">
+            <div class="ct-sheet">
+              <div class="ct-sheet-group">业绩<span class="ct-sg-note">项目 / 类型 / 角色 / 金额</span></div>
+              <div class="ct-sheet-row">
+                <div class="ct-sheet-cell ct-sheet-wide">
+                  <a-form-item label="项目名称（必填）"><a-input v-model:value="perfForm.projectName" /></a-form-item>
+                </div>
+              </div>
+              <div class="ct-sheet-row">
+                <div class="ct-sheet-cell">
+                  <a-form-item label="项目类型"><a-input v-model:value="perfForm.projectType" /></a-form-item>
+                </div>
+                <div class="ct-sheet-cell">
+                  <a-form-item label="角色">
+                    <a-select v-model:value="perfForm.role" :options="QualificationApi.PERFORMANCE_ROLE_OPTIONS" allow-clear />
+                  </a-form-item>
+                </div>
+                <div class="ct-sheet-cell">
+                  <a-form-item label="合同金额">
+                    <a-input-number v-model:value="perfForm.contractAmount" :min="0" style="width: 100%" />
+                  </a-form-item>
+                </div>
+              </div>
+              <div class="ct-sheet-row">
+                <div class="ct-sheet-cell">
+                  <a-form-item label="竣工日期">
+                    <a-date-picker v-model:value="perfForm.completionDate" value-format="YYYY-MM-DD" style="width: 100%" />
+                  </a-form-item>
+                </div>
+                <div class="ct-sheet-cell">
+                  <a-form-item label="质量结论"><a-input v-model:value="perfForm.qualityResult" /></a-form-item>
+                </div>
+                <div class="ct-sheet-cell">
+                  <a-form-item label="业主名称"><a-input v-model:value="perfForm.ownerName" /></a-form-item>
+                </div>
+              </div>
+              <div class="ct-sheet-row">
+                <div class="ct-sheet-cell">
+                  <a-form-item label="平台可核验"><a-switch v-model:checked="perfForm.isPlatformVerified" /></a-form-item>
+                </div>
+              </div>
+            </div>
+            <div class="ct-sheet" style="margin-top: 14px">
+              <div class="ct-sheet-group">证据文件<span class="ct-sg-note">直接上传，不必填写文件编号</span></div>
+              <div class="ct-sheet-row">
+                <div class="ct-sheet-cell ct-sheet-wide">
+                  <a-form-item label="证据文件">
+                    <a-upload
+                      :before-upload="onPickElementEvidence"
+                      :show-upload-list="false"
+                      :disabled="elementEvidenceUploading"
+                      multiple
+                    >
+                      <a-button :loading="elementEvidenceUploading">{{ elementEvidenceUploading ? '上传中…' : '选择文件上传' }}</a-button>
+                    </a-upload>
+                    <ul v-if="elementEvidenceFiles.length" class="mt-2 space-y-1">
+                      <li v-for="(f, i) in elementEvidenceFiles" :key="f.fileId" class="flex items-center gap-2 text-sm">
+                        <span class="truncate">{{ f.name }}</span>
+                        <CaSignEntry :file="signFileOf(f)" biz-type="QUALIFICATION" :biz-code="f.name" label="CA 签名" @signed="onEvidenceSigned" />
+                        <a class="text-xs text-red-500" @click="removeElementEvidence(i)">移除</a>
+                      </li>
+                    </ul>
+                  </a-form-item>
+                </div>
+              </div>
+            </div>
+          </a-form>
+        </a-tab-pane>
+
+        <a-tab-pane key="asset" tab="资产/技术装备">
+          <a-form layout="horizontal">
+            <div class="ct-sheet">
+              <div class="ct-sheet-group">资产<span class="ct-sg-note">名称 / 类型 / 规格</span></div>
+              <div class="ct-sheet-row">
+                <div class="ct-sheet-cell">
+                  <a-form-item label="名称（必填）"><a-input v-model:value="assetForm.name" /></a-form-item>
+                </div>
+                <div class="ct-sheet-cell">
+                  <a-form-item label="资产类型">
+                    <a-select v-model:value="assetForm.assetType" :options="QualificationApi.ASSET_TYPE_OPTIONS" allow-clear />
+                  </a-form-item>
+                </div>
+                <div class="ct-sheet-cell">
+                  <a-form-item label="规格型号"><a-input v-model:value="assetForm.spec" /></a-form-item>
+                </div>
+              </div>
+              <div class="ct-sheet-row">
+                <div class="ct-sheet-cell">
+                  <a-form-item label="数量">
+                    <a-input-number v-model:value="assetForm.quantity" :min="0" style="width: 100%" />
+                  </a-form-item>
+                </div>
+                <div class="ct-sheet-cell">
+                  <a-form-item label="价值金额">
+                    <a-input-number v-model:value="assetForm.valueAmount" :min="0" style="width: 100%" />
+                  </a-form-item>
+                </div>
+                <div class="ct-sheet-cell">
+                  <a-form-item label="统计年份">
+                    <a-input-number v-model:value="assetForm.statYear" :min="1990" style="width: 100%" />
+                  </a-form-item>
+                </div>
+              </div>
+            </div>
+            <div class="ct-sheet" style="margin-top: 14px">
+              <div class="ct-sheet-group">证据文件<span class="ct-sg-note">直接上传，不必填写文件编号</span></div>
+              <div class="ct-sheet-row">
+                <div class="ct-sheet-cell ct-sheet-wide">
+                  <a-form-item label="证据文件">
+                    <a-upload
+                      :before-upload="onPickElementEvidence"
+                      :show-upload-list="false"
+                      :disabled="elementEvidenceUploading"
+                      multiple
+                    >
+                      <a-button :loading="elementEvidenceUploading">{{ elementEvidenceUploading ? '上传中…' : '选择文件上传' }}</a-button>
+                    </a-upload>
+                    <ul v-if="elementEvidenceFiles.length" class="mt-2 space-y-1">
+                      <li v-for="(f, i) in elementEvidenceFiles" :key="f.fileId" class="flex items-center gap-2 text-sm">
+                        <span class="truncate">{{ f.name }}</span>
+                        <CaSignEntry :file="signFileOf(f)" biz-type="QUALIFICATION" :biz-code="f.name" label="CA 签名" @signed="onEvidenceSigned" />
+                        <a class="text-xs text-red-500" @click="removeElementEvidence(i)">移除</a>
+                      </li>
+                    </ul>
+                  </a-form-item>
+                </div>
+              </div>
+            </div>
+          </a-form>
+        </a-tab-pane>
+      </a-tabs>
+      <div class="ct-tip">
+        每次提交当前页签的一条要素（后端逐条插入）；角色/资产类型码表取自 QualificationStaffRoleEnum /
+        QualificationAssetTypeEnum / PerformanceRoleEnum，尚未登记字典故仅作建议值。录入后可用「达标核查」复算差额。
+      </div>
+    </a-modal>
+
+    <!-- 安许建档 -->
+    <a-modal
+      v-model:open="permitOpen"
+      title="安全生产许可证建档"
+      :width="760"
+      :confirm-loading="permitSaving"
+      ok-text="建档"
+      cancel-text="取消"
+      destroy-on-close
+      @ok="submitPermit"
+    >
+      <a-form layout="horizontal">
+        <!-- ① 编号类归组（主体 + 许可证编号） -->
+        <div class="ct-sheet">
+          <div class="ct-sheet-group">编号<span class="ct-sg-note">企业主体 / 许可证编号</span></div>
+          <div class="ct-sheet-row">
+            <div class="ct-sheet-cell">
+              <a-form-item label="企业主体（必填）">
+                <a-input :value="currentSubject?.label || '加载中…'" disabled />
+              </a-form-item>
+            </div>
+            <div class="ct-sheet-cell ct-sheet-wide">
+              <a-form-item label="许可证编号（必填）">
+                <a-input v-model:value="permitForm.permitNo" placeholder="UK 判重" />
+              </a-form-item>
+            </div>
+          </div>
+        </div>
+
+        <!-- ② 颁发信息（元数据 + 时间） -->
+        <div class="ct-sheet">
+          <div class="ct-sheet-group">颁发信息<span class="ct-sg-note">机关 / 日期 / 法定代表人</span></div>
+          <div class="ct-sheet-row">
+            <div class="ct-sheet-cell">
+              <a-form-item label="发证机关"><a-input v-model:value="permitForm.issuingAuthority" /></a-form-item>
+            </div>
+            <div class="ct-sheet-cell">
+              <a-form-item label="发证日期">
+                <a-date-picker v-model:value="permitForm.issueDate" value-format="YYYY-MM-DD" style="width: 100%" />
+              </a-form-item>
+            </div>
+            <div class="ct-sheet-cell">
+              <a-form-item label="有效期至">
+                <a-date-picker v-model:value="permitForm.validTo" value-format="YYYY-MM-DD" style="width: 100%" placeholder="空=长期" />
+              </a-form-item>
+            </div>
+          </div>
+          <div class="ct-sheet-row">
+            <div class="ct-sheet-cell">
+              <a-form-item label="法定代表人"><a-input v-model:value="permitForm.legalPerson" /></a-form-item>
+            </div>
+            <div class="ct-sheet-cell ct-sheet-wide">
+              <a-form-item label="关联证照（可空）">
+                <a-select
+                  v-model:value="permitForm.bindedCertId"
+                  :options="certLinkOptions"
+                  :loading="certLinkLoading"
+                  show-search
+                  option-filter-prop="label"
+                  :filter-option="false"
+                  allow-clear
+                  placeholder="按证照名称/编号检索选择"
+                  style="width: 100%"
+                  @search="loadCertLinkOptions"
+                />
+              </a-form-item>
+            </div>
+          </div>
+        </div>
+
+        <!-- ③ 备注（最后） -->
+        <div class="ct-sheet">
+          <div class="ct-sheet-group">备注</div>
+          <div class="ct-sheet-row">
+            <div class="ct-sheet-cell ct-sheet-wide">
+              <a-form-item label="备注"><a-textarea v-model:value="permitForm.remark" :rows="2" /></a-form-item>
+            </div>
+          </div>
+        </div>
+      </a-form>
+      <div class="ct-tip">
+        建档后安许状态为 VALID；状态流转（挂起/吊销等）需 permitId+version，当前无安许列表接口，故本页不提供。
+        风险评估与宽限期登记见「员工资质/安许风险」页的安许风险卡片。
+      </div>
+    </a-modal>
+
+    <!-- 资质主档编辑（补原有缺口：后端此前只有 create、无 update，原型"编辑"按钮无从落地） -->
+    <a-modal
+      v-model:open="editOpen"
+      :title="editForm.id ? `编辑企业资质 #${editForm.id}` : '编辑企业资质'"
+      :width="820"
+      :confirm-loading="editSaving"
+      ok-text="保存"
+      cancel-text="取消"
+      destroy-on-close
+      @ok="submitEdit"
+    >
+      <a-form layout="horizontal">
+        <div class="ct-sheet">
+          <div class="ct-sheet-group">资质标识<span class="ct-sg-note">序列 / 类别 / 等级 / 证书编号</span></div>
+          <div class="ct-sheet-row">
+            <div class="ct-sheet-cell">
+              <a-form-item label="资质序列（必填）">
+                <a-select v-model:value="editForm.qualSerial" :options="QualificationApi.QUAL_SERIAL_OPTIONS" style="width: 100%" />
+              </a-form-item>
+            </div>
+            <div class="ct-sheet-cell">
+              <a-form-item label="资质类别（必填）"><a-input v-model:value="editForm.qualCategory" /></a-form-item>
+            </div>
+            <div class="ct-sheet-cell">
+              <a-form-item label="资质等级（必填）"><a-input v-model:value="editForm.qualGrade" /></a-form-item>
+            </div>
+          </div>
+          <div class="ct-sheet-row">
+            <div class="ct-sheet-cell ct-sheet-wide">
+              <a-form-item label="资质证书编号（必填，租户内唯一）"><a-input v-model:value="editForm.certNo" /></a-form-item>
+            </div>
+          </div>
+        </div>
+
+        <div class="ct-sheet" style="margin-top: 14px">
+          <div class="ct-sheet-group">发证信息<span class="ct-sg-note">机关 / 日期 / 有效期</span></div>
+          <div class="ct-sheet-row">
+            <div class="ct-sheet-cell">
+              <a-form-item label="发证机关"><a-input v-model:value="editForm.issuingAuthority" /></a-form-item>
+            </div>
+            <div class="ct-sheet-cell">
+              <a-form-item label="发证日期">
+                <a-date-picker v-model:value="editForm.issueDate" value-format="YYYY-MM-DD" style="width: 100%" />
+              </a-form-item>
+            </div>
+            <div class="ct-sheet-cell">
+              <a-form-item label="有效期至（留空=长期）">
+                <a-date-picker v-model:value="editForm.validTo" value-format="YYYY-MM-DD" style="width: 100%" />
+              </a-form-item>
+            </div>
+          </div>
+          <div class="ct-sheet-row">
+            <div class="ct-sheet-cell ct-sheet-wide">
+              <a-form-item label="关联证照（可空）">
+                <a-select
+                  v-model:value="editForm.bindedCertId"
+                  :options="certLinkOptions"
+                  :loading="certLinkLoading"
+                  show-search
+                  option-filter-prop="label"
+                  :filter-option="false"
+                  allow-clear
+                  placeholder="按证照名称/编号检索选择"
+                  style="width: 100%"
+                  @search="loadCertLinkOptions"
+                />
+              </a-form-item>
+            </div>
+          </div>
+        </div>
+
+        <div class="ct-sheet" style="margin-top: 14px">
+          <div class="ct-sheet-group">备注</div>
+          <div class="ct-sheet-row">
+            <div class="ct-sheet-cell ct-sheet-wide">
+              <a-form-item label="备注"><a-textarea v-model:value="editForm.remark" :rows="2" /></a-form-item>
+            </div>
+          </div>
+        </div>
+      </a-form>
+      <div class="ct-tip">
+        保存时回传乐观锁 version；若提示"数据已被他人修改"，请关窗刷新后重试（不要重发同一版本）。
+        状态流转（暂停/吊销等）仍走既有状态机，不在此表单内改。
+      </div>
+    </a-modal>
+</div>
+</template>
+
+<style scoped>
+/* 看板卡片可点击联动（与证照台账同款交互） */
+.ct-kpis.is-loading {
+  opacity: 0.6;
+}
+
+.ct-kpi {
+  cursor: pointer;
+  transition:
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.ct-kpi:hover {
+  box-shadow: var(--ind-shadow-lg, 0 4px 12px hsl(var(--foreground) / 16%));
+  transform: translateY(-1px);
+}
+
+.ct-kpi.is-active {
+  outline: 2px solid var(--ind-line, #2e333b);
+  outline-offset: -2px;
+}
+</style>

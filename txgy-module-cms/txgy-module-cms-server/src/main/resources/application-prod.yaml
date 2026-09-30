@@ -1,0 +1,14 @@
+txgy:
+  cms:
+    storage:
+      # 生产环境不把知识库原件保存在应用容器磁盘；由 infra 文件服务的主存储连接 MinIO/OSS。
+      mode: ${CMS_STORAGE_MODE:infra}
+      presign-seconds: ${CMS_STORAGE_PRESIGN_SECONDS:1800}
+      snapshot-browser: ${CMS_SNAPSHOT_BROWSER:}
+      snapshot-timeout-seconds: ${CMS_SNAPSHOT_TIMEOUT_SECONDS:45}
+    validity-check:
+      enabled: ${CMS_VALIDITY_CHECK_ENABLED:true}
+      cron: ${CMS_VALIDITY_CHECK_CRON:0 20 3 * * ?}
+      batch-size: ${CMS_VALIDITY_CHECK_BATCH_SIZE:100}
+      request-timeout-seconds: ${CMS_VALIDITY_CHECK_TIMEOUT_SECONDS:12}
+      national-law-base-url: ${CMS_NATIONAL_LAW_BASE_URL:https://flk.npc.gov.cn}

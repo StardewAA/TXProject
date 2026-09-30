@@ -1,0 +1,6 @@
+# 补丁镜像的构建暂存目录（含各服务的 fat jar / 前端 dist 副本，体积大，不入 git）
+stage-*/
+stage-web/
+# 就地打补丁用的 jar（由构建产出后手工复制到此）
+app.jar
+*.jar

@@ -1,0 +1,16 @@
+# 仅本 Dockerfile 生效的构建上下文裁剪（BuildKit 会优先取 <Dockerfile>.dockerignore）。
+# 仓库根 .dockerignore 没有排除 .docker-local / 各模块 target，直接用会让上下文达到数 GB。
+**
+!deploy/
+!deploy/goview/
+!deploy/goview/**
+!txgy-ui-go-view/
+!txgy-ui-go-view/**
+txgy-ui-go-view/node_modules
+txgy-ui-go-view/node_modules/**
+txgy-ui-go-view/dist
+txgy-ui-go-view/dist/**
+txgy-ui-go-view/.git
+txgy-ui-go-view/.git/**
+txgy-ui-go-view/.pnpm-store
+txgy-ui-go-view/.pnpm-store/**

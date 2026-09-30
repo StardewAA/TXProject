@@ -1,0 +1,120 @@
+package cn.iocoder.txgy.module.wms.dal.dataobject.order.shipment;
+
+import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.txgy.module.wms.dal.dataobject.md.merchant.WmsMerchantDO;
+import cn.iocoder.txgy.module.wms.dal.dataobject.md.warehouse.WmsWarehouseDO;
+import cn.iocoder.txgy.module.wms.enums.DictTypeConstants;
+import cn.iocoder.txgy.module.wms.enums.order.WmsShipmentOrderTypeEnum;
+import com.baomidou.mybatisplus.annotation.KeySequence;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
+import lombok.*;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+/**
+ * WMS 出库单 DO
+ *
+ * @author OPENLAB BS
+ */
+@TableName("wms_shipment_order")
+@KeySequence("wms_shipment_order_seq")
+@Data
+@EqualsAndHashCode(callSuper = true)
+@ToString(callSuper = true)
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class WmsShipmentOrderDO extends BaseDO {
+
+    /**
+     * 主键编号
+     */
+    @TableId
+    private Long id;
+    /**
+     * 出库单号
+     */
+    private String no;
+    /**
+     * 出库类型
+     *
+     * 枚举 {@link WmsShipmentOrderTypeEnum}
+     * 字典 {@link DictTypeConstants#SHIPMENT_ORDER_TYPE}
+     */
+    private Integer type;
+    /**
+     * 单据日期
+     */
+    private LocalDateTime orderTime;
+    /**
+     * 出库状态
+     *
+     * 字典 {@link DictTypeConstants#ORDER_STATUS}
+     */
+    private Integer status;
+    /**
+     * BPM 审批状态
+     */
+    private Integer approvalStatus;
+    /**
+     * BPM 流程实例编号
+     */
+    private String processInstanceId;
+    /**
+     * 审批完成时间
+     */
+    private LocalDateTime approvalTime;
+    /**
+     * 审批结果原因
+     */
+    private String approvalReason;
+    private Integer executionStatus;
+    private LocalDateTime executionTime;
+    private String executionError;
+    /**
+     * 业务订单号
+     */
+    private String bizOrderNo;
+    private Boolean simulation;
+    private String notificationStatus;
+    private String notificationError;
+    private Integer notificationAttempts;
+    private LocalDateTime nextNotificationTime;
+    private String sourceModule;
+    private String businessChainNo;
+    /** 商城来源店铺；非商城来源为空。 */
+    private Long shopId;
+    /**
+     * 客户编号
+     *
+     * 关联 {@link WmsMerchantDO#getId()}
+     */
+    private Long merchantId;
+    /**
+     * 备注
+     */
+    private String remark;
+
+    // ========= 仓库字段 =========
+
+    /**
+     * 仓库编号
+     *
+     * 关联 {@link WmsWarehouseDO#getId()}
+     */
+    private Long warehouseId;
+
+    // ========= 汇总金额字段 =========
+
+    /**
+     * 总数量
+     */
+    private BigDecimal totalQuantity;
+    /**
+     * 总金额
+     */
+    private BigDecimal totalPrice;
+
+}

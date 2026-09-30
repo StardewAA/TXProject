@@ -1,0 +1,169 @@
+--- a/txgy-module-bidding/txgy-module-bidding-server/src/main/java/cn/iocoder/txgy/module/bidding/controller/admin/notice/vo/NoticePageReqVO.java
++++ b/txgy-module-bidding/txgy-module-bidding-server/src/main/java/cn/iocoder/txgy/module/bidding/controller/admin/notice/vo/NoticePageReqVO.java
+@@ -39,6 +39,12 @@
+     @Schema(description = "项目编号")
+     private String projectCode;
+ 
++    @Schema(description = "招标项目编号（精确匹配；权威数据集 TENDER_PROJECT_CODE）")
++    private String tenderProjectCode;
++
++    @Schema(description = "标段（包）编号（精确匹配；权威数据集 BID_SECTION_CODES，任一分量命中即算）")
++    private String bidSectionCode;
++
+     @Schema(description = "发布时间-开始")
+     @DateTimeFormat(pattern = FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND)
+     private LocalDateTime publishTimeStart;
+--- a/txgy-module-bidding/txgy-module-bidding-server/src/main/java/cn/iocoder/txgy/module/bidding/service/notice/NoticeServiceImpl.java
++++ b/txgy-module-bidding/txgy-module-bidding-server/src/main/java/cn/iocoder/txgy/module/bidding/service/notice/NoticeServiceImpl.java
+@@ -166,8 +166,11 @@
+         afterCommit(() -> indexDoc(notice.getId()));
+         // 关注扇出：原状态已发布且正文产生新版本 → 同租户关注者收到 NOTICE_UPDATED（业务口径：草稿期编辑不打扰订阅者）
+         if (appendedVersion > 0 && NoticeStatusEnum.PUBLISHED.name().equals(notice.getStatus())) {
++            LinkedHashMap<String, Object> payload = readPayload(notice.getFieldsJson());
+             fanoutInternalVersionChange("UPDATED", notice.getId(), notice.getTitle(),
+-                    notice.getPublisherName(), notice.getProjectName(), notice.getProjectCode(), appendedVersion);
++                    notice.getPublisherName(), notice.getProjectName(), notice.getProjectCode(),
++                    strOrNull(payload.get("TENDER_PROJECT_CODE")),
++                    splitSectionCodes(payload.get("BID_SECTION_CODES")), appendedVersion);
+         }
+     }
+ 
+@@ -255,11 +258,16 @@
+         // 注册后状态必为 PUBLISHED，但招标项目状态机可能仍在 PREPARING（发布公告后才由
+         // PUBLISH_TENDER_NOTICE 推进到 ANNOUNCED）——两者时间差由调度器的"状态未就绪"分支吸收，
+         // 且该分支已加退避（见 TimeEventScheduler），不会形成高频重试。
+-        registerTimerFromPayload(typeOfNotice(notice), readPayload(notice.getFieldsJson()));
++        LinkedHashMap<String, Object> payload = readPayload(notice.getFieldsJson());
++        registerTimerFromPayload(typeOfNotice(notice), payload);
+         // 关注扇出：发布/重新发布成功 → 同租户关注者收到 NOTICE_PUBLISHED（版本=当前最新正文版本；重发同版本不重复提醒，见事件键含版本号）
++        // 三级编号（2026-09-23）：项目编号取根字段，招标项目编号/标段（包）编号取权威数据集——
++        // 门户「我的关注」的三级跟踪键就是这三种编号（notice-follow PROJECT/TENDER_PROJECT/SECTION）。
+         int version = latestContentVersion(id);
+         fanoutInternalVersionChange("PUBLISHED", id, notice.getTitle(),
+-                notice.getPublisherName(), notice.getProjectName(), notice.getProjectCode(), version);
++                notice.getPublisherName(), notice.getProjectName(), notice.getProjectCode(),
++                strOrNull(payload.get("TENDER_PROJECT_CODE")),
++                splitSectionCodes(payload.get("BID_SECTION_CODES")), version);
+     }
+ 
+     /** 公告实体类型（注册时间轴用；类型串非法时返回 null，由注册方法自行跳过）。 */
+@@ -419,13 +427,16 @@
+         }
+     }
+ 
+-    /** 内部公告关注扇出（失败仅记日志，不阻断公告本身的结果；见 FollowService.handleInternalNoticeChanged）。 */
++    /** 内部公告关注扇出（失败仅记日志，不阻断公告本身的结果；见 FollowService.handleInternalNoticeChanged）。
++     *  2026-09-23：入参由「一个项目编号」扩为**三级编号**（项目/招标项目/标段），
++     *  与门户「我的关注」三级跟踪键一一对应；另两级来自权威数据集（见 splitSectionCodes）。 */
+     private void fanoutInternalVersionChange(String action, Long noticeId, String title, String publisherName,
+-                                             String projectName, String projectCode, int version) {
++                                             String projectName, String projectCode, String tenderProjectCode,
++                                             List<String> bidSectionCodes, int version) {
+         try {
+             if (followService != null && noticeId != null) {
+                 followService.handleInternalNoticeChanged(action, noticeId, title, publisherName,
+-                        projectName, projectCode, version);
++                        projectName, projectCode, tenderProjectCode, bidSectionCodes, version);
+             }
+         } catch (Exception e) {
+             log.error("[notice][internalFanout][action={}][noticeId={}] 关注扇出失败（不影响公告结果）", action, noticeId, e);
+@@ -550,6 +561,23 @@
+         return value == null ? null : value.toString();
+     }
+ 
++    /** 数据集 BID_SECTION_CODES（可多个）→ 标段编号列表：分隔符口径与 {@link #matchesSection} 一致
++     *  （半角/全角分号、顿号、逗号、空白），去重且保序；空值返回空列表（不过滤、不报错）。 */
++    private List<String> splitSectionCodes(Object value) {
++        List<String> codes = new ArrayList<>();
++        String text = strOrNull(value);
++        if (!StringUtils.hasText(text)) {
++            return codes;
++        }
++        for (String part : text.split("[,，、;；\s]+")) {
++            String code = part.trim();
++            if (StringUtils.hasText(code) && !codes.contains(code)) {
++                codes.add(code);
++            }
++        }
++        return codes;
++    }
++
+     // ========== 内部实现 ==========
+ 
+     private PageResult<NoticeRespVO> queryPage(NoticePageReqVO reqVO, boolean publicOnly) {
+@@ -559,6 +587,15 @@
+                 .eq(reqVO.getInternalFlag() != null, NoticeDO::getInternalFlag, reqVO.getInternalFlag())
+                 .eq(StringUtils.hasText(reqVO.getPublicLevel()), NoticeDO::getPublicLevel, reqVO.getPublicLevel())
+                 .eq(StringUtils.hasText(reqVO.getProjectCode()), NoticeDO::getProjectCode, reqVO.getProjectCode())
++                // 三级编号（2026-09-23）：招标项目编号 / 标段（包）编号落在权威数据集 fields_json 里，
++                // 零 DDL 用 JSON 提取做精确匹配；标段编号任一分量命中即算（分隔符口径同 matchesSection）。
++                .apply(StringUtils.hasText(reqVO.getTenderProjectCode()),
++                        "JSON_UNQUOTE(JSON_EXTRACT(fields_json, '$.TENDER_PROJECT_CODE')) = {0}",
++                        reqVO.getTenderProjectCode())
++                .apply(StringUtils.hasText(reqVO.getBidSectionCode()),
++                        "FIND_IN_SET({0}, REPLACE(REPLACE(REPLACE(REPLACE("
++                                + "JSON_UNQUOTE(JSON_EXTRACT(fields_json, '$.BID_SECTION_CODES')), ';', ','), '；', ','), '、', ','), ' ', ',')) > 0",
++                        reqVO.getBidSectionCode())
+                 .ge(reqVO.getPublishTimeStart() != null, NoticeDO::getPublishTime, reqVO.getPublishTimeStart())
+                 .le(reqVO.getPublishTimeEnd() != null, NoticeDO::getPublishTime, reqVO.getPublishTimeEnd())
+                 .orderByDesc(NoticeDO::getPublishTime);
+--- a/txgy-module-bidding/txgy-module-bidding-server/src/main/java/cn/iocoder/txgy/module/bidding/service/noticefollow/FollowService.java
++++ b/txgy-module-bidding/txgy-module-bidding-server/src/main/java/cn/iocoder/txgy/module/bidding/service/noticefollow/FollowService.java
+@@ -10,6 +10,8 @@
+ import cn.iocoder.txgy.module.bidding.controller.admin.noticefollow.vo.FollowStatusRespVO;
+ import cn.iocoder.txgy.module.bidding.dal.dataobject.noticeexternal.NoticeExternalDO;
+ 
++import java.util.List;
++
+ /**
+  * 关注/关注项目列表 服务（投标人订阅 公告/项目/招标项目/标段）。
+  *
+@@ -67,6 +69,7 @@
+      * 写 INTERNAL 事件（事件键含版本号：同一版本幂等，新版本再提醒）与 IN_APP 提醒留痕。
+      */
+     void handleInternalNoticeChanged(String action, Long noticeId, String title, String publisherName,
+-                                     String projectName, String projectCode, int version);
++                                     String projectName, String projectCode, String tenderProjectCode,
++                                     List<String> bidSectionCodes, int version);
+ 
+ }
+--- a/txgy-module-bidding/txgy-module-bidding-server/src/main/java/cn/iocoder/txgy/module/bidding/service/noticefollow/FollowServiceImpl.java
++++ b/txgy-module-bidding/txgy-module-bidding-server/src/main/java/cn/iocoder/txgy/module/bidding/service/noticefollow/FollowServiceImpl.java
+@@ -513,12 +513,14 @@
+ 
+     /**
+      * 内部公告版本变化扇出（业务核查补全 2026-09-07）：发布首版/已发布内容更新时通知同租户关注者。
+-     * 匹配：公告级订阅（ANNOUNCEMENT, targetKey=公告id）+ 项目级订阅（PROJECT, targetKey=notice.projectCode）；
++     * 匹配：公告级订阅（ANNOUNCEMENT, targetKey=公告id）+ 三级编号订阅（PROJECT=notice.projectCode /
++     * TENDER_PROJECT=payload.TENDER_PROJECT_CODE / SECTION∈payload.BID_SECTION_CODES）；
+      * 事件键含动作与版本号：同一版本幂等（重放安全），新版本/重新发布产生新动态。
+      */
+     @Override
+     public void handleInternalNoticeChanged(String action, Long noticeId, String title, String publisherName,
+-                                            String projectName, String projectCode, int version) {
++                                            String projectName, String projectCode, String tenderProjectCode,
++                                            List<String> bidSectionCodes, int version) {
+         if (noticeId == null || action == null) {
+             return;
+         }
+@@ -536,6 +538,20 @@
+                         .eq(NoticeSubscriptionDO::getTargetType, TYPE_PROJECT)
+                         .eq(NoticeSubscriptionDO::getTargetKey, projectCode)));
+             }
++            // 三级编号（2026-09-23 补）：门户「我的关注」按三种编号建关注键，上面只查了 PROJECT，
++            // 招标项目级/标段级关注者结构上永远命中不到 → 本站公告发出去没人收到动态。
++            if (StringUtils.hasText(tenderProjectCode)) {
++                subscriptions.addAll(noticeSubscriptionMapper.selectList(new LambdaQueryWrapper<NoticeSubscriptionDO>()
++                        .eq(NoticeSubscriptionDO::getFollowStatus, STATUS_FOLLOWING)
++                        .eq(NoticeSubscriptionDO::getTargetType, TYPE_TENDER_PROJECT)
++                        .eq(NoticeSubscriptionDO::getTargetKey, tenderProjectCode)));
++            }
++            if (bidSectionCodes != null && !bidSectionCodes.isEmpty()) {
++                subscriptions.addAll(noticeSubscriptionMapper.selectList(new LambdaQueryWrapper<NoticeSubscriptionDO>()
++                        .eq(NoticeSubscriptionDO::getFollowStatus, STATUS_FOLLOWING)
++                        .eq(NoticeSubscriptionDO::getTargetType, TYPE_SECTION)
++                        .in(NoticeSubscriptionDO::getTargetKey, bidSectionCodes)));
++            }
+         } catch (Exception e) {
+             log.warn("[follow][internal] 订阅查询失败 noticeId={}", noticeId, e);
+             return;

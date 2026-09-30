@@ -1,0 +1,5 @@
+**
+!txgy-module-bpm/
+!txgy-module-bpm/txgy-module-bpm-server/
+!txgy-module-bpm/txgy-module-bpm-server/target/
+!txgy-module-bpm/txgy-module-bpm-server/target/txgy-module-bpm-server.jar

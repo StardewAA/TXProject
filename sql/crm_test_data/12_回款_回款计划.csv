@@ -1,0 +1,4 @@
+﻿plan_id,contract_id,contract_no,customer_id,customer_name,owner_user_id,owner_user_name,period,plan_amount,plan_date,remind_days,remind_time,return_type,actual_amount,actual_date,unpaid_amount,receivable_id,tenant_id
+7001,6001,TXGY-HT-2026-0012,3002,延长油田股份有限公司靖边采油厂,103,刘志强,第一期(预付款50%),693065.00,2026-09-20,7,2026-09-13,1,693065.00,2026-09-18,0.00,8001,1
+7002,6001,TXGY-HT-2026-0012,3002,延长油田股份有限公司靖边采油厂,103,刘志强,第二期(到货款50%),693065.00,2026-11-30,7,2026-11-23,2,0.00,,693065.00,,1
+7003,6002,TXGY-HT-2026-0015,3005,延长石油集团延安炼油厂,109,周文斌,全款(检测完成后),36000.00,2026-10-15,5,2026-10-10,1,36000.00,2026-10-12,0.00,8002,1

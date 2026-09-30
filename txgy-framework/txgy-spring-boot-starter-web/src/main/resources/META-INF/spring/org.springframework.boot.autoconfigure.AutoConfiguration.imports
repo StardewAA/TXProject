@@ -1,0 +1,8 @@
+cn.iocoder.txgy.framework.apilog.config.TxgyApiLogAutoConfiguration
+cn.iocoder.txgy.framework.jackson.config.TxgyJacksonAutoConfiguration
+cn.iocoder.txgy.framework.swagger.config.TxgySwaggerAutoConfiguration
+cn.iocoder.txgy.framework.web.config.TxgyWebAutoConfiguration
+cn.iocoder.txgy.framework.apilog.config.TxgyApiLogRpcAutoConfiguration
+cn.iocoder.txgy.framework.xss.config.TxgyXssAutoConfiguration
+cn.iocoder.txgy.framework.banner.config.TxgyBannerAutoConfiguration
+cn.iocoder.txgy.framework.encrypt.config.TxgyApiEncryptAutoConfiguration

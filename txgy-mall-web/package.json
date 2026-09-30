@@ -1,0 +1,37 @@
+{
+  "name": "txgy-mall-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.5.2",
+  "engines": {
+    "node": ">=22.18.0",
+    "pnpm": ">=11.0.0"
+  },
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5175",
+    "build": "vue-tsc -b && vite build",
+    "typecheck": "vue-tsc -b --pretty false",
+    "test:unit": "vitest run",
+    "preview": "vite preview --host 0.0.0.0 --port 5175"
+  },
+  "dependencies": {
+    "axios": "^1.18.0",
+    "element-plus": "^2.14.2",
+    "pinia": "^3.0.4",
+    "qrcode": "^1.5.4",
+    "vue": "^3.5.38",
+    "vue-router": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.4",
+    "@types/qrcode": "^1.5.6",
+    "@vitejs/plugin-vue": "^6.0.7",
+    "sass": "^1.101.0",
+    "typescript": "^6.0.3",
+    "unplugin-vue-components": "^32.1.0",
+    "vite": "8.0.10",
+    "vitest": "^4.1.9",
+    "vue-tsc": "^3.3.5"
+  }
+}

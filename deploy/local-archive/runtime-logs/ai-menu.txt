@@ -1,0 +1,20 @@
+2758	0	AI 大模型	/ai		400		\0
+2759	2758	AI 对话	chat	ai/chat/index/index.vue	1		\0
+2783	2758	AI 绘画	image	ai/image/index/index.vue	2		\0
+2792	2758	AI 写作	write	ai/write/index/index.vue	3		\0
+2794	2793	AI 写作查询			1		\0
+2795	2793	AI 写作删除			4		\0
+2796	2758	AI 音乐	music	ai/music/index/index.vue	4		\0
+2798	2758	AI 思维导图	mind-map	ai/mindmap/index/index.vue	6		\0
+2915	2758	AI 知识库	knowledge	ai/knowledge/knowledge/index	5		\0
+2916	2915	AI 知识库查询			1		\0
+2917	2915	AI 知识库创建			2		\0
+2918	2915	AI 知识库更新			3		\0
+2919	2915	AI 知识库删除			4		\0
+5000	2758	AI 工作流	workflow	ai/workflow/index.vue	5		\0
+5001	5000	AI 工作流查询			1		\0
+5002	5000	AI 工作流创建			2		\0
+5003	5000	AI 工作流更新			3		\0
+5004	5000	AI 工作流删除			4		\0
+5005	5000	AI 工作流测试			5		\0
+70017	70016	AI 知识库管理	knowledge	cms/consulting/knowledge/index	10		

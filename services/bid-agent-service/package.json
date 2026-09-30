@@ -1,0 +1,25 @@
+{
+  "name": "bid-agent-service",
+  "version": "0.1.0",
+  "description": "标书生成 Agent 编排服务（Node 22，零运行时依赖），对应《标书Agent_最终架构设计》第 4 章",
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "serve": "npm run build && node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "mock:java": "node tools/mock-java-api.mjs",
+    "mock:llm": "node tools/mock-llm.mjs",
+    "smoke": "node tools/smoke-test.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}

@@ -1,0 +1,40 @@
+*************************** 1. row ***************************
+70030
+发布管理
+cms:knowledge:query
+1
+30
+70000
+publish
+ep:promotion
+cms/publish/index
+CmsPublishManagement
+0
+
+
+
+1
+2026-09-18 10:05:19
+1
+2026-09-20 10:03:08
+ 
+*************************** 2. row ***************************
+70031
+发布已审内容
+cms:knowledge:publish
+2
+2
+70030
+standard
+ep:collection
+cms/content/standard/index
+CmsStandard
+0
+
+
+
+1
+2026-09-18 10:05:19
+1
+2026-09-20 10:03:08
+ 

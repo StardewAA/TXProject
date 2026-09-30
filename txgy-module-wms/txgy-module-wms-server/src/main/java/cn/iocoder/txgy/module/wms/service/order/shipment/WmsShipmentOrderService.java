@@ -1,0 +1,108 @@
+package cn.iocoder.txgy.module.wms.service.order.shipment;
+
+import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.module.wms.controller.admin.order.shipment.vo.order.WmsShipmentOrderPageReqVO;
+import cn.iocoder.txgy.module.wms.controller.admin.order.shipment.vo.order.WmsShipmentOrderSaveReqVO;
+import cn.iocoder.txgy.module.wms.dal.dataobject.order.shipment.WmsShipmentOrderDO;
+import jakarta.validation.Valid;
+
+/**
+ * WMS 出库单 Service 接口
+ *
+ * @author OPENLAB BS
+ */
+public interface WmsShipmentOrderService {
+
+    /**
+     * 创建出库单
+     *
+     * @param createReqVO 创建信息
+     * @return 编号
+     */
+    Long createShipmentOrder(@Valid WmsShipmentOrderSaveReqVO createReqVO);
+
+    /**
+     * 更新出库单
+     *
+     * @param updateReqVO 更新信息
+     */
+    void updateShipmentOrder(@Valid WmsShipmentOrderSaveReqVO updateReqVO);
+
+    /**
+     * 删除出库单
+     *
+     * @param id 编号
+     */
+    void deleteShipmentOrder(Long id);
+
+    /**
+     * 完成出库
+     *
+     * @param id 编号
+     */
+    void completeShipmentOrder(Long id);
+
+    /**
+     * 自动完成商城销售出库。
+     *
+     * <p>仅允许来源为 MALL 的出库单调用。商城订单已经完成支付和服务端库存校验，
+     * WMS 仍负责最终库存扣减与流水落库，但不再要求仓库人员重复提交 BPM 审批。</p>
+     *
+     * @param id 出库单编号
+     */
+    void autoCompleteMallShipment(Long id);
+
+    /**
+     * 提交出库单审批
+     *
+     * @param userId 发起人用户编号
+     * @param id 出库单编号
+     * @return 流程实例编号
+     */
+    String submitShipmentOrderApproval(Long userId, Long id);
+
+    /**
+     * BPM 流程结束后回写审批结果
+     */
+    void updateShipmentOrderApprovalStatus(Long id, String processInstanceId, Integer status, String reason);
+
+    /**
+     * 作废出库单
+     *
+     * @param id 编号
+     */
+    void cancelShipmentOrder(Long id);
+
+    /**
+     * 获得出库单
+     *
+     * @param id 编号
+     * @return 出库单
+     */
+    WmsShipmentOrderDO getShipmentOrder(Long id);
+
+    /**
+     * 获得出库单分页
+     *
+     * @param pageReqVO 分页查询
+     * @return 出库单分页
+     */
+    PageResult<WmsShipmentOrderDO> getShipmentOrderPage(WmsShipmentOrderPageReqVO pageReqVO);
+
+    /**
+     * 获得指定往来企业的出库单数量
+     *
+     * @param merchantId 往来企业编号
+     * @return 出库单数量
+     */
+    long getShipmentOrderCountByMerchantId(Long merchantId);
+
+    /**
+     * 获得指定仓库的出库单数量
+     *
+     * @param warehouseId 仓库编号
+     * @return 出库单数量
+     */
+    long getShipmentOrderCountByWarehouseId(Long warehouseId);
+
+}

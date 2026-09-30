@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <groupId>cn.iocoder.cloud</groupId>
+        <artifactId>txgy-module-bidding</artifactId>
+        <version>${revision}</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>txgy-module-bidding-server</artifactId>
+
+    <name>${project.artifactId}</name>
+    <description>
+        bidding 包下，公共资源交易招投标业务（企业后台 / 监管 / 公共服务大厅）。
+        业务代码按 docs/双层VO设计说明.md 的视图层设计逐步落地。
+    </description>
+
+    <properties>
+        <!--
+          JDK 21+ 默认禁止 JVM 动态自附加（self-attach），Mockito 的 inline mock maker 初始化会直接失败：
+          "Could not initialize plugin: interface org.mockito.plugins.MockMaker"，
+          表现为整个模块单测全红（2026-09-17 在 JDK 25.0.4 上实测 484 个用例报 365 个该错误）。
+          这里把 byte-buddy-agent 以 javaagent 形式预挂载，Mockito 检测到 instrumentation 后不再自附加。
+          版本与 org.mockito:mockito-core 传递依赖的 byte-buddy 保持一致；可用 -DargLine=... 覆盖。
+        -->
+        <txgy.surefire.byte-buddy.version>1.18.10</txgy.surefire.byte-buddy.version>
+        <txgy.surefire.argLine>-Xshare:off -javaagent:${settings.localRepository}/net/bytebuddy/byte-buddy-agent/${txgy.surefire.byte-buddy.version}/byte-buddy-agent-${txgy.surefire.byte-buddy.version}.jar</txgy.surefire.argLine>
+    </properties>
+
+    <dependencies>
+        <!-- Spring Cloud 基础 -->
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-spring-boot-starter-env</artifactId>
+        </dependency>
+
+        <!-- 依赖服务 -->
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-module-bidding-api</artifactId>
+            <version>${revision}</version>
+        </dependency>
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-module-system-api</artifactId>
+            <version>${revision}</version>
+        </dependency>
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-module-infra-api</artifactId>
+            <version>${revision}</version>
+        </dependency>
+
+        <!-- 业务组件 -->
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-spring-boot-starter-biz-tenant</artifactId>
+        </dependency>
+
+        <!-- 幂等/并发保护（@Idempotent 等，规范 4.5） -->
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-spring-boot-starter-protection</artifactId>
+        </dependency>
+        <!-- Redis Stream 消息队列（下载异步化：生产发消息 / 消费 ACK，崩溃 pending 自动重投不丢任务） -->
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-spring-boot-starter-mq</artifactId>
+        </dependency>
+        <!-- 多节点布隆过滤（Redis 位图）依赖：显式声明（starter-protection 亦传递引入，声明以消除传递歧义） -->
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-spring-boot-starter-redis</artifactId>
+        </dependency>
+
+        <!-- OpenDataLoader 本地 PDF 引擎（PDFBox，设计 v0.6 §7.3/§14.2/§15.6：本地抽取文本+表格，不 OCR）
+             版本须与 tika-parser-pdf-module（spring-ai-tika-document-reader 传递引入）的 pdfbox 3.x 对齐，
+             否则 PDF 解析抛 NoSuchFieldError（MemoryUsageSetting.streamCache）。 -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.7</version>
+        </dependency>
+
+        <!-- Web 相关 -->
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!-- DB 相关 -->
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-spring-boot-starter-mybatis</artifactId>
+        </dependency>
+
+        <!-- RPC 远程调用相关 -->
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-spring-boot-starter-rpc</artifactId>
+        </dependency>
+
+        <!-- Registry 注册中心相关 -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+        </dependency>
+
+        <!-- Config 配置中心相关 -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
+        </dependency>
+
+        <!-- 工具类相关 -->
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-spring-boot-starter-excel</artifactId>
+        </dependency>
+
+        <!-- 监控相关 -->
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-spring-boot-starter-monitor</artifactId>
+        </dependency>
+
+        <!-- Test 测试相关 -->
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- 规约自动化校验：架构/命名/注解约束（《招投标模块开发规范》对应章节），凡违规即令 mvn test 失败 -->
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <version>1.5.0</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- 标书智能体运行时：Qdrant 向量库 + Tika 解析。
+             Embedding/Rerank 不再走 spring-ai 的模型 starter，而是 framework/bidagent 下自研的
+             阿里云百炼 HTTP 客户端（DashScopeEmbeddingModel 实现 EmbeddingModel 供 VectorStore 使用），
+             因此无需 spring-ai-starter-model-openai，也不再需要 spring.ai.openai.api-key 占位。 -->
+        <dependency><groupId>org.springframework.ai</groupId><artifactId>spring-ai-starter-vector-store-qdrant</artifactId>
+            <version>2.0.0</version></dependency>
+        <dependency><groupId>org.springframework.ai</groupId><artifactId>spring-ai-tika-document-reader</artifactId>
+            <version>2.0.0</version></dependency>
+        <dependency><groupId>org.springframework.cloud</groupId><artifactId>spring-cloud-function-context</artifactId></dependency>
+        <dependency><groupId>org.springframework.cloud</groupId><artifactId>spring-cloud-function-core</artifactId></dependency>
+        <!-- ==================== 外部 CA 互认 SDK（gitee.com/cebpubservice，本地仓库已 mvn install） ====================
+             中国招标投标公共服务平台 CA 互认体系：Core 基础 + 扫码登录认证 + 消息签名验签 + 报文加解密 + 电子签章。
+             官方 SDK 目标 JDK 8，用 JDK 21 构建安装（lombok 1.18.32 不兼容 JDK 25 编译），jar 可直接打进 JDK 25 项目。
+             文档：docs/接口互认/（官方接入指南/前置条件清单）；对接清单见 29-外部CA与身份认证对接清单-2026-09-18.md
+             注：encrypt-decrypt-msg-sdk 官方 pom 依赖 Core 的 groupId 误写 com.cebpubservice，本地已修正为 com.cebpubservice.cashare -->
+        <dependency>
+            <groupId>com.cebpubservice.cashare</groupId>
+            <artifactId>cebpubservice-java-sdk-Core</artifactId>
+            <version>1.0.3</version>
+            <exclusions>
+                <!-- SDK 官方用 bcprov-jdk15on 1.70（旧命名）；项目统一 bcprov-jdk18on 1.84（同类 API，包名 org.bouncycastle.* 一致），排除旧版避免 classpath 双 BC -->
+                <exclusion>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcprov-jdk15on</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>com.cebpubservice.cashare</groupId>
+            <artifactId>cebpubservice-CA-CAShare-java-sdk-SharedLoginRegistration</artifactId>
+            <version>1.0.3</version>
+        </dependency>
+        <dependency>
+            <groupId>com.cebpubservice.cashare</groupId>
+            <artifactId>cebpubservice-CA-CAShare-java-sdk-SignatureAndVerifySignature</artifactId>
+            <version>1.0.3</version>
+        </dependency>
+        <dependency>
+            <groupId>com.cebpubservice.cashare</groupId>
+            <artifactId>cebpubservice-CA-CAShare-java-sdk-EncryptAndDecrypt</artifactId>
+            <version>1.0.3</version>
+        </dependency>
+        <dependency>
+            <groupId>com.cebpubservice.cashare</groupId>
+            <artifactId>cebpubservice-CA-CAShare-java-sdk-ElectronicSealSignatureAndVerifySignature</artifactId>
+            <version>1.0.3</version>
+        </dependency>
+        <!-- 本地国密算法（SM2/SM3/SM4）由 BC 提供：显式声明版本，避免 SDK 传递依赖与框架的 bcprov 冲突 -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+            <version>1.84</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <!-- 设置构建的 jar 包名 -->
+        <finalName>${project.artifactId}</finalName>
+        <plugins>
+            <!-- 规约测试执行器（JUnit Platform；ArchUnit 自定义引擎自动发现） -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+                <configuration>
+                    <!-- 见上方 txgy.surefire.argLine 注释：修复 JDK 21+ 下 Mockito 无法自附加导致的整模块单测失败 -->
+                    <argLine>${txgy.surefire.argLine}</argLine>
+                </configuration>
+            </plugin>
+            <!-- 打包 -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>${spring.boot.version}</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal> <!-- 将引入的 jar 打入其中 -->
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

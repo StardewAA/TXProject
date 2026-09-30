@@ -1,0 +1,54 @@
+# 标书生成 Agent 编排服务 + Mock LLM（接入 txgy-dev 网络，与 bidding 容器同网互访）
+#
+# 用途：把 Node 底座 bid-agent-service（8199）与 OpenAI 兼容 Mock LLM（8100）跑进容器，
+#   避免「Windows 宿主进程 ↔ WSL2 容器」跨网络边界不可达的问题。
+#
+# 用法（在 deploy 目录执行）：
+#   docker compose -f docker-compose.bidagent.yml build
+#   docker compose -f docker-compose.bidagent.yml up -d
+#
+# bidding 容器通过容器名访问：BIDDING_BID_AGENT_ORCHESTRATOR_BASE_URL=http://txgy-bid-agent:8199
+# Node 底座回连 Java 契约端走：JAVA_BASE_URL=http://txgy-bidding:48080
+services:
+
+  bid-agent-service:
+    build:
+      context: ../services/bid-agent-service
+    image: txgy-bid-agent:latest
+    container_name: txgy-bid-agent
+    environment:
+      AGENT_HOST: "0.0.0.0"
+      AGENT_PORT: "8199"
+      JAVA_BASE_URL: http://txgy-bidding:48080
+      # 生成 LLM 走阿里云百炼（OpenAI 兼容）；key 从环境变量注入，避免提交到仓库
+      LLM_BASE_URL: ${BID_AGENT_LLM_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      LLM_MODEL: ${BID_AGENT_LLM_MODEL:-qwen-plus}
+      LLM_API_KEY: ${BID_AGENT_LLM_API_KEY:-EMPTY}
+    ports:
+      - "8199:8199"
+    volumes:
+      # 工作区/会话持久化：容器重建不丢生成产物（生产要求见 README §9）
+      - ../services/bid-agent-service/workspace:/app/workspace
+      - ../services/bid-agent-service/sessions:/app/sessions
+    networks:
+      - txgy-dev
+    restart: unless-stopped
+
+  # 离线自测用 Mock LLM（仅当不想消耗真实模型额度时，把 LLM_BASE_URL 指回 http://txgy-mock-llm:8100/v1）
+  bid-agent-mock-llm:
+    image: node:22-alpine
+    container_name: txgy-mock-llm
+    working_dir: /app
+    volumes:
+      - ../services/bid-agent-service/tools/mock-llm.mjs:/app/mock-llm.mjs:ro
+    command: ["node", "mock-llm.mjs"]
+    ports:
+      - "8100:8100"
+    networks:
+      - txgy-dev
+    restart: unless-stopped
+
+networks:
+  txgy-dev:
+    external: true
+    name: txgy-dev

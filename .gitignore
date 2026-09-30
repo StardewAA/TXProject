@@ -1,0 +1,200 @@
+######################################################################
+# 临时排查脚本与探针输出（agent/人工排查用，勿入库）
+# 2026-09-23：仓库根此前会散落 .tmp-*.cjs/.sql/.log 等一次性探针文件，容易被误 git add。
+/.tmp/
+/.tmp-*
+/.tmp-scratch-*/
+
+######################################################################
+# Build Tools
+
+.gradle
+/build/
+!gradle/wrapper/gradle-wrapper.jar
+
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+.flattened-pom.xml
+
+######################################################################
+# 本地数据（体积大，不纳入版本管理）
+backup/
+.workbuddy/
+
+######################################################################
+# IDE
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+nbproject/private/
+build/*
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
+
+######################################################################
+# Others
+*.log
+
+######################################################################
+# 本地工具链与运行产物（不入库）
+# 说明：repo/.tools 下同时放"本地 JDK 解压目录 + nacos 数据 + DB 备份"与"启动脚本"。
+# 只忽略重资产/运行态，保留 .tools/setup/start-*.cmd 等可入库的便利脚本。
+.tools/jdk/
+.tools/home/
+.tools/setup/dump/
+.tools/setup/merge-backup-*/
+*.xml.versionsBackup
+*.swp
+
+!*/build/*.java
+!*/build/*.html
+!*/build/*.xml
+
+### JRebel ###
+rebel.xml
+
+application-my.yaml
+
+deploy/.env
+
+# 本地 Docker Compose 个性化覆盖（端口冲突规避等），不应入库
+deploy/docker-compose.override.yml
+
+# jar-only 镜像的构建输入（本机 mvn 编译产物，不应入库）
+deploy/backend/app.jar
+
+######################################################################
+# 本地缓存与开发工具
+.codegraph/
+.superpowers/
+**/docs/superpowers/
+_debug/
+
+######################################################################
+# 前端依赖与构建产物
+node_modules/
+
+# 前端按需加载的图标集合（由 scripts/generate-offline-icons.mjs 生成，不入 git）
+/txgy-ui-admin-vben/apps/web-antd/public/iconify/
+# 本地构建验证产生的历史产物副本（dist/ 已忽略，这里是手工重命名留下的）
+/txgy-ui-admin-vben/apps/web-antd/dist.bak/
+/txgy-ui-admin-vben/apps/web-antd/dist.old/
+# 绕开"清空 dist"批量删除护栏时使用的替代输出目录（见 skills/txgy-mall-patch-deploy）
+/txgy-ui-admin-vben/apps/web-antd/dist-facl/
+/txgy-ui-admin-vben/apps/web-antd/dist-facl2/
+
+######################################################################
+# 本地数据库整库备份
+sql/mysql/
+deploy/mysql/init/*mysql-all-databases*.sql*
+# 运维操作前的本地表备份（含数据，不入库）
+deploy/backup_*.sql
+# 整库导出快照目录（12 位时间戳命名，如 sql/202609201700/；单个 dump 常超 Gitee 单文件上限，仅本地运维用）
+sql/20??????????/
+
+######################################################################
+# 环境变量
+.env
+**/.env
+# Machine-local overrides must stay private on every clone, not just via .git/info/exclude.
+.env.local
+.env.*.local
+# 密钥文件（真实 API Key / AccessKey / 高德密钥等），绝不入库
+deploy/*keys*.env
+
+/txgy-ui-app/unpackage/
+.DS_Store
+**/.DS_Store
+
+######################################################################
+# 部署产物与工具缓存（不入库）
+/deploy/mysql/init.d/
+/.dsh-vision-router/
+/.preview_tmp/
+/design/.preview_tmp/
+lefthook.yml.*备份*
+/txgy-module-bidding/.git-backup-merged/
+# Local exam database and build verification logs
+services/training-exam/data/
+services/training-exam/__pycache__/
+services/training-exam/.pytest_cache/
+txgy-ui-admin-vben/.exam-*.log
+
+# 培训资源中心运行时上传文件（视频/文档本体，属运行数据不入库）
+uploads/
+# 例外：云培训学院标准视频种子数据随项目分发，应用启动自动入库
+!deploy/uploads/
+!deploy/uploads/resource/
+!deploy/uploads/resource/video/
+!deploy/uploads/resource/video/seed/
+!deploy/uploads/resource/video/seed/*.mp4
+!deploy/uploads/resource/video/seed/*.mov
+
+######################################################################
+# pnpm 本地内容寻址存储（仅本地缓存，禁止入库）
+.pnpm-store/
+# 镜像构建用的临时上下文
+.fe-image-context/
+.wms-image-context/
+
+# MES 后端构建产物（仅本地部署用，禁止入库）
+deploy/backend/app.jar
+deploy/backend/erp-app.jar
+
+# 本地法规原文、OCR 中间文件与导入记录（不提交附件及抓取内容）
+/data/cms-import/
+deploy/backend/bpm-app.jar
+deploy/backend/wms-app.jar
+/deploy/jars/**/app.jar
+
+# 报表后端构建产物（仅本地部署用，禁止入库）
+deploy/backend/report-app.jar
+
+# 前端 Playwright CLI 本地缓存（工具生成，不入库）
+.playwright-cli/
+
+# QA 浏览器会话态/证据导出（含 token/cookie，禁止入库）
+docs/hrm-qa/evidence/
+
+# 误生成的空文件
+/$null
+
+# 本地构建与运行时产物（独立编排的 jar / 前端产物 / 补丁 / 备份，不入库）
+.docker-local/
+# One-off inspection and hotfix build contexts are reproducible local artifacts.
+/.codex-hotfix-*/
+/.codex-inspect-*/
+/.codex-product-full-*/
+/deploy/jars/**/*.jar
+/deploy/jars/**/*.jar.bak-*
+/script/_dryrun-009.sql
+/script/_measure-refs.sql
+/script/_url-columns.txt
+# 独立编排初始化用的整库 dump（本地生成，不入库）
+deploy/mysql/standalone/001-*.sql
+
+# 本地缓存与临时目录（禁止入库：体积大且是机器生成的产物）
+# 说明：仓库里原有的 .pnpm-store/ 只覆盖了主存储，pnpm 在某些安装方式下会另建
+# .pnpm-store-alt/（本机实测 14.4 万个文件）；tmp/ 是本机排查脚本与构建日志。
+# 不忽略的话，一次 git add -A 会把这十几万文件全塞进索引。
+.pnpm-store-alt/
+tmp/
+.turbo/
+.kb-files/
+.review-wms-ai/

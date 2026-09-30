@@ -1,0 +1,321 @@
+name: txgy-mall
+
+x-backend-env: &backend-env
+  TZ: Asia/Shanghai
+  SERVER_PORT: 48080
+  SPRING_PROFILES_ACTIVE: local
+  SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR: nacos:8848
+  SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+  SPRING_CLOUD_NACOS_DISCOVERY_NAMESPACE: ""
+  SPRING_CLOUD_NACOS_CONFIG_NAMESPACE: ""
+  # Configuration is in Git/env; a pre-populated Nacos database is not required.
+  SPRING_CLOUD_NACOS_CONFIG_ENABLED: "false"
+  SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
+  SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_USERNAME: root
+  SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_PASSWORD: ${MYSQL_ROOT_PASSWORD:-mall-local-db-change-me}
+  SPRING_DATASOURCE_DYNAMIC_DATASOURCE_SLAVE_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
+  SPRING_DATASOURCE_DYNAMIC_DATASOURCE_SLAVE_USERNAME: root
+  SPRING_DATASOURCE_DYNAMIC_DATASOURCE_SLAVE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-mall-local-db-change-me}
+  SPRING_DATASOURCE_DYNAMIC_DRUID_MAX_ACTIVE: 10
+  SPRING_DATA_REDIS_HOST: redis
+  SPRING_BOOT_ADMIN_CLIENT_ENABLED: "false"
+  XXL_JOB_ENABLED: "false"
+  SPRING_QUARTZ_AUTO_STARTUP: "false"
+  TXGY_SECURITY_MOCK_ENABLE: "false"
+  TXGY_CAPTCHA_ENABLE: "false"
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info
+  MALL_ADDRESS_MAP_ENABLED: "false"
+  MALL_ADDRESS_MAP_PROVIDER: NONE
+  MALL_REGISTRATION_PICTURE_ENABLED: "true"
+  MALL_TENANT_DIRECTORY_ENABLED: "true"
+  MALL_TENANT_BROWSE_PREVIEW_ENABLED: "true"
+  MALL_TENANT_SCOPED_ENTRY_ENABLED: "true"
+  MALL_PLATFORM_ENTERPRISE_ID: 940400
+  MALL_TENANT_AUTH_ENABLED: "true"
+  MALL_TENANT_AUTH_HMAC_SECRET: ${MALL_AUTH_SECRET:-mall-local-auth-change-before-production-20260924}
+  MALL_TENANT_SMS_TEMPLATE_CODE: local-picture-registration
+  MALL_LEGACY_MEMBER_SALES_ENABLED: "false"
+  MALL_CUSTOMER_SERVICE_SCOPED_ENABLED: "true"
+  MALL_CUSTOMER_SERVICE_AI_ENABLED: "false"
+  TXGY_PAY_WALLET_PAY_APP_KEY: wallet
+  TXGY_TRADE_COMPATIBILITY_MEMBER_SUPPLIER_WRITE_ENABLED: "false"
+  TXGY_TRADE_PORTAL_SALES_FALLBACK_ENABLED: "true"
+  TXGY_TRADE_ORDER_LOCAL_AUTO_CANCEL_ENABLED: "true"
+  TXGY_TRADE_ORDER_STATUS_SYNC_TO_WXA_ENABLE: "false"
+  WMS_SHORTAGE_SENDER_ENABLED: "false"
+  LOGGING_LEVEL_CN_IOCODER_TXGY_MODULE: INFO
+
+x-backend: &backend
+  environment: *backend-env
+  restart: unless-stopped
+  depends_on:
+    mysql:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    nacos:
+      condition: service_healthy
+  healthcheck:
+    test: [CMD-SHELL, "curl -fsS http://localhost:48080/actuator/health >/dev/null"]
+    interval: 15s
+    timeout: 5s
+    start_period: 180s
+    retries: 20
+  logging:
+    driver: json-file
+    options:
+      max-size: 20m
+      max-file: "3"
+
+services:
+  mysql:
+    image: mysql:8.4
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-mall-local-db-change-me}
+      MYSQL_DATABASE: ruoyi-vue-pro
+      MALL_API_ORIGIN: ${MALL_API_ORIGIN:-http://localhost:48080}
+      OSS_BUCKET: ${OSS_BUCKET:-java-ai-comency}
+      OSS_ENDPOINT: ${OSS_ENDPOINT:-oss-cn-beijing.aliyuncs.com}
+      OSS_PUBLIC_ORIGIN: ${OSS_PUBLIC_ORIGIN:-https://java-ai-comency.oss-cn-beijing.aliyuncs.com}
+      TZ: Asia/Shanghai
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./sql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # Check critical tables before the marker: an old/incomplete volume must
+      # not report healthy merely because a release marker survived.
+      test: [CMD-SHELL, "MYSQL_PWD=\"$${MYSQL_ROOT_PASSWORD}\" mysql -h127.0.0.1 -uroot -N ruoyi-vue-pro -e \"SELECT 1 FROM member_platform_account LIMIT 0; SELECT 1 FROM member_platform_account_link LIMIT 0; SELECT 1 FROM member_platform_tenant_membership LIMIT 0; SELECT 1 FROM product_enterprise LIMIT 0; SELECT promote_status, promote_fail_count, promote_last_error FROM infra_file LIMIT 0; SELECT 1 FROM infra_file_upload_ticket LIMIT 0; SELECT 1 FROM trade_erp_inventory_request LIMIT 0; SELECT version FROM mall_release WHERE version='2026-09-25-file-acl'\" | grep -q 2026-09-25-file-acl"]
+      interval: 10s
+      timeout: 5s
+      start_period: 90s
+      retries: 30
+    restart: unless-stopped
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+  nacos:
+    image: nacos/nacos-server:v3.0.3
+    environment:
+      MODE: standalone
+      NACOS_AUTH_ENABLE: "false"
+      NACOS_AUTH_TOKEN: bWFsbC1sb2NhbC1uYWNvcy1kZW1vLXRva2VuLWNoYW5nZS1tZQ==
+      NACOS_AUTH_IDENTITY_KEY: mall-local
+      NACOS_AUTH_IDENTITY_VALUE: mall-local
+      JVM_XMS: 256m
+      JVM_XMX: 512m
+      JVM_XMN: 128m
+      TZ: Asia/Shanghai
+    volumes:
+      - nacos-data:/home/nacos/data
+    healthcheck:
+      test: [CMD-SHELL, "curl -fsS http://localhost:8848/nacos/v3/admin/core/state/readiness | grep -Eq '\"data\"[[:space:]]*:[[:space:]]*\"ok\"'"]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 20
+    restart: unless-stopped
+  gateway:
+    <<: *backend
+    build:
+      context: ../..
+      dockerfile: deploy/mall/Dockerfile.backend
+      args: { MODULE_PATH: txgy-gateway }
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${MALL_API_PORT:-48080}:48080"
+  system:
+    <<: *backend
+    build:
+      context: ../..
+      dockerfile: deploy/mall/Dockerfile.backend
+      args: { MODULE_PATH: txgy-module-system/txgy-module-system-server }
+  infra:
+    <<: *backend
+    # Deliberately scoped: no database/Nacos credentials are copied from deploy/.env.
+    env_file:
+      - ${MALL_OSS_ENV_FILE:-../oss-keys.env}
+    build:
+      context: ../..
+      dockerfile: deploy/mall/Dockerfile.backend
+      args: { MODULE_PATH: txgy-module-infra/txgy-module-infra-server }
+  member:
+    <<: *backend
+    environment:
+      <<: *backend-env
+      MALL_ADDRESS_MAP_ENABLED: ${MALL_ADDRESS_MAP_ENABLED:-true}
+      MALL_ADDRESS_MAP_PROVIDER: AMAP
+    build:
+      context: ../..
+      dockerfile: deploy/mall/Dockerfile.backend
+      args: { MODULE_PATH: txgy-module-member/txgy-module-member-server }
+  pay:
+    <<: *backend
+    build:
+      context: ../..
+      dockerfile: deploy/mall/Dockerfile.backend
+      args: { MODULE_PATH: txgy-module-pay/txgy-module-pay-server }
+  product:
+    <<: *backend
+    build:
+      context: ../..
+      dockerfile: deploy/mall/Dockerfile.backend
+      args: { MODULE_PATH: txgy-module-mall/txgy-module-product-server }
+  trade:
+    <<: *backend
+    build:
+      context: ../..
+      dockerfile: deploy/mall/Dockerfile.backend
+      args: { MODULE_PATH: txgy-module-mall/txgy-module-trade-server }
+  promotion:
+    <<: *backend
+    environment:
+      <<: *backend-env
+      MALL_CUSTOMER_SERVICE_AI_ENABLED: ${MALL_CUSTOMER_SERVICE_AI_ENABLED:-true}
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      nacos: { condition: service_healthy }
+      ai: { condition: service_healthy }
+    build:
+      context: ../..
+      dockerfile: deploy/mall/Dockerfile.backend
+      args: { MODULE_PATH: txgy-module-mall/txgy-module-promotion-server }
+  statistics:
+    <<: *backend
+    build:
+      context: ../..
+      dockerfile: deploy/mall/Dockerfile.backend
+      args: { MODULE_PATH: txgy-module-mall/txgy-module-statistics-server }
+  wms:
+    <<: *backend
+    build:
+      context: ../..
+      dockerfile: deploy/mall/Dockerfile.backend
+      args: { MODULE_PATH: txgy-module-wms/txgy-module-wms-server }
+  ai:
+    <<: *backend
+    env_file:
+      - ${MALL_DEEPSEEK_ENV_FILE:-../deepseek-keys.env}
+    environment:
+      <<: *backend-env
+      AI_PROVIDER_CONNECT_TIMEOUT_MS: 3000
+      AI_PROVIDER_READ_TIMEOUT_MS: 15000
+      JAVA_OPTS: -Xms96m -Xmx512m -XX:MaxMetaspaceSize=384m -XX:ActiveProcessorCount=2
+    build:
+      context: ../..
+      dockerfile: deploy/mall/Dockerfile.backend
+      args: { MODULE_PATH: txgy-module-ai/txgy-module-ai-server }
+    volumes:
+      - ai-vector-store:/root/vector_store
+  mall-pc:
+    build:
+      context: ../../txgy-mall-web
+      secrets:
+        - source: pc_amap_env
+          target: amap_env
+      args:
+        AMAP_BUILD_REV: ${AMAP_BUILD_REV:-bundled-20260925}
+        VITE_PAYMENT_PREVIEW: "true"
+        VITE_MALL_PUBLIC_BASE_URL: ${MALL_PUBLIC_ORIGIN:-http://localhost:15175}
+        VITE_MALL_DEMO_MODE: "true"
+        VITE_MALL_H5_URL: ${MALL_H5_ORIGIN:-}
+        VITE_MALL_H5_PORT: ${MALL_H5_PORT:-3000}
+        VITE_ANDROID_APK_URL: ${VITE_ANDROID_APK_URL:-}
+        VITE_ANDROID_APP_VERSION: ${VITE_ANDROID_APP_VERSION:-}
+        VITE_ANDROID_FILE_SIZE: ${VITE_ANDROID_FILE_SIZE:-}
+        VITE_ANDROID_RELEASE_DATE: ${VITE_ANDROID_RELEASE_DATE:-}
+        VITE_ANDROID_MIN_VERSION: ${VITE_ANDROID_MIN_VERSION:-}
+        VITE_ANDROID_SHA256: ${VITE_ANDROID_SHA256:-}
+        VITE_ANDROID_PERMISSIONS_SUMMARY: ${VITE_ANDROID_PERMISSIONS_SUMMARY:-}
+        VITE_MOBILE_FEEDBACK_URL: ${VITE_MOBILE_FEEDBACK_URL:-}
+        VITE_PUBLIC_IMAGE_ORIGIN: ${OSS_PUBLIC_ORIGIN:-https://java-ai-comency.oss-cn-beijing.aliyuncs.com}
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${MALL_PC_PORT:-15175}:80"
+    depends_on:
+      gateway: { condition: service_healthy }
+      product: { condition: service_healthy }
+      member: { condition: service_healthy }
+      trade: { condition: service_healthy }
+    restart: unless-stopped
+  mall-h5:
+    build:
+      context: ../..
+      dockerfile: deploy/uniapp/Dockerfile.mall
+      secrets:
+        - source: h5_amap_env
+          target: amap_env
+      args:
+        AMAP_BUILD_REV: ${AMAP_BUILD_REV:-bundled-20260925}
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${MALL_H5_PORT:-3000}:80"
+    depends_on:
+      mall-pc: { condition: service_healthy }
+    restart: unless-stopped
+  admin:
+    build:
+      context: ../..
+      dockerfile: deploy/frontend/Dockerfile
+      args:
+        VITE_MALL_PC_URL: ${MALL_PUBLIC_ORIGIN:-http://localhost:15175}
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${MALL_ADMIN_PORT:-5173}:80"
+    depends_on:
+      gateway: { condition: service_healthy }
+      system: { condition: service_healthy }
+      infra: { condition: service_healthy }
+    restart: unless-stopped
+  verify:
+    image: python:3.13-alpine
+    profiles: [tools]
+    volumes:
+      - ./verify.py:/verify.py:ro
+    command: [python, /verify.py]
+  verify-local:
+    image: python:3.13-alpine
+    profiles: [tools]
+    volumes:
+      - ./verify.py:/verify.py:ro
+    command: [python, /verify.py, --local-only]
+  verify-assets:
+    image: python:3.13-alpine
+    profiles: [tools]
+    environment:
+      OSS_PUBLIC_ORIGIN: ${OSS_PUBLIC_ORIGIN:-https://java-ai-comency.oss-cn-beijing.aliyuncs.com}
+    volumes:
+      - ./tools/public_assets.py:/public_assets.py:ro
+      - ./public-assets.json:/public-assets.json:ro
+    command: [python, /public_assets.py, verify, --manifest, /public-assets.json]
+  preflight:
+    image: python:3.13-alpine
+    profiles: [tools]
+    environment:
+      REQUIRE_AMAP: ${MALL_ADDRESS_MAP_ENABLED:-true}
+      # The AI service is still started when automatic replies are disabled.
+      REQUIRE_DEEPSEEK: "true"
+    volumes:
+      - ./preflight.py:/preflight.py:ro
+      - ${MALL_OSS_ENV_FILE:-../oss-keys.env}:/config/oss.env:ro
+      - ${MALL_DEEPSEEK_ENV_FILE:-../deepseek-keys.env}:/config/deepseek.env:ro
+      - ${MALL_PC_MAP_ENV_FILE:-../../txgy-mall-web/.env.local}:/config/pc.env:ro
+      - ${MALL_H5_MAP_ENV_FILE:-../../txgy-mall-uniapp-master/.env.local}:/config/h5.env:ro
+    command: [python, /preflight.py]
+
+secrets:
+  pc_amap_env:
+    file: ${MALL_PC_MAP_ENV_FILE:-../../txgy-mall-web/.env.local}
+  h5_amap_env:
+    file: ${MALL_H5_MAP_ENV_FILE:-../../txgy-mall-uniapp-master/.env.local}
+
+volumes:
+  mysql-data:
+  redis-data:
+  nacos-data:
+  ai-vector-store:

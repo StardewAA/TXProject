@@ -1,0 +1,43 @@
+# 独立的本机开发配置。不要覆盖现有 deploy/docker-compose.yml 中的缓存 Redis。
+# Redis 8 已整合原 Redis Stack 的 Search/JSON/Vector 能力，默认将数据持久化到 D 盘。
+name: txgy-cms-search
+
+services:
+  redis-search:
+    image: ${CMS_REDIS_SEARCH_IMAGE:-redis:8.2}
+    profiles: ["search"]
+    ports:
+      - "127.0.0.1:${CMS_REDIS_SEARCH_PORT:-6380}:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - type: bind
+        source: ${CMS_REDIS_SEARCH_DATA_DIR:-D:/Redis-Stack/data}
+        target: /data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --raw COMMAND INFO FT.SEARCH | grep -qi '^ft.search$'"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${CMS_ELASTICSEARCH_VERSION:-8.19.19}
+    profiles: ["search"]
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      xpack.security.enrollment.enabled: "false"
+      ES_JAVA_OPTS: ${CMS_ELASTICSEARCH_JAVA_OPTS:--Xms512m -Xmx448m}
+    ports:
+      - "127.0.0.1:${CMS_ELASTICSEARCH_PORT:-9200}:9200"
+    volumes:
+      - type: bind
+        source: ${CMS_ELASTICSEARCH_DATA_DIR:-D:/Elasticsearch-8.19.19/data}
+        target: /usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s' >/dev/null"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 45s
+    restart: unless-stopped

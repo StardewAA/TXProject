@@ -1,0 +1,174 @@
+/**
+ * 招聘门户（/portal/recruit 系列页面）暗色适配 —— 对应问题 4 / 8
+ *
+ * 背景：门户页面是独立的品牌化样式（大量固定浅色），跟随系统切到暗色后，
+ * 卡片仍是白底、按钮色与页面不协调，浅色下也有低对比风险。
+ *
+ * 实现：只做「暗色覆盖」，用 html.dark 提高优先级；浅色模式保持原有品牌配色不变。
+ * 类清单来自实际渲染扫描（docs/hrm-qa/evidence/theme-dark-offenders.json），
+ * 覆盖门户首页/职位/企业/沟通/求职资料/应聘记录六个区块的主要容器、卡片、表单控件与按钮。
+ */
+
+html.dark {
+  /* 门户配色变量：暗色下改为浅字 + 深底 */
+  --portal-dark-surface: hsl(var(--card));
+  --portal-dark-surface-soft: color-mix(in srgb, hsl(var(--card)) 88%, #ffffff 12%);
+  --portal-dark-line: hsl(var(--border));
+  --portal-dark-ink: hsl(var(--foreground));
+  --portal-dark-muted: hsl(var(--muted-foreground));
+}
+
+html.dark .portal-shell,
+html.dark .portal-page,
+html.dark .portal-page.recruit-page,
+html.dark .recruit-page,
+html.dark .recruit-page--home,
+html.dark .recruit-page--rich-footer {
+  background: hsl(var(--background)) !important;
+  color: var(--portal-dark-ink) !important;
+}
+
+/* 顶部导航 */
+html.dark .recruit-subnav {
+  background: color-mix(in srgb, hsl(var(--card)) 92%, transparent) !important;
+  border-bottom-color: var(--portal-dark-line) !important;
+  color: var(--portal-dark-ink) !important;
+}
+
+html.dark .recruit-subnav button,
+html.dark .recruit-nav-links button,
+html.dark .recruit-account-name,
+html.dark .recruit-brand-copy strong {
+  color: var(--portal-dark-ink) !important;
+}
+
+html.dark .recruit-subnav button.active,
+html.dark .recruit-nav-links button.active {
+  background: color-mix(in srgb, hsl(var(--primary)) 18%, transparent) !important;
+  color: hsl(var(--primary)) !important;
+}
+
+/* 卡片类容器 */
+html.dark .post-card,
+html.dark .post-card.home-job-card,
+html.dark .post-card.home-company-card,
+html.dark .search-post-card,
+html.dark .search-detail-card,
+html.dark .company-card,
+html.dark .company-card-main,
+html.dark .company-directory,
+html.dark .company-filters,
+html.dark .company-sort,
+html.dark .company-directory-stats,
+html.dark .filter-panel,
+html.dark .search-result-list,
+html.dark .service-grid article,
+html.dark .location-card,
+html.dark .offer-card,
+html.dark .resume-card,
+html.dark .ant-tabs-content-holder {
+  background: var(--portal-dark-surface) !important;
+  border-color: var(--portal-dark-line) !important;
+  color: var(--portal-dark-ink) !important;
+}
+
+/* 卡片内的次级区域与文字 */
+html.dark .post-card-actions,
+html.dark .recruit-category-content,
+html.dark .location-address,
+html.dark .location-actions,
+html.dark .location-fallback,
+html.dark .location-loading {
+  background: var(--portal-dark-surface-soft) !important;
+  border-color: var(--portal-dark-line) !important;
+  color: var(--portal-dark-ink) !important;
+}
+
+html.dark .post-card *,
+html.dark .search-post-card *,
+html.dark .search-detail-card *,
+html.dark .company-card *,
+html.dark .company-directory *,
+html.dark .filter-panel *,
+html.dark .offer-card *,
+html.dark .location-card * {
+  border-color: var(--portal-dark-line);
+}
+
+html.dark .post-card small,
+html.dark .post-card .post-meta,
+html.dark .search-post-card small,
+html.dark .company-card small,
+html.dark .location-address,
+html.dark .offer-card small {
+  color: var(--portal-dark-muted) !important;
+}
+
+/* 表单控件：antd 组件在暗色下已有变量，门户自定义选择器需跟随 */
+html.dark .ant-select-selector,
+html.dark .ant-input,
+html.dark .ant-input-affix-wrapper,
+html.dark .ant-pagination-item-link,
+html.dark input,
+html.dark select,
+html.dark textarea {
+  background: var(--portal-dark-surface) !important;
+  border-color: var(--portal-dark-line) !important;
+  color: var(--portal-dark-ink) !important;
+}
+
+html.dark .ant-input::placeholder,
+html.dark input::placeholder {
+  color: var(--portal-dark-muted) !important;
+}
+
+/* 门户按钮：保证暗色下文字与底色形成足够对比（问题 4） */
+html.dark .post-card-actions button,
+html.dark .city-opportunities-next,
+html.dark .city-opportunities-prev,
+html.dark .hero-tool-icon,
+html.dark .location-secondary,
+html.dark button.active {
+  background: var(--portal-dark-surface-soft) !important;
+  border-color: var(--portal-dark-line) !important;
+  color: var(--portal-dark-ink) !important;
+}
+
+html.dark .detail-favorite-button,
+html.dark .detail-favorite {
+  background: var(--portal-dark-surface) !important;
+  border-color: hsl(var(--primary)) !important;
+  color: hsl(var(--primary)) !important;
+}
+
+html.dark .detail-favorite-button.active {
+  background: color-mix(in srgb, hsl(var(--primary)) 18%, transparent) !important;
+}
+
+html.dark .detail-chat-button,
+html.dark .location-primary,
+html.dark .offer-actions button {
+  background: hsl(var(--primary)) !important;
+  border-color: hsl(var(--primary)) !important;
+  color: #fff !important;
+}
+
+html.dark .detail-apply-button {
+  background: var(--portal-dark-surface) !important;
+  border-color: var(--portal-dark-line) !important;
+  color: var(--portal-dark-ink) !important;
+}
+
+/* 标签 / 徽标 */
+html.dark .hiring-tag,
+html.dark .company-monogram,
+html.dark .recruit-footer-badge {
+  background: color-mix(in srgb, hsl(var(--primary)) 16%, transparent) !important;
+  border-color: color-mix(in srgb, hsl(var(--primary)) 40%, transparent) !important;
+  color: hsl(var(--primary)) !important;
+}
+
+html.dark .recruit-footer {
+  background: var(--portal-dark-surface) !important;
+  border-top-color: var(--portal-dark-line) !important;
+}

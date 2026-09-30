@@ -1,0 +1,150 @@
+# 本地新栈覆盖文件（最新 master 构建）
+# 与旧栈（project=deploy）完全隔离：独立 project 名、独立网络、独立数据卷；
+# 旧栈容器仅 stop，数据卷保留，可随时回退。
+# 用法（在 deploy 目录，经 D:\txgy-new 联接路径执行）：
+#   docker compose -f docker-compose.yml -f docker-compose.txgynew.yml up -d mysql redis nacos
+name: txgynew
+
+services:
+  mysql:
+    # 全新卷首次启动只执行 newinit（01-full-dump.sql 为旧栈全库逻辑备份）
+    volumes: !override
+      - mysql-data:/var/lib/mysql
+      - ./mysql/newinit:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p\"$${MYSQL_ROOT_PASSWORD}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 180s
+
+  nacos:
+    environment:
+      PREFER_HOST_MODE: hostname
+    # 宿主端口避开 txgy-stack 的 8848/9848/9849（容器间仍走内部网络 nacos:8848）
+    ports: !override
+      - "8851:8848"
+      - "9851:9848"
+      - "9852:9849"
+
+  gateway:
+    image: txgynew-gateway:local
+    # 宿主端口避开 txgy-stack 的 48080/48081（容器间仍走内部网络 gateway:48080）
+    ports: !override
+      - "48082:48080"
+    build:
+      context: ./jars/gateway
+      dockerfile: Dockerfile.runtime
+      args:
+        JAR_FILE: app.jar
+    environment:
+      JAVA_OPTS: -Xms128m -Xmx384m -XX:MaxMetaspaceSize=192m -XX:+UseG1GC
+    healthcheck:
+      test: ["CMD-SHELL", "exit 0"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
+
+  system:
+    image: txgynew-system:local
+    build:
+      context: ./jars/system
+      dockerfile: Dockerfile.runtime
+      args:
+        JAR_FILE: app.jar
+    environment:
+      JAVA_OPTS: -Xms128m -Xmx384m -XX:MaxMetaspaceSize=192m -XX:+UseG1GC
+    healthcheck:
+      test: ["CMD-SHELL", "exit 0"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
+
+  infra:
+    image: txgynew-infra:local
+    build:
+      context: ./jars/infra
+      dockerfile: Dockerfile.runtime
+      args:
+        JAR_FILE: app.jar
+    environment:
+      OSS_ACCESS_KEY: ${OSS_ACCESS_KEY:-}
+      OSS_ACCESS_SECRET: ${OSS_ACCESS_SECRET:-}
+      JAVA_OPTS: -Xms128m -Xmx384m -XX:MaxMetaspaceSize=192m -XX:+UseG1GC
+    healthcheck:
+      test: ["CMD-SHELL", "exit 0"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
+
+  # 培训模块（旧栈在跑的业务模块；主 compose 未定义，此处补齐）
+  training:
+    image: txgynew-training:local
+    build:
+      context: ./jars/training
+      dockerfile: Dockerfile.runtime
+      args:
+        JAR_FILE: app.jar
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    environment:
+      TZ: ${TZ}
+      SERVER_PORT: 48080
+      SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR: nacos:8848
+      SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+      SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
+      SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_USERNAME: root
+      SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      SPRING_DATASOURCE_DYNAMIC_DATASOURCE_SLAVE_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
+      SPRING_DATASOURCE_DYNAMIC_DATASOURCE_SLAVE_USERNAME: root
+      SPRING_DATASOURCE_DYNAMIC_DATASOURCE_SLAVE_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      SPRING_DATA_REDIS_HOST: redis
+      RESOURCE_UPLOAD_DIR: /app/uploads
+      TXGY_CAPTCHA_ENABLE: "false"
+      JAVA_OPTS: -Xms128m -Xmx384m -XX:MaxMetaspaceSize=192m -XX:+UseG1GC
+    volumes:
+      - training-uploads:/app/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "exit 0"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
+    networks:
+      - txgy-dev
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # 前端：复用已构建 dist 卷 + nginx 反代（含 training-exam）
+  frontend:
+    image: nginx:alpine
+    ports: !override
+      - "5174:80"
+    volumes:
+      - txgynew-frontend-dist:/usr/share/nginx/html:ro
+      - ./frontend/nginx-txgynew.conf:/etc/nginx/conf.d/default.conf:ro
+
+networks:
+  txgy-dev:
+    name: txgynew-dev
+
+volumes:
+  # 复用旧栈培训上传资源卷（只读复用既有资源，不影响旧栈回退）
+  training-uploads:
+    external: true
+    name: deploy_training-uploads
+  # 前端 dist 卷（已复制旧克隆 dist；新构建完成后替换内容）
+  txgynew-frontend-dist:
+    name: txgynew-frontend-dist

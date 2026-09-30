@@ -1,0 +1,28 @@
+package cn.iocoder.txgy.module.product.api.shop.dto;
+
+import lombok.Data;
+
+/**
+ * 企业店铺信息 Response DTO。
+ *
+ * @author DAMU
+ */
+@Data
+public class ProductShopRespDTO {
+
+    /** 店铺编号 */
+    private Long id;
+    /** 店铺名称 */
+    private String name;
+    /** 店铺 Logo */
+    private String logoUrl;
+    /** 店铺状态 */
+    private Integer status;
+    /** 店铺负责人（后台系统用户编号） */
+    private Long managerUserId;
+
+    /** 店铺登记的发货/退货地址；缺失时回退企业档案地址，仅供内部业务接口使用 */
+    private String dispatchAddress;
+
+}
+

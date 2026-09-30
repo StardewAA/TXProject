@@ -1,0 +1,15 @@
+# 运行态与本地依赖不入库（服务源码 + .env.example 入库，便于队友直接起服务）
+node_modules/
+dist/
+
+# 本地凭据：只提交 .env.example，真实 key 写 .env（仓库根 .gitignore 已忽略 .env）
+.env
+.env.local
+
+# 运行产物
+sessions/
+sessions-*/
+workspace/
+workspace-*/
+uploads/
+*.log

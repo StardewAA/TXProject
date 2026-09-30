@@ -1,0 +1,70 @@
+# =====================================================================
+# 本地辅助编排：将 ERP + INFRA 微服务纳入 compose 统一管理
+# 用法（与 mes.yml 合并，一条命令启动全部已部署服务）：
+#   docker compose -f deploy/docker-compose.mes.yml -f deploy/docker-compose.erp.yml up -d
+#
+# 说明：
+#   - 镜像 deploy-erp / deploy-infra = deploy-system 基础镜像 + 各自 jar
+#     （docker commit 生成），不走 compose build，避免在线拉取基础镜像
+#   - 故意不设置 restart 策略：这两个容器不开机自启，开机后由上面这条命令统一拉起
+#   - 本文件为本地辅助文件，暂未提交团队仓库；如需入库请先与团队对齐
+# =====================================================================
+services:
+  infra:
+    image: deploy-infra:latest
+    environment:
+      SERVER_PORT: "48082"
+      SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR: nacos:8848
+      SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+      SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
+      SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_USERNAME: root
+      SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_PASSWORD: mm123456
+      SPRING_DATA_REDIS_HOST: redis
+      JAVA_OPTS: -Xms256m -Xmx576m
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent --show-error http://localhost:$${SERVER_PORT}/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - txgy-dev
+
+  erp:
+    image: deploy-erp:latest
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile.local
+      args:
+        MODULE_PATH: txgy-module-erp/txgy-module-erp-server
+    environment:
+      SERVER_PORT: "48088"
+      SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR: nacos:8848
+      SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+      SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
+      SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_USERNAME: root
+      SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_PASSWORD: mm123456
+      SPRING_DATA_REDIS_HOST: redis
+      JAVA_OPTS: -Xms256m -Xmx576m
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent --show-error http://localhost:$${SERVER_PORT}/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - txgy-dev

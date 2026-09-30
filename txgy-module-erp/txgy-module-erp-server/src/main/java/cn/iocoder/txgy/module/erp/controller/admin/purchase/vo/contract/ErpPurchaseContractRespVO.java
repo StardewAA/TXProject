@@ -1,0 +1,80 @@
+package cn.iocoder.txgy.module.erp.controller.admin.purchase.vo.contract;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.Data;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Data
+public class ErpPurchaseContractRespVO {
+    private Long id;
+    private String no;
+    private String contractName;
+    private Long supplierId;
+    private String supplierName;
+    private Long purchaseOrderId;
+    private String purchaseOrderNo;
+    private LocalDateTime signDate;
+    private LocalDateTime effectiveDate;
+    private LocalDateTime expireDate;
+    private BigDecimal totalAmount;
+    private BigDecimal taxRate;
+    private String paymentTerms;
+    private String deliveryPlace;
+    private LocalDateTime deliveryDeadline;
+    private String signPlace;
+    private String currency;
+    private Long signerId;
+    private String signerName;
+    private String qualityStandard;
+    private Integer acceptancePeriodDays;
+    private Integer warrantyPeriodMonths;
+    private Integer afterSaleResponseHours;
+    private Integer onSiteServiceHours;
+    private Integer maxRepairTimes;
+    private BigDecimal advancePaymentRatio;
+    private BigDecimal advancePaymentAmount;
+    private Integer advancePaymentDays;
+    private BigDecimal acceptancePaymentRatio;
+    private BigDecimal acceptancePaymentAmount;
+    private Integer acceptancePaymentDays;
+    private BigDecimal warrantyRetentionRatio;
+    private BigDecimal warrantyRetentionAmount;
+    private Integer warrantyReleaseDays;
+    private String warrantyReleaseCondition;
+    private BigDecimal buyerRejectPenaltyRatio;
+    private BigDecimal buyerOverdueRate;
+    private Integer buyerTerminationDays;
+    private BigDecimal sellerQualityPenaltyRatio;
+    private BigDecimal sellerOverdueRate;
+    private Integer sellerTerminationDays;
+    private BigDecimal sellerTerminationCompensationRatio;
+    private BigDecimal ipDefectPenaltyRatio;
+    private String buyerName;
+    private String buyerLegalRepresentative;
+    private String buyerAddress;
+    private String buyerBankName;
+    private String buyerBankAccount;
+    private String buyerPhone;
+    private String buyerFax;
+    private String supplierNameSnapshot;
+    private String sellerLegalRepresentative;
+    private String sellerAddress;
+    private String sellerBankName;
+    private String sellerBankAccount;
+    private String sellerPhone;
+    private String sellerFax;
+    private Long templateId;
+    private String templateName;
+    private String templateVersion;
+    private String legalTerms;
+    private Integer status;
+    @Schema(description = "反审批原因")
+    private String reverseApproveReason;
+    private String fileUrl;
+    private String remark;
+    private String creator;
+    private String creatorName;
+    private LocalDateTime createTime;
+}

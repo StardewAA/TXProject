@@ -1,0 +1,10 @@
+import { chromium } from 'playwright';
+const browser = await chromium.launch({ channel: 'msedge', headless: true });
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+await page.goto('http://127.0.0.1:8080/', { waitUntil: 'networkidle', timeout: 60000 });
+console.log('url=' + page.url());
+console.log('title=' + await page.title());
+console.log('inputs=' + JSON.stringify(await page.locator('input').evaluateAll((els) => els.map((el) => ({ type: el.type, placeholder: el.placeholder, name: el.name })))));
+console.log('buttons=' + JSON.stringify(await page.locator('button').allTextContents()));
+await page.screenshot({ path: 'runtime-logs/cms-login.png', fullPage: true });
+await browser.close();

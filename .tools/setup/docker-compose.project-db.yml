@@ -1,0 +1,8 @@
+# 本地 override（未纳入仓库跟踪）：
+# deploy/mysql/init 里是别的服务器（hyperv_ubuntu）导出的增量 dump，不适合给一个空库做初始化，
+# 因此这里把 mysql 的初始化挂载整个去掉（!override），改为启动后导入本次整库备份：
+#   .tools/setup/dump/ruoyi-vue-pro-20260915.sql
+services:
+  mysql:
+    volumes: !override
+      - mysql-data:/var/lib/mysql

@@ -1,0 +1,32 @@
+# 文件访问控制（2026-09-24 复评整改）联调覆盖层
+#
+# 作用：把 infra / trade / product / member 四个服务切到本轮回评整改构建出的补丁镜像。
+# 这四者之外的镜像保持 docker-compose.mall-rollout.yml 中的既有版本不变。
+#
+# 用法（叠加在主编排之后，最后一个 -f 优先级最高）：
+#   docker compose -p deploy \
+#     -f deploy/docker-compose.yml \
+#     -f deploy/docker-compose.mall-rollout.yml \
+#     -f deploy/docker-compose.mall-android-rollout.yml \
+#     -f deploy/docker-compose.file-acl-rollout.yml \
+#     up -d --no-build infra trade product member
+#
+# 说明：
+# 1. `--no-build` 必须带上：主编排里这些服务都带 `build:` 段（上下文是仓库根），
+#    若不带该参数且镜像缺失，compose 会在容器内重跑整条 Maven Reactor 构建。
+# 2. 补丁镜像由 deploy/patch-image/Dockerfile.patch-app / Dockerfile.patch-product
+#    以"当前运行镜像"为基底、仅替换 app.jar 生成，JVM 参数与健康检查不变。
+# 3. 回滚：删掉本文件的 -f 参数并 `up -d --no-build`，即回到 mall-rollout 的旧镜像。
+services:
+  infra:
+    image: deploy-infra:file-acl-20260924-7
+    pull_policy: never
+  trade:
+    image: mall-trade:file-acl-20260924-4
+    pull_policy: never
+  product:
+    image: mall-product:file-acl-20260924-3
+    pull_policy: never
+  member:
+    image: mall-member:file-acl-20260924-2
+    pull_policy: never

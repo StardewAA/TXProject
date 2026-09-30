@@ -1,0 +1,407 @@
+/* =====================================================================
+ * bid-indust：招投标模块视觉基座（2026-09-11 主题化）
+ * 管理端（.bid-ind）与门户招投标域均对齐平台标准视觉 —— 全量走主题 token
+ * （--card/--border/--foreground/--muted-foreground/--primary 等），深色/浅色自适应，
+ * 与 CRM/商城/MES 等模块口径一致。
+ * 注：2026-09-11 门户招投标 6 页也已主题化，原「门户保留工业风」的 .portal-shell
+ *     覆盖块已移除；门户中非招投标页面的浅色锁定在 layouts/portal.vue（.portal-light）。
+ * ===================================================================== */
+
+/* ---------- 旧「工业风」变量 → 平台主题 token 映射（页面局部样式沿用） ---------- */
+:root {
+  --ind-ink: hsl(var(--foreground));
+  --ind-line: hsl(var(--border));
+  --ind-line-soft: hsl(var(--border));
+  --ind-paper: hsl(var(--card));
+  --ind-bone: hsl(var(--muted));
+  --ind-orange: hsl(var(--primary));
+  --ind-amber: hsl(var(--warning));
+  --ind-ink-text: hsl(var(--foreground));
+  --ind-sub-text: hsl(var(--muted-foreground));
+  --ind-weak-text: hsl(var(--muted-foreground));
+  --ind-row-hover: hsl(var(--accent));
+  --ind-row-active: hsl(var(--primary) / 8%);
+  /* 语义色（深浅两套，供页面局部样式直接引用） */
+  --ind-ok: #15803d;
+  --ind-warn: #b45309;
+  --ind-warn-bg: hsl(var(--warning) / 12%);
+  --ind-warn-border: hsl(var(--warning) / 40%);
+  --ind-danger: hsl(var(--destructive));
+  /* 层次感与斑马纹：深浅两套分别取值，页面直接用 var(--ind-shadow) / var(--ind-zebra) */
+  --ind-shadow: 0 1px 3px hsl(var(--foreground) / 7%);
+  --ind-shadow-lg: 0 2px 8px hsl(var(--foreground) / 10%);
+  --ind-zebra: hsl(var(--muted-foreground) / 6%);
+}
+
+.dark {
+  --ind-ok: #4ade80;
+  --ind-warn: #fbbf24;
+  /* 深色下阴影需要更重才看得出层次；斑马纹改用低透明前景色，避免浅色底纹在深底上"发灰" */
+  --ind-shadow: 0 1px 3px hsl(var(--background) / 40%);
+  --ind-shadow-lg: 0 2px 8px hsl(var(--background) / 55%);
+  --ind-zebra: hsl(var(--foreground) / 4%);
+}
+
+/* ---------- ③ 管理端：平台标准视觉（深浅色自适应） ---------- */
+.bid-ind { color: hsl(var(--foreground)); }
+.bid-ind :where(h1, h2, h3, h4) { color: hsl(var(--foreground)); }
+
+/* 页面容器 */
+.bid-ind.ind-page { padding: 14px; }
+.bid-ind .ind-body { padding: 14px 2px 8px; }
+
+/* 顶部刻条：工业风装饰已去除（保留占位高度，不改变布局） */
+.bid-ind .ind-stripes { height: 7px; background: transparent; }
+
+/* 页头：对齐平台「标题 + 操作」样式（无底色块） */
+.bid-ind .ind-head {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 2px 2px 14px;
+  color: hsl(var(--foreground));
+  background: transparent;
+  border-radius: 0;
+  flex-wrap: wrap;
+}
+.bid-ind .ind-title {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+.bid-ind .ind-title .ind-mark {
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: hsl(var(--primary));
+  letter-spacing: 0.5px;
+  background: hsl(var(--primary) / 10%);
+  border-radius: 4px;
+}
+.bid-ind .ind-sub {
+  max-width: 760px;
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.65;
+  color: hsl(var(--muted-foreground));
+}
+.bid-ind .ind-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+/* KPI 卡 */
+.bid-ind .ind-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+.bid-ind .ind-kpi {
+  position: relative;
+  padding: 12px 16px;
+  overflow: hidden;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+}
+.bid-ind .ind-kpi::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: hsl(var(--muted-foreground) / 40%);
+  content: '';
+}
+.bid-ind .ind-kpi.k-green::before { background: hsl(var(--success)); }
+.bid-ind .ind-kpi.k-orange::before { background: hsl(var(--warning)); }
+.bid-ind .ind-kpi.k-red::before { background: hsl(var(--destructive)); }
+.bid-ind .ind-kpi.k-blue::before { background: hsl(var(--primary)); }
+.bid-ind .ind-kpi .k-label {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  text-transform: none;
+  letter-spacing: 0;
+}
+.bid-ind .ind-kpi .k-num {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: hsl(var(--foreground));
+  font-variant-numeric: tabular-nums;
+}
+.bid-ind .ind-kpi .k-note { margin-top: 2px; font-size: 12px; color: hsl(var(--muted-foreground)); }
+.bid-ind .ind-kpi .k-unit { font-size: 14px; font-weight: 500; color: hsl(var(--muted-foreground)); }
+
+/* 面板 */
+.bid-ind .ind-panel {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+}
+.bid-ind .ind-panel > .ind-panel-h {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 16px;
+  background: hsl(var(--muted) / 50%);
+  border-bottom: 1px solid hsl(var(--border));
+}
+.bid-ind .ind-panel > .ind-panel-h .ind-panel-t {
+  font-size: 14px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+.bid-ind .ind-panel > .ind-panel-h .ind-panel-meta {
+  font-size: 12.5px;
+  color: hsl(var(--muted-foreground));
+}
+.bid-ind .ind-panel > .ind-panel-b { padding: 14px 16px; }
+
+/* 卡片 / 行卡片 */
+.bid-ind .ind-card {
+  margin-bottom: 10px;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+}
+.bid-ind .ind-card-h {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 16px;
+  background: hsl(var(--muted) / 40%);
+  border-bottom: 1px solid hsl(var(--border));
+}
+.bid-ind .ind-card-h .cd-title {
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+.bid-ind .ind-card-h .cd-meta {
+  margin-left: auto;
+  font-size: 12.5px;
+  color: hsl(var(--muted-foreground));
+  white-space: nowrap;
+}
+.bid-ind .ind-card-b { padding: 12px 16px; }
+
+/* 键值栅格 */
+.bid-ind .ind-kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 22px; }
+.bid-ind .ind-kv .kv { display: flex; gap: 8px; align-items: baseline; min-width: 0; }
+.bid-ind .ind-kv .kv .k { flex: 0 0 auto; font-size: 12.5px; font-weight: 500; color: hsl(var(--muted-foreground)); }
+.bid-ind .ind-kv .kv .v { font-size: 13px; font-weight: 500; color: hsl(var(--foreground)); word-break: break-all; }
+.bid-ind .ind-kv .v.weak { font-weight: 400; color: hsl(var(--muted-foreground)); }
+
+/* 行式列表（批次等） */
+.bid-ind .ind-row {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 10px 4px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+.bid-ind .ind-row:last-child { border-bottom: none; }
+.bid-ind .ind-row .rw { font-size: 13px; font-weight: 500; color: hsl(var(--muted-foreground)); }
+.bid-ind .ind-row .rw.main {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  color: hsl(var(--foreground));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bid-ind .ind-row .rw.time {
+  font-size: 12.5px;
+  color: hsl(var(--muted-foreground));
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 选项卡（自绘）：对齐平台的「下划线式」标签页 */
+.bid-ind .ind-tabs {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-top: 4px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+.bid-ind .ind-tab {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: -1px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  appearance: none;
+}
+.bid-ind .ind-tab:hover { color: hsl(var(--foreground)); }
+.bid-ind .ind-tab.on {
+  font-weight: 600;
+  color: hsl(var(--primary));
+  border-bottom-color: hsl(var(--primary));
+}
+.bid-ind .ind-tab.on::after { content: none; }
+.bid-ind .ind-tab .cnt {
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  color: hsl(var(--muted-foreground));
+  background: hsl(var(--muted));
+  border-radius: 9px;
+}
+.bid-ind .ind-tab.on .cnt { color: hsl(var(--primary)); background: hsl(var(--primary) / 10%); }
+.bid-ind .ind-tab-body { padding: 16px 0 0; background: transparent; border: none; }
+
+/* 空态 / 分节标题 */
+.bid-ind .ind-empty {
+  padding: 32px 20px;
+  font-size: 13px;
+  font-weight: 400;
+  color: hsl(var(--muted-foreground));
+  text-align: center;
+  background: hsl(var(--muted) / 30%);
+  border: 1px dashed hsl(var(--border));
+  border-radius: var(--radius);
+}
+.bid-ind .ind-sec-t {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  margin-bottom: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+.bid-ind .ind-sec-t span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: hsl(var(--primary));
+  letter-spacing: 0.5px;
+  background: hsl(var(--primary) / 10%);
+  border-radius: 4px;
+}
+.bid-ind .ind-doc-extra { max-height: 300px; overflow: auto; }
+
+/* ---------- 两档视图（概览 → 详情）交互反馈 ---------- */
+.bid-ind .ind-card-click { cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; }
+.bid-ind .ind-card-click:hover { border-color: hsl(var(--primary) / 40%); box-shadow: 0 3px 10px rgb(0 0 0 / 6%); }
+.bid-ind .cd-link { font-size: 13px; font-weight: 500; color: hsl(var(--primary)); white-space: nowrap; }
+.bid-ind .cd-link:hover { text-decoration: underline; }
+.bid-ind .ind-card-b .cd-abs { font-size: 13px; font-weight: 400; color: hsl(var(--muted-foreground)); }
+.bid-ind .ind-dl-row { cursor: pointer; border-radius: 4px; transition: background-color 0.12s; }
+.bid-ind .ind-dl-row:hover { background: hsl(var(--accent)); }
+.bid-ind .ind-dl-row.on { background: hsl(var(--primary) / 8%); }
+
+/* 公文预览（爬虫解析渲染区）：保留公文体排版，配色走主题 */
+.bid-ind .ind-doc {
+  max-height: 300px;
+  padding: 14px 16px;
+  overflow: auto;
+  font-family: 'Songti SC', SimSun, serif;
+  font-size: 14px;
+  line-height: 1.95;
+  color: hsl(var(--foreground));
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+}
+.bid-ind .ind-doc h1.doc-title {
+  margin: 0 0 10px;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-size: 17px;
+  font-weight: 600;
+  text-align: center;
+}
+.bid-ind .ind-doc p.doc-para { margin: 0 0 5px; text-indent: 2em; }
+.bid-ind .ind-doc table { width: 100%; margin: 6px 0; border-collapse: collapse; }
+.bid-ind .ind-doc td {
+  padding: 6px 10px;
+  font-size: 13px;
+  vertical-align: top;
+  border: 1px solid hsl(var(--border));
+}
+.bid-ind .ind-doc td.doc-kv-key {
+  width: 110px;
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+  background: hsl(var(--muted) / 60%);
+}
+
+/* ---------- 页面框架（列表/工作台页通用） ---------- */
+.bid-ind .ind-filterbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 16px;
+  margin-bottom: 14px;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  flex-wrap: wrap;
+}
+.bid-ind .ind-table-shell {
+  overflow: hidden;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+}
+.bid-ind .ind-table-shell .ant-table,
+.bid-ind .ind-table-shell .vxe-grid { padding: 2px 2px 0; }
+
+/* 列表单项卡（流程/公告等） */
+.bid-ind .ind-item {
+  padding: 13px 16px;
+  margin-bottom: 10px;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.bid-ind .ind-item:hover { border-color: hsl(var(--primary) / 40%); box-shadow: 0 3px 10px rgb(0 0 0 / 6%); }
+.bid-ind .ind-item .it-title { font-size: 14px; font-weight: 600; line-height: 1.4; color: hsl(var(--foreground)); }
+.bid-ind .ind-item a { margin-right: 10px; font-size: 13px; font-weight: 500; }
+.bid-ind .ind-item .it-sub { font-size: 12.5px; font-weight: 400; color: hsl(var(--muted-foreground)); }
+.bid-ind .ind-item .it-meta { font-size: 12.5px; font-weight: 400; color: hsl(var(--muted-foreground)); }
+
+/* 主段落标题 */
+.bid-ind .ind-sect {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding-bottom: 8px;
+  margin: 18px 0 10px;
+  font-size: 15px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  border-bottom: 1px solid hsl(var(--border));
+}
+.bid-ind .ind-sect small { margin-left: 6px; font-size: 12.5px; font-weight: 400; color: hsl(var(--muted-foreground)); }
+
+/* 表单区（主体档案等） */
+.bid-ind .form-lbl { margin-bottom: 6px; font-size: 13px; font-weight: 500; color: hsl(var(--foreground)); }
+.bid-ind .form-field-wrap { margin-bottom: 2px; }
+.bid-ind .form-panel {
+  padding: 18px 18px 8px;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+}

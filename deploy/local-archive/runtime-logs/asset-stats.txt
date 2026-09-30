@@ -1,0 +1,5 @@
+	FILE	1
+PDF文档	PDF	7
+产品图	IMAGE	32
+关于天信	IMAGE	52
+文章图	IMAGE	361

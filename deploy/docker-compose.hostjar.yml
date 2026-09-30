@@ -1,0 +1,243 @@
+# 本地部署覆盖文件：所有后端服务统一使用「宿主机 Maven 产物 + 薄镜像」构建。
+#
+# 为什么需要它：deploy/docker-compose.yml 里 member/bpm/pay/... 等 17 个服务用的是
+#   context: .. + deploy/backend/Dockerfile（源码进、镜像出），每个服务都会在容器内
+#   各自重跑一遍全量 Maven；而 gateway/system/infra/im/ai 指向的
+#   deploy/jars/<svc>/Dockerfile.runtime 在仓库里只有 ai 一个。本文件把 25 个后端服务
+#   统一改成「jar 进、镜像出」：构建上下文就是 deploy/jars/<svc>，镜像里只 COPY app.jar。
+#
+# 用法（在 deploy 目录下，先完成宿主机打包）：
+#   mvn -Dmaven.test.skip=true package                 # 宿主机全量打包（JDK 25）
+#   bash script/docker/stage-jars.sh                   # 各模块 target/*.jar -> deploy/jars/<svc>/app.jar
+#   docker compose -f docker-compose.yml -f docker-compose.hostjar.yml up -d --build
+#
+# 前置条件：deploy/jars/<service>/app.jar 必须存在，否则对应服务的镜像构建会失败。
+# ==============================================================================
+
+# 另外：本文件为每个后端容器加 mem_limit（= Xmx + MaxMetaspaceSize 再留 ~35% 余量），
+# 避免单个服务堆外内存（线程栈/直接内存/CodeCache）膨胀拖垮整个 Docker VM；
+# mes(2048m)/nacos(3072m) 在 docker-compose.yml 里已有更具体的上限，此处不再覆盖。
+# 本机 Docker VM 内存上限由 .wslconfig 的 memory 控制（已由 8GB 调整到 20GB）。
+# ==============================================================================
+#
+# 2026-09-21 更新（同步远程 master 后）：
+#   1. gateway/infra/system/training 四支使用仓库自带的薄 Dockerfile.runtime
+#      （远程版本，镜像内不含 curl），因此这四个服务的 healthcheck 改为
+#      bash /dev/tcp 端口探测，否则会因为 curl 不存在而长期 unhealthy。
+#   2. bidding / cms / training 只在本覆盖文件中定义（锚点不跨文件），
+#      所以这里内联补齐后端公共环境变量、depends_on、网络与日志轮转。
+# ==============================================================================
+
+x-local-backend-env: &local-backend-env
+  SERVER_PORT: 48080
+  TZ: ${TZ}
+  SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR: nacos:8848
+  SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+  SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
+  SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_USERNAME: root
+  SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+  SPRING_DATA_REDIS_HOST: redis
+  RESOURCE_UPLOAD_DIR: /app/uploads
+  TXGY_CAPTCHA_ENABLE: "false"
+
+# 无 curl 镜像的探活方式：bash 的 /dev/tcp 打开 48080 端口即视为存活
+x-tcp-probe: &tcp-probe
+  test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/48080'"]
+  interval: 15s
+  timeout: 5s
+  retries: 20
+  start_period: 90s
+
+x-curl-probe: &curl-probe
+  test: ["CMD-SHELL", "curl --fail --silent --show-error http://localhost:$${SERVER_PORT}/actuator/health"]
+  interval: 15s
+  timeout: 5s
+  retries: 20
+  start_period: 90s
+
+x-local-backend-service: &local-backend-service
+  depends_on:
+    mysql:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    nacos:
+      condition: service_healthy
+  networks:
+    - txgy-dev
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options:
+      max-size: "50m"
+      max-file: "3"
+
+services:
+  gateway:
+    build:
+      context: ./jars/gateway
+      dockerfile: Dockerfile.runtime
+    healthcheck: *tcp-probe
+    mem_limit: 768m
+  system:
+    build:
+      context: ./jars/system
+      dockerfile: Dockerfile.runtime
+    healthcheck: *tcp-probe
+    mem_limit: 1152m
+  infra:
+    build:
+      context: ./jars/infra
+      dockerfile: Dockerfile.runtime
+    environment:
+      OSS_ACCESS_KEY: ${OSS_ACCESS_KEY:-}
+      OSS_ACCESS_SECRET: ${OSS_ACCESS_SECRET:-}
+    healthcheck: *tcp-probe
+    mem_limit: 1152m
+  member:
+    build:
+      context: ./jars/member
+      dockerfile: Dockerfile.runtime
+    mem_limit: 1152m
+  bpm:
+    build:
+      context: ./jars/bpm
+      dockerfile: Dockerfile.runtime
+    mem_limit: 1280m
+  pay:
+    build:
+      context: ./jars/pay
+      dockerfile: Dockerfile.runtime
+    mem_limit: 1152m
+  report:
+    build:
+      context: ./jars/report
+      dockerfile: Dockerfile.runtime
+    mem_limit: 1024m
+  mp:
+    build:
+      context: ./jars/mp
+      dockerfile: Dockerfile.runtime
+    mem_limit: 1152m
+  product:
+    build:
+      context: ./jars/product
+      dockerfile: Dockerfile.runtime
+    mem_limit: 1152m
+  trade:
+    build:
+      context: ./jars/trade
+      dockerfile: Dockerfile.runtime
+    mem_limit: 1152m
+  promotion:
+    build:
+      context: ./jars/promotion
+      dockerfile: Dockerfile.runtime
+    mem_limit: 1152m
+  statistics:
+    build:
+      context: ./jars/statistics
+      dockerfile: Dockerfile.runtime
+    mem_limit: 1152m
+  crm:
+    build:
+      context: ./jars/crm
+      dockerfile: Dockerfile.runtime
+    mem_limit: 1152m
+  erp:
+    build:
+      context: ./jars/erp
+      dockerfile: Dockerfile.runtime
+    mem_limit: 1280m
+  iot:
+    build:
+      context: ./jars/iot
+      dockerfile: Dockerfile.runtime
+    mem_limit: 1152m
+  iot-gateway:
+    build:
+      context: ./jars/iot-gateway
+      dockerfile: Dockerfile.runtime
+    mem_limit: 768m
+  mes:
+    build:
+      context: ./jars/mes
+      dockerfile: Dockerfile.runtime
+  wms:
+    build:
+      context: ./jars/wms
+      dockerfile: Dockerfile.runtime
+    mem_limit: 1280m
+  im:
+    build:
+      context: ./jars/im
+      dockerfile: Dockerfile.runtime
+    mem_limit: 1024m
+  ai:
+    build:
+      context: ./jars/ai
+      dockerfile: Dockerfile.runtime
+    mem_limit: 1280m
+  hrm:
+    build:
+      context: ./jars/hrm
+      dockerfile: Dockerfile.runtime
+    mem_limit: 1152m
+  fms:
+    build:
+      context: ./jars/fms
+      dockerfile: Dockerfile.runtime
+    mem_limit: 1152m
+
+  # 2026-09-21 新增：招投标 / 云学院 / CMS（构建上下文必须是 deploy/jars/<svc>：仓库路径含非 ASCII，
+  # 用仓库根做 context 会让 docker 解析失败）
+  bidding:
+    <<: *local-backend-service
+    build:
+      context: ./jars/bidding
+      dockerfile: Dockerfile.runtime
+    environment:
+      <<: *local-backend-env
+      # 服务间调用直连，避免缺少注册中心时 Feign 找不到实例
+      JAVA_OPTS: -Xms96m -Xmx448m -XX:MaxMetaspaceSize=320m -XX:+UseG1GC -XX:MaxRAMPercentage=40 -Dspring.cloud.openfeign.client.config.system-server.url=http://system:48080 -Dspring.cloud.openfeign.client.config.infra-server.url=http://infra:48080
+      # 本机未部署 Elasticsearch：按模块自带的降级开关关闭 ES（公告不建全文索引，其余业务不受影响）
+      BIDDING_ES_ENABLED: "false"
+    healthcheck: *curl-probe
+    mem_limit: 1152m
+
+  training:
+    <<: *local-backend-service
+    build:
+      context: ./jars/training
+      dockerfile: Dockerfile.runtime
+    environment:
+      <<: *local-backend-env
+      # 让 controller.portal.** 也注册到 /admin-api 前缀下
+      TXGY_WEB_ADMIN_API_CONTROLLER: "**.controller.**"
+      JAVA_OPTS: -Xms96m -Xmx384m -XX:MaxMetaspaceSize=256m -XX:+UseG1GC -XX:MaxRAMPercentage=36 -Dspring.cloud.discovery.client.simple.instances.system-server[0].uri=http://system:48080 -Dspring.cloud.discovery.client.simple.instances.training-server[0].uri=http://training:48080
+    # 资源上传落宿主机目录，容器重建后课件/附件不丢
+    volumes:
+      - ./uploads:/app/uploads
+    healthcheck: *tcp-probe
+    mem_limit: 1280m
+
+  cms:
+    <<: *local-backend-service
+    build:
+      context: ./jars/cms
+      dockerfile: Dockerfile.runtime
+    environment:
+      <<: *local-backend-env
+      TXGY_DB_HOST: mysql
+      TXGY_DB_PORT: "3306"
+      TXGY_DB_NAME: ruoyi-vue-pro
+      TXGY_DB_USERNAME: root
+      TXGY_DB_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      TXGY_SEARCH_ES_ENABLED: "false"
+      CMS_NACOS_ENABLED: "true"
+      NACOS_SERVER_ADDR: nacos:8848
+      NACOS_NAMESPACE: dev
+      CMS_SERVER_PORT: "48080"
+      JAVA_OPTS: -Xms96m -Xmx448m -XX:MaxMetaspaceSize=320m -XX:+UseG1GC -XX:MaxRAMPercentage=40
+    healthcheck: *curl-probe
+    mem_limit: 1152m

@@ -1,0 +1,30 @@
+-- HRM 招聘职位关联的用工需求单。
+
+CREATE TABLE IF NOT EXISTS `hrm_recruit_demand` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '需求编号',
+  `demand_no` varchar(64) NOT NULL COMMENT '需求单号（REQ-yyyyMMdd-序号）',
+  `demand_name` varchar(128) NOT NULL COMMENT '需求名称',
+  `dept_id` bigint DEFAULT NULL COMMENT '用工部门/项目部编号',
+  `company_profile_id` bigint DEFAULT NULL COMMENT '用工主体编号',
+  `work_type` varchar(64) DEFAULT NULL COMMENT '工种',
+  `cert_require` varchar(512) DEFAULT NULL COMMENT '证照要求（多个用、分隔）',
+  `headcount` int NOT NULL DEFAULT '0' COMMENT '需求人数',
+  `onboard_count` int NOT NULL DEFAULT '0' COMMENT '已到岗人数',
+  `plan_entry_date` date DEFAULT NULL COMMENT '计划进场日期',
+  `expect_salary` varchar(64) DEFAULT NULL COMMENT '参考单价',
+  `urgency` tinyint DEFAULT '1' COMMENT '紧急程度：1 普通 2 紧急 3 特急',
+  `status` tinyint NOT NULL DEFAULT '1' COMMENT '状态：1 待招聘 2 招聘中 3 已完成 4 已取消',
+  `applicant` varchar(64) DEFAULT NULL COMMENT '提出人',
+  `contact_mobile` varchar(32) DEFAULT NULL COMMENT '联系方式',
+  `remark` varchar(500) DEFAULT NULL COMMENT '备注',
+  `creator` varchar(64) DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
+  PRIMARY KEY (`id`),
+  KEY `idx_demand_no` (`demand_no`),
+  KEY `idx_status` (`status`),
+  KEY `idx_dept` (`dept_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='HRM 用工需求单';

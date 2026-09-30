@@ -1,0 +1,343 @@
+spring:
+  application:
+    name: bidding-server
+
+  profiles:
+    active: local
+
+  main:
+    allow-circular-references: true # 允许循环依赖，因为项目是三层架构，无法避免这个情况。
+    allow-bean-definition-overriding: true # 允许 Bean 覆盖，例如说 Feign 等会存在重复定义的服务
+
+  config:
+    import:
+      - optional:classpath:application-${spring.profiles.active}.yaml # 加载【本地】配置
+      - optional:nacos:${spring.application.name}-${spring.profiles.active}.yaml # 加载【Nacos】的配置
+
+  # Servlet 配置
+  servlet:
+    # 文件上传相关配置项
+    multipart:
+      max-file-size: 16MB # 单个文件大小
+      max-request-size: 32MB # 设置总上传的文件大小
+
+  # Cache 配置项
+  cache:
+    type: REDIS
+    redis:
+      time-to-live: 1h # 设置过期时间为 1 小时
+
+server:
+  port: 48110
+
+logging:
+  file:
+    name: ${user.home}/logs/${spring.application.name}.log # 日志文件名，全路径
+
+--- #################### 接口文档配置 ####################
+
+springdoc:
+  api-docs:
+    enabled: true # 1. 是否开启 Swagger 接文档的元数据
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true # 2.1 是否开启 Swagger 文档的官方 UI 界面
+    path: /swagger-ui
+  default-flat-param-object: true # 参见 https://doc.xiaominfo.com/docs/faq/v4/knife4j-parameterobject-flat-param 文档
+
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+
+# MyBatis Plus 的配置项
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true # 虽然默认为 true ，但是还是显示去指定下。
+  global-config:
+    db-config:
+      id-type: NONE # "智能"模式，基于 IdTypeEnvironmentPostProcessor + 数据源的类型，自动适配成 AUTO、INPUT 模式。
+      logic-delete-value: 1 # 逻辑已删除值(默认为 1)
+      logic-not-delete-value: 0 # 逻辑未删除值(默认为 0)
+    banner: false # 关闭控制台的 Banner 打印
+  type-aliases-package: ${txgy.info.base-package}.dal.dataobject
+  encryptor:
+    password: XDV71a+xqStEA3WH # 加解密的秘钥，可使用 https://www.imaegoo.com/2020/aes-key-generator/ 网站生成
+
+mybatis-plus-join:
+  banner: false # 关闭控制台的 Banner 打印
+
+# Spring Data Redis 配置
+spring:
+  data:
+    redis:
+      repositories:
+        enabled: false # 项目未使用到 Spring Data Redis 的 Repository，所以直接禁用，保证启动速度
+
+# VO 转换（数据翻译）相关
+easy-trans:
+  is-enable-global: false # 【默认禁用，对性能确认压力大】启用全局翻译（拦截所有 SpringMVC ResponseBody 进行自动翻译 )。如果对于性能要求很高可关闭此配置，或通过 @IgnoreTrans 忽略某个接口
+
+--- #################### MQ 消息队列相关配置 ####################
+
+--- #################### 定时任务相关配置 ####################
+
+xxl:
+  job:
+    executor:
+      appname: ${spring.application.name} # 执行器 AppName
+      logpath: ${user.home}/logs/xxl-job/${spring.application.name} # 执行器运行日志文件存储磁盘路径
+    accessToken: default_token # 执行器通讯TOKEN
+
+--- #################### OPENLAB BS相关配置 ####################
+
+txgy:
+  info:
+    version: 1.0.0
+    base-package: cn.iocoder.txgy.module.bidding
+  web:
+    admin-ui:
+      url: http://dashboard.txgy.iocoder.cn # Admin 管理后台 UI 的地址
+  xss:
+    enable: false
+    exclude-urls: # 如下 url，仅仅是为了演示，去掉配置也没关系
+      - ${management.endpoints.web.base-path}/** # 不处理 Actuator 的请求
+  swagger:
+    title: 管理后台
+    description: 提供管理员管理的所有功能
+    version: ${txgy.info.version}
+  tenant: # 多租户相关配置项
+    enable: true
+    ignore-urls:
+    # 不参与租户插件自动过滤的表（TenantDatabaseInterceptor 按本清单决定是否追加 tenant_id 条件）。
+    #
+    # 为什么 bidding_dict_data 必须在这里：该表是"平台默认行(tenant_id=0) + 租户覆盖行(tenant_id=N)"
+    #   的双租户模型，MetaDictServiceImpl 自己写 tenant_id 谓词（先查 0 再叠加当前租户）。
+    #   若插件再追加 `AND tenant_id = 当前租户`，条件变成自相矛盾（实测 tenant_id = 0 AND tenant_id = 1
+    #   ⇒ Total: 0，/bidding/meta/dicts 报 1060108008「字典类型不支持」）。
+    #   库里 196 行 / 44 类字典**全部** tenant_id=0，故表现为"整张字典表都读不到"、
+    #   前端所有状态下拉与角标静默回落英文 code。
+    # ⚠️ 修在配置而不是 DO 注解：框架的 @TenantIgnore 是对**方法**做 AOP（TenantIgnoreAspect），
+    #   加在 DO 上实测无效（SQL 仍带 AND tenant_id = 1）。
+    ignore-tables:
+      - bidding_dict_data
+
+# 检索组件（notice 全文检索，规范 4.6）：es 开关放根级 bidding: 下，与 EsNoticeSearchEngine 的
+# @ConditionalOnProperty(prefix=bidding.es) / @Value(bidding.es.uris) 读取键一致
+# enabled=true 启用 ES 引擎（原生 HTTP，失败重试 3 次，索引 bidding-notice / bidding-notice-external）；无集群时置 false 走数据库兜底
+bidding:
+  flow:
+    # 招标全流程运转模式（2026-09-20，BiddingFlowProperties 读取）：
+    #   TEST=测试中：招标方/平台方/政府审批方点击「下一步」或「审批通过」手动驱动状态流转（联调演示）
+    #   PROD=实战：时间驱动（投标截止/公示期到期自动流转）+ 真实政府审批接口驱动
+    mode: TEST
+    # 「下一步」是否可代替时间轴流转（手动执行时间驱动事件：投标开始/截止、公示过期等）：
+    #   true=允许（PROD 联调期临时开启，等定时任务就绪再关）；false=禁止（时间轴事件只走定时任务）
+    # 缺省（不配置）跟随模式：TEST 默认 true、PROD 默认 false
+    manual-advance-enabled: true
+    # 时间驱动调度器开关（TimeEventScheduler 读取 bidding.flow.scheduler.enabled，默认 false）：
+    #   必须显式 true 才启用秒级扫描（投标开始/截止、公示过期等时间轴事件自动流转）。
+    #   默认 false 是 Job 安全门禁要求（生产可一键停）；本环境显式开启保证时间驱动验收可用。
+    scheduler:
+      enabled: true
+  crawl:
+    # 下载器 HTTP 客户端参数（配置文件为准；HttpFetchClient 启动时 @ConfigurationProperties 读取）
+    # connect/second 连接超时（秒）；read/second 单请求读超时（秒）；followRedirects 是否跟随重定向（默认 NORMAL）
+      # userAgent 默认走浏览器 UA；referer 可选注入；downloadTimeoutSeconds PDF/附件下载超时（秒）
+      # 2026-09-10 新增（下载监控与数据完整性，见 docs/开发联调与运维/爬虫测试与监控指标-2026-09-10.md）：
+      #   max-download-bytes 单文件下载上限（防跑飞/防被灌大文件撑爆内存，超限即失败并审计）
+      #   speed-warn-bps 下载速率上限告警（超过=带宽异常/被镜像加速，记 WARN 并落审计）
+      #   speed-slow-warn-bps 速率下限告警（长期低于=被限速/站点异常，记 WARN 并落审计）
+      #   robots-enabled 是否遵循 robots.txt（true=抓取前检查 Disallow；robots.txt 不可达时放行并记审计）
+      #   robots-cache-minutes robots.txt 缓存时长（分钟，默认 360）
+    http:
+      connect-timeout-seconds: 10
+      read-timeout-seconds: 20
+      download-timeout-seconds: 60
+      max-download-bytes: 52428800
+      speed-warn-bps: 2097152
+      speed-slow-warn-bps: 2048
+      robots-enabled: true
+      robots-cache-minutes: 360
+      follow-redirects: true
+      user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36
+      # 下载目标临时目录（存 PDF 二进制后做 PDFBox 解析；空=java.io.tmpdir）
+      download-tmp-dir: ./data/crawl-tmp
+    # ============ 爬取频率（唯一事实源：改本文件即生效，无需改代码） ============
+    # 业务要求（2026-09-09 用户口径）：安全、稳，演示节奏像正常业务；慢是要求，不是缺陷
+    runner:
+      # 【2026-09-10 语义变更 / 2026-09-11 定稿】下载「公告原文文件」的最小间隔（毫秒），当前 2 分钟=120000。
+      # 生效位置：CrawlDownloadGate（库内原子占位，表 bidding_crawl_download_gate）——在真正发起原文下载**之前**占位，
+      #   而不是在"任务被调度"时。因此：纯本地处理任务（列表已带全文，无网络下载）不消耗间隔；
+      #   进程重启、多实例部署都不会放宽速率（原实现是进程内变量，重启即归零、多实例各算一份）。
+      # 实际间隔 = max(本值, 合规下限 120 秒)；源表 fetch_interval_seconds 仅约束"列表页"节奏，不参与本闸位计算
+      #   （2026-09-11 修正：原文下载间隔的权威来源只有本配置，避免两处配置互相影响导致限速被意外放宽）。
+      # 2026-09-10 用户口径调整：由 5 分钟缩短为 2 分钟（120000ms）——2 分钟即合规下限，
+      # 故 CrawlDownloadGate 的 MIN_INTERVAL_SECONDS=120 与之对齐；再调小将不生效（下限保护）。
+      consumer-delay-ms: 120000
+      # 生产端翻页间隔：多页回溯每页之间等 1 分钟再翻下一页
+      page-delay-ms: 60000
+      # 页内条目处理间隔（列表已整页取回后的本地处理节拍，随主节奏保持低频观感）
+      entry-delay-ms: 1500
+      # 异步投递模式（审查 A1）：true=列表只入队，原文下载由消费端按限速闸逐条执行（**推荐的合规形态**）；
+      # false=同步直抓：GX 详情页/PDF 会在列表循环内下载，自 2026-09-10 起该路径同样先过限速闸并阻塞等待，
+      #   不再出现"一有任务就直接下载"，但会让单轮采集耗时 = 条数 × 间隔，仅建议小规模人工验证时使用。
+      async-mode: true
+      # 首次全量窗口（天）：源从无 SUCCESS 历史（首次爬取无断点）时回溯补历史的天数；栏目级 fullLookbackDays 可覆盖
+      full-lookback-days: 60
+      # 首次全量单栏目单轮页上限（防失控；停页由窗口外判定负责）
+      full-max-pages: 300
+    # 定时调度（CrawlRunServiceImpl @Value 读取；默认开：30s tick 按各源 fetch_interval_seconds ≥120 节流触发 SCHEDULE 轮次）
+    scheduler:
+      enabled: true
+  es:
+    # enabled=true：装配 ES 检索引擎与索引通知器，且 EsStartupHealthCheck 启动强制探活（ES 不可达=拒绝启动，防无索引上线）；
+    # 确需无 ES 降级运行（检索报"未启用"、不建索引）才显式置 false
+    enabled: true
+    uris: http://127.0.0.1:9200
+    debug: true # ES 请求/响应调试日志（本地联调开 true；生产置 false）。ESDebug 开关即本键
+    username: ${ES_USERNAME:elastic} # 账号（本地 dev，勿提交生产凭据）
+    password: ${ES_PASSWORD:} # 密码：本地用环境变量 ES_PASSWORD 注入（不入库）；留空=不带认证
+  ai:
+    # AI 结构化抽取（PDF/HTML 公告 → 结构化字段 + 扫描件全文转写；规范依据：设计 v0.6 §7 增强）
+    # enabled=false → /notice-external/ai-extract 报"未配置"；true 走 Nacos 下发的 base-url 指向的 AI 模块入口
+    enabled: true
+    # AI 模块 admin-api 入口：**本键不再写在这里**（2026-09-25 去硬编码）。
+    # 地址由 Nacos 配置中心下发：dataId=bidding-server-local.yaml 键 bidding.ai.base-url，
+    # 当前值 = 网关 48080（容器化 ai-server 未映射宿主端口，经网关转发可达且路由已验证）；
+    # 本地另起 ai-server(48086) 时改 Nacos 为 http://127.0.0.1:48086/admin-api 即可。
+    # 为什么必须放 Nacos：Spring Boot 4.x 里 classpath application.yaml 优先级高于 config-import 的
+    # Nacos 配置 —— 本地若定义该键（哪怕空占位）也会遮蔽 Nacos 值；故彻底移除，Nacos 为唯一来源。
+    # 缺失时 AiHttpSupport 报"base-url 未配置"快速失败（fail-fast），防静默用错环境。
+    conversation-id: # 固定复用会话 id（空则每次自动 create-my）
+    # ai-server 启用真实鉴权时注入真 token；本地 mock-enable 联调默认 test1（mockSecret 前缀）
+    admin-token: ${BIDDING_AI_ADMIN_TOKEN:test1}
+    # AI 调用租户兜底值（默认平台租户 1）：正常跟随当前请求/触发者租户（各租户用自己的
+    # AI 渠道与 key，见 AiChatNoticeExtractor.resolveTenantId）；仅离线/无租户上下文时用此兜底
+    tenant-id: 1
+    timeout-seconds: 60
+    # 公告 AI 解析角色 id（2026-09-09：role 20=公告AI解析 / deepseek-chat / test key；建会话自动带该角色 System Message=解析提示词）
+    role-id: 20
+    # 温度（低=稳/贴 JSON，高=发散；抽取建议 0~0.5）
+    temperature: 0.3
+    # 单条回复最大 token
+    max-tokens: 4096
+  # ===== 智慧标书审查（bid-review）AI 通道 =====
+  # 方案依据：docs/模块设计与规范/智慧标书审查-设计方案.md V2.0 §2.4 / §6.4。
+  # 口径：本模块「直连大模型」，不经 AI 模块；使用本模块专属 Key（BIDDING_REVIEW_AI_API_KEY），
+  #      与 CRM 的 DASHSCOPE_API_KEY、公告域的 bidding.ai.* 完全隔离，互不影响、互不覆盖。
+  # 供应商：DeepSeek（OpenAI 兼容）。注意三条硬约束：
+  #   ① JSON 模式要求提示词含 "json" 字样（客户端已兜底补写）；
+  #   ② deepseek-reasoner 不支持 response_format/temperature → 切它时置 json-mode=false；
+  #   ③ DeepSeek 无视觉模型 → 扫描件不做图片转写，直接提示用户上传文字版。
+  review:
+    ai:
+      enabled: ${BIDDING_REVIEW_AI_ENABLED:true}
+      base-url: ${BIDDING_REVIEW_AI_BASE_URL:https://api.deepseek.com/v1}
+      # 本模块专属密钥：只从环境变量注入（deploy/.env → 容器 env），不落库、不进代码仓库
+      api-key: ${BIDDING_REVIEW_AI_API_KEY:}
+      model: ${BIDDING_REVIEW_AI_MODEL:deepseek-chat}
+      json-mode: ${BIDDING_REVIEW_AI_JSON_MODE:true}
+      temperature: 0.2
+      # 单次调用超时（秒）/ 失败重试次数（仅连接异常、5xx、429 重试）
+      timeout-seconds: 60
+      retry-times: 2
+      # 并发闸门：防止一键生成打满该 Key 的配额
+      concurrency: 4
+      # 单次内联正文上限（字符）：DeepSeek 上下文与输出预算取保守值
+      chunk-size: 30000
+    # 文件服务「容器内」地址：上传接口回传的 URL 是宿主机视角（127.0.0.1:48080），
+    # 在本服务容器里不可达；解析取流时会把本机 host 替换成这个地址（默认容器内服务名 server）。
+    file:
+      base-url: ${BIDDING_REVIEW_FILE_BASE_URL:http://server:48080}
+  # ==================== 外部 CA 互认 SDK（gitee.com/cebpubservice） ====================
+  # enabled=false（默认）：CaClientFacadeDefault 占位实现（业务闭环可测，远程组件未就绪不阻塞开发）
+  # enabled=true：CaClientFacadeSdkImpl 真实实现（扫码登录认证/扫码签名验签/扫码解密），
+  #   测试无需商务资格：本地自部署 components-server（端口 8992，启动 .tmp/start-ca-component.ps1）
+  #   或连官方测试节点（47.95.1.24:8443 / 123.56.236.113:8090），凭证见 docs/接口互认/对接前置条件清单.md §七。
+  #   本地测试凭证示例：trading-system-code=axj11111111 service-url=http://127.0.0.1:8992/
+  #   client-id=trading_system client-secret=35AD59C501ACF5DCDF6F221D890917C3
+  #   signature-secret=256b00c7f8264a9fa1c11e1878f7879a
+  ca:
+    sdk:
+      # 启用真实 SDK 实现。
+      # [2026-09-20 用户口径]「官方凭证申请不到，要把测试做成真的」——故本地自建官方 CA 互认共享组件
+      #   （components-server，端口 8992）并置 true，二维码/扫码状态/签名验签走**真实链路**（非占位模拟）。
+      #   组件启动：powershell -File .tmp/start-ca-component.ps1（JDK21 + 本地 SM2 私钥）。
+      #   置 false 则回退 CaClientFacadeDefault（本地占位，业务闭环可测但非真实链路）。
+      enabled: true
+      # 平台代码（本地测试 axj11111111；生产自助开通分配）
+      trading-system-code: axj11111111
+      # CA 互认共享组件服务地址（自部署 http://127.0.0.1:8992 或官方测试节点）
+      service-url: http://127.0.0.1:8992/
+      # 客户端凭据（本地测试 trading_system / 35AD59C501ACF5DCDF6F221D890917C3）
+      client-id: trading_system
+      client-secret: 35AD59C501ACF5DCDF6F221D890917C3
+      # 请求签名密钥（HmacSM3；本地测试 256b00c7f8264a9fa1c11e1878f7879a）
+      signature-secret: 256b00c7f8264a9fa1c11e1878f7879a
+      # 待签名摘要算法（国密 SM3）
+      digest-algorithm: SM3
+      # 签名证书公钥算法（SM2 国密）
+      public-key-algorithm: SM2
+  ext-notice:
+    pdf:
+      open-data-loader:
+        # OpenDataLoader 本地引擎（PDFBox 实现）：extract(File)→text/tables/pageCount，见 infra.file.PdfBoxOpenDataLoader
+        loader-class: cn.iocoder.txgy.module.bidding.infra.file.PdfBoxOpenDataLoader
+
+--- #################### 标书智能体（bid-agent）配置 ####################
+
+# 运行期配置以本文件为准：txgy-server 不再依赖 txgy-module-bidding，
+# gateway 用 grayLb://bidding-server 把 /admin-api/bidding/** 路由到本进程（48110）。
+# 契约端 /admin-api/bidding/bid-agent/contract/** 由 Node 侧 bid-agent-service 机对机调用：
+#   1) 免登放行见 framework/security/config/SecurityConfiguration（无需登录 token）；
+#   2) BidAgentKeyFilter（order=-200，先于 Spring Security）校验 X-Agent-Key；密钥为空=开发态不校验。
+# 检索口径（2026-09-16 起）：不再自建本地模型（TEI 8081/8082）——embedding/rerank 统一走阿里云百炼云端，
+#   向量库继续用 Qdrant 容器（6334）。入库/召回/切片三条链路都在 Java 内闭环（不再透传 Node 底座）。
+# 开关口径：ai-enabled=false 时 /retrieve 返回 hit=false 转人工、入库跳过并在台账写原因，
+#   便于无 key 环境先跑通 CRUD 链路；ai-enabled=true 但缺 key 时显式报「云端检索不可用」。
+bidding:
+  bid-agent:
+    agent-key: ${TXGY_BID_AGENT_KEY:} # 机对机密钥（X-Agent-Key）；为空=开发态不校验
+    ai-enabled: ${BID_AGENT_AI_ENABLED:false} # 检索能力（云端 embedding + Qdrant）总开关
+    embedding: # 阿里云百炼 Embedding（OpenAI 兼容端点 /compatible-mode/v1/embeddings）
+      base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com} # 专属网关可覆盖
+      api-key: ${DASHSCOPE_API_KEY:} # 百炼 key（缺失时调用报「云端检索不可用」，启动不受影响）
+      model: ${DASHSCOPE_EMBEDDING_MODEL:text-embedding-v3} # 未开通时可切 text-embedding-v4 / v2
+      dimensions: ${DASHSCOPE_EMBEDDING_DIMENSIONS:1024} # 必须与 Qdrant 集合维度一致
+      batch-size: 10 # 百炼 text-embedding-v3 单次上限 10 条
+      timeout-seconds: 60
+    rerank: # 阿里云百炼 Rerank（/api/v1/services/rerank/text-rerank/text-rerank）
+      enabled: ${DASHSCOPE_RERANK_ENABLED:true} # 关闭则只用向量分数 + 阈值
+      # 与 embedding 的 base-url 解耦：MaaS 专属网关只提供 compatible-mode，rerank 会 404
+      # （2026-09-17 实测 ws-*.maas.aliyuncs.com 的 rerank 返回 404，公共域名 200），故单独留一个开关变量
+      base-url: ${DASHSCOPE_RERANK_BASE_URL:https://dashscope.aliyuncs.com}
+      model: ${DASHSCOPE_RERANK_MODEL:gte-rerank-v2} # 未开通时可切 gte-rerank
+      timeout-seconds: 60
+    retrieve:
+      top-k: 8 # 默认返回条数
+      min-score: 0.35 # 相似度阈值
+      candidate-factor: 4 # 向量粗召回放大系数（供 rerank 重排）
+      # 关键词通道（BM25 / MySQL FULLTEXT + ngram）：与向量候选做 RRF 融合后一起重排。
+      # bm25-enabled=false 时行为与"仅向量 + rerank"完全一致（回滚开关 + A/B 对比用）。
+      bm25-enabled: ${BID_AGENT_BM25_ENABLED:true}
+      bm25-top-k: ${BID_AGENT_BM25_TOP_K:8}
+      rrf-k: ${BID_AGENT_RRF_K:60}
+
+--- #################### Qdrant 向量库配置 ####################
+
+# EmbeddingModel 由 framework/bidagent/DashScopeEmbeddingModel 常驻提供（不受 ai-enabled 影响），
+# QdrantVectorStoreAutoConfiguration 用「唯一 EmbeddingModel + QdrantClient」构造 vectorStore：
+#   集合维度取 EmbeddingModel.dimensions()（= bidding.bid-agent.embedding.dimensions），
+#   故换模型/换维度时必须同步改 dimensions 并重建集合（initialize-schema=true 会自动建缺失集合）。
+# 注意：Qdrant 已是必需基础设施（启动时建集合），本地开发请用 docker compose 起 6334。
+# 注意：本集合与平台 AI 模块的 knowledge_segment 集合互不影响。
+spring:
+  ai:
+    vectorstore:
+      qdrant:
+        host: ${QDRANT_HOST:127.0.0.1}
+        port: ${QDRANT_PORT:6334}
+        collection-name: ${QDRANT_COLLECTION:bidding_bid_agent_chunk} # 与表 bidding_bid_agent_chunk 对齐
+        initialize-schema: ${QDRANT_INITIALIZE_SCHEMA:true} # 首次启动自动建集合（空集合无害）
+

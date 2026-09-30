@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>AI 宠物形象预览</title>
+<style>
+body{margin:0;display:flex;gap:64px;align-items:center;justify-content:center;height:100vh;background:#0b2f57;font-family:"Microsoft YaHei",sans-serif}
+.pet{position:relative;width:240px;height:260px;filter:drop-shadow(0 12px 22px rgba(0,0,0,.35))}
+.pet svg{width:100%;height:100%;animation:bob 3.2s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+.tip{position:absolute;top:6px;right:-16px;background:#fff;color:#0b2f57;border-radius:999px;padding:6px 16px;font-size:16px}
+.small{width:78px;height:78px}
+.panel{background:#fff;border-radius:14px;width:400px;height:560px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 14px 40px rgba(0,0,0,.3)}
+.ph{background:linear-gradient(120deg,#0b2f57,#1a4480);color:#fff;padding:16px 20px;font-weight:600}
+.pb{flex:1;background:#f4f6f9;padding:18px}
+.ai-msg{background:#fff;border:1px solid #e3e8ef;border-radius:10px;border-top-left-radius:2px;padding:11px 14px;font-size:14px;line-height:1.65;max-width:88%}
+.sug{display:flex;flex-wrap:wrap;gap:8px;padding:12px 18px;border-top:1px solid #eef1f6}
+.sug button{font-size:12.5px;padding:5px 12px;border-radius:999px;background:#eef3fa;color:#1a4480;border:0}
+.inp{display:flex;gap:8px;padding:12px 18px 16px;border-top:1px solid #eef1f6}
+.mic{width:42px;height:42px;border-radius:8px;background:#eef3fa;border:1px solid #dbe6f5;color:#1a4480;display:grid;place-items:center}
+.inp input{flex:1;height:42px;border:1px solid #e3e8ef;border-radius:8px;padding:0 14px;font-size:14px;outline:0}
+.send{width:42px;height:42px;border-radius:8px;background:#1a4480;color:#fff;border:0;display:grid;place-items:center}
+.petFab{position:relative;width:78px;height:78px;filter:drop-shadow(0 12px 22px rgba(0,0,0,.35))}
+</style></head>
+<body>
+<div class="pet">
+  <span class="tip">问我</span>
+  <svg viewBox="0 0 96 104">
+    <defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#e33b30"/><stop offset="1" stop-color="#b81f16"/></linearGradient></defs>
+    <ellipse cx="33" cy="86" rx="8.5" ry="5.6" fill="#b81f16"/>
+    <ellipse cx="63" cy="86" rx="8.5" ry="5.6" fill="#b81f16"/>
+    <ellipse cx="13.5" cy="62" rx="7.5" ry="6.2" fill="#c9261c"/>
+    <ellipse cx="82.5" cy="62" rx="7.5" ry="6.2" fill="#c9261c"/>
+    <path d="M44 8.5c2-3.4 6.9-3.4 8.9 0l33.4 56.2c2 3.4-.5 7.6-4.5 7.6H13.8c-4 0-6.5-4.2-4.5-7.6L44 8.5Z" fill="url(#g)"/>
+    <g transform="translate(48 64)">
+      <circle cx="0" cy="0" fill="none" r="10.5" stroke="#fff" stroke-width="4.2"/>
+      <path d="M0 -16 5.6 -10.4H-5.6Z" fill="#fff"/>
+      <path d="M13.9 -5.4 11.2 1.4 4.7 -2.5Z" fill="#fff"/>
+      <path d="M-13.9 -5.4 -4.7 -2.5 -11.2 1.4Z" fill="#fff"/>
+    </g>
+    <circle cx="36.5" cy="35" fill="#3b0b08" r="4.4"/>
+    <circle cx="59.5" cy="35" fill="#3b0b08" r="4.4"/>
+    <circle cx="38" cy="33.6" fill="#fff" opacity=".85" r="1.5"/>
+    <circle cx="61" cy="33.6" fill="#fff" opacity=".85" r="1.5"/>
+    <path d="M42 44.5c3.6 3.6 8.4 3.6 12 0" fill="none" stroke="#3b0b08" stroke-linecap="round" stroke-width="2.6"/>
+  </svg>
+</div>
+<div class="petFab">
+  <svg viewBox="0 0 96 104">
+    <ellipse cx="33" cy="86" rx="8.5" ry="5.6" fill="#b81f16"/><ellipse cx="63" cy="86" rx="8.5" ry="5.6" fill="#b81f16"/>
+    <ellipse cx="13.5" cy="62" rx="7.5" ry="6.2" fill="#c9261c"/><ellipse cx="82.5" cy="62" rx="7.5" ry="6.2" fill="#c9261c"/>
+    <path d="M44 8.5c2-3.4 6.9-3.4 8.9 0l33.4 56.2c2 3.4-.5 7.6-4.5 7.6H13.8c-4 0-6.5-4.2-4.5-7.6L44 8.5Z" fill="url(#g)"/>
+    <g transform="translate(48 64)"><circle cx="0" cy="0" fill="none" r="10.5" stroke="#fff" stroke-width="4.2"/><path d="M0 -16 5.6 -10.4H-5.6Z" fill="#fff"/><path d="M13.9 -5.4 11.2 1.4 4.7 -2.5Z" fill="#fff"/><path d="M-13.9 -5.4 -4.7 -2.5 -11.2 1.4Z" fill="#fff"/></g>
+    <circle cx="36.5" cy="35" fill="#3b0b08" r="4.4"/><circle cx="59.5" cy="35" fill="#3b0b08" r="4.4"/>
+    <path d="M42 44.5c3.6 3.6 8.4 3.6 12 0" fill="none" stroke="#3b0b08" stroke-linecap="round" stroke-width="2.6"/>
+  </svg>
+</div>
+<div class="panel">
+  <div class="ph">AI 政策助手 · 在线</div>
+  <div class="pb"><div class="ai-msg">您好，我是天信之星 AI 政策助手。可以直接输入、点选推荐问题，或按住麦克风用语音提问。</div></div>
+  <div class="sug"><button>专精特新中小企业有哪些金融支持政策？</button><button>设备更新贷款贴息的补贴标准是多少？</button></div>
+  <div class="inp"><button class="mic">🎙</button><input placeholder="请输入您的问题，或点击麦克风说话"><button class="send">➤</button></div>
+</div>
+</body></html>

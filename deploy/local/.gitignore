@@ -1,0 +1,3 @@
+# 服务可执行 jar 为构建产物（体积大），不纳入版本库。
+# 由 deploy/local/build-images.ps1 从各模块 target 目录自动收集到 jars/ 后构建镜像。
+jars/

@@ -1,0 +1,60 @@
+#!/bin/sh
+# txgy-module-bidding 规约校验钩子（提交前哨）：
+# 提交前运行 ArchUnit 规约测试（命名/分层/注解/错误码），违规即拒绝提交。
+#
+# 启用：  git config core.hooksPath .githooks
+# 跳过：  git commit --no-verify     或   NO_RULE_CHECK=1 git commit
+#
+# 环境：与 build.cmd 一致使用绝对路径 JDK/Maven，不依赖 PATH/JAVA_HOME。
+cd "$(dirname "$0")/.." || exit 1
+
+# ---- Nacos 命名空间守卫（快速失败；先于规约测试，秒级）----
+# 为什么：application-local.yaml 曾被改成 namespace: dev、override 里给 gateway/system/infra
+#        置空(=public)的覆盖也丢过 -> bidding 注册进 dev 而网关在 public 查不到实例
+#        （Unable to find instance for bidding-server），联调环境反复「服务起不来」。
+#        守护脚本：deploy/guard-nacos-config.ps1（可 -Fix 自愈）
+# 跳过：NO_NS_GUARD=1
+if [ -z "$NO_NS_GUARD" ]; then
+    ns_fail=0
+    NS_YAML="txgy-module-bidding-server/src/main/resources/application-local.yaml"
+    NS_OVR="deploy-bidding-local.override.yml"
+    # 口径（2026-09-20 确认）：远端 master = dev（团队默认），本机 = public（容器/run-local.cmd）。
+    # 两者靠 git skip-worktree 隔离：本机 public 不会被 push，远端 dev 也不会被本机覆盖。
+    # 因此这里【只拦"本次提交改动了命名空间口径"】，不要求工作区一定是 public
+    # —— 否则远端是 dev 的同事每次提交都会被误拦。
+    d1=$(git diff --cached -U0 -- "$NS_YAML" 2>/dev/null | grep -E '^[+-][[:space:]]*namespace:')
+    if [ -n "$d1" ]; then
+        echo "[ns-guard] x 本次提交改动了 $NS_YAML 的 namespace 行："
+        echo "$d1"
+        ns_fail=1
+    fi
+    d2=$(git diff --cached -U0 -- "$NS_OVR" 2>/dev/null | grep -E '^-.*SPRING_CLOUD_NACOS_[A-Z_]*NAMESPACE: ""')
+    if [ -n "$d2" ]; then
+        echo "[ns-guard] x 本次提交删除了 $NS_OVR 的置空(=public)覆盖："
+        echo "$d2"
+        ns_fail=1
+    fi
+    if [ "$ns_fail" -ne 0 ]; then
+        echo "[ns-guard] 命名空间属受保护配置：本机 public 由 skip-worktree 隔离、不会推送；远端 dev 不应被 public 覆盖。"
+        echo "[ns-guard] 确需变更请先同步 deploy/README-docker.md 的口径；临时跳过 NO_NS_GUARD=1"
+        exit 1
+    fi
+    echo "[ns-guard] v 本次提交未改动命名空间口径"
+fi
+
+if [ -n "$NO_RULE_CHECK" ]; then
+    exit 0
+fi
+export JAVA_HOME="${JAVA_HOME:-D:/Java/jdk-25}"
+export PATH="$JAVA_HOME/bin:D:/maven/apache-maven-3.9.11/bin:$PATH"
+
+echo "[rule-check] 运行规约测试（ArchUnit：命名/分层/注解/错误码段位）……"
+mvn -q -pl txgy-module-bidding-server -am test -DskipTests=false
+rc=$?
+if [ "$rc" -ne 0 ]; then
+    echo "[rule-check] 规约校验未通过：请修正后重试（测试见 txgy-module-bidding-server/src/test/.../arch）"
+    echo "[rule-check] 如确认是临时跳过，可用 git commit --no-verify 或 NO_RULE_CHECK=1"
+    exit 1
+fi
+echo "[rule-check] 规约校验通过"
+exit 0

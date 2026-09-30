@@ -1,0 +1,135 @@
+spring:
+  application:
+    name: cms-server
+  profiles:
+    active: local
+  main:
+    allow-circular-references: true
+    allow-bean-definition-overriding: true
+  sql:
+    init:
+      mode: never # 骨架阶段不初始化或修改数据库
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 80MB
+  data:
+    redis:
+      client-type: lettuce # CMS 查询缓存统一使用 Lettuce，不引入 Jedis
+      repositories:
+        enabled: false
+  cloud:
+    nacos:
+      discovery:
+        enabled: ${CMS_NACOS_ENABLED:false}
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+        namespace: ${NACOS_NAMESPACE:}
+      config:
+        enabled: false
+        import-check:
+          enabled: false
+
+server:
+  port: ${CMS_SERVER_PORT:48100}
+
+mybatis-plus:
+  mapper-locations: classpath*:mapper/**/*.xml
+  type-aliases-package: cn.iocoder.txgy.module.cms.dal.dataobject
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false
+    db-config:
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui
+  default-flat-param-object: true
+
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+
+xxl:
+  job:
+    enabled: false # 尚未实现同步任务，不启动执行器
+
+txgy:
+  info:
+    version: 1.0.0
+    base-package: cn.iocoder.txgy.module.cms
+  web:
+    admin-ui:
+      url: ${CMS_ADMIN_UI_URL:http://localhost:5666}
+  swagger:
+    title: CMS 行业专业资料检索
+    description: Elasticsearch 双库检索：法规 BM25 精准召回，问答库 dense_vector kNN 与 BM25 融合
+    version: ${txgy.info.version}
+  tenant:
+    enable: true
+  search:
+    elasticsearch:
+      enabled: ${TXGY_SEARCH_ES_ENABLED:true} # 检索开关独立；文档审查本身不依赖ES
+      uris: ${TXGY_SEARCH_ES_URIS:http://127.0.0.1:9200}
+      username: ${TXGY_SEARCH_ES_USERNAME:}
+      password: ${TXGY_SEARCH_ES_PASSWORD:}
+      index-prefix: txgy-cms
+      connect-timeout: 3s
+      socket-timeout: 10s
+      bulk-size: 500
+    cache:
+      enabled: false # Lettuce 查询缓存实现尚未提供
+      key-prefix: txgy:cms:search
+      ttl: 5m
+    redis:
+      enabled: ${CMS_VECTOR_ENABLED:${TXGY_SEARCH_VECTOR_ENABLED:false}}
+      host: ${TXGY_SEARCH_REDIS_HOST:127.0.0.1}
+      port: ${TXGY_SEARCH_REDIS_PORT:6380}
+      username: ${TXGY_SEARCH_REDIS_USERNAME:}
+      password: ${TXGY_SEARCH_REDIS_PASSWORD:}
+      ssl: ${TXGY_SEARCH_REDIS_SSL:false}
+      timeout-millis: 3000
+      index-prefix: txgy:cms
+      vector-dimensions: ${TXGY_SEARCH_VECTOR_DIMENSIONS:768}
+      default-top-k: 50
+      distance-metric: COSINE
+  cms:
+    storage:
+      # local: 服务器磁盘；infra: 平台 FileApi（在基础设施模块配置 MinIO/S3）
+      mode: ${CMS_STORAGE_MODE:local}
+      local-root: ${CMS_STORAGE_LOCAL_ROOT:./data/cms-knowledge}
+      # 兼容历史金融政策导入的 /files/... 原件路径。
+      static-files-root: ${CMS_STORAGE_STATIC_FILES_ROOT:./deploy/content-files}
+      presign-seconds: ${CMS_STORAGE_PRESIGN_SECONDS:1800}
+      snapshot-browser: ${CMS_SNAPSHOT_BROWSER:}
+      snapshot-timeout-seconds: ${CMS_SNAPSHOT_TIMEOUT_SECONDS:45}
+      snapshot-token-minutes: ${CMS_SNAPSHOT_TOKEN_MINUTES:30}
+    validity-check:
+      # 本地默认关闭；prod profile 默认开启。只生成管理员待办，不自动归档。
+      enabled: ${CMS_VALIDITY_CHECK_ENABLED:false}
+      cron: ${CMS_VALIDITY_CHECK_CRON:0 20 3 * * ?}
+      batch-size: ${CMS_VALIDITY_CHECK_BATCH_SIZE:100}
+      request-timeout-seconds: ${CMS_VALIDITY_CHECK_TIMEOUT_SECONDS:12}
+      national-law-base-url: ${CMS_NATIONAL_LAW_BASE_URL:https://flk.npc.gov.cn}
+    rag:
+      enabled: ${CMS_RAG_ENABLED:false}
+      native-rrf-enabled: ${CMS_ES_NATIVE_RRF_ENABLED:false}
+      provider: ${CMS_AI_PROVIDER:ai-module}
+      chat-model-id: ${CMS_CHAT_MODEL_ID:}
+      embedding-model-id: ${CMS_EMBEDDING_MODEL_ID:}
+      api-key: ${DASHSCOPE_API_KEY:}
+      base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+      embedding-model: ${CMS_EMBEDDING_MODEL:text-embedding-v3}
+      chat-model: ${CMS_CHAT_MODEL:qwen-plus}
+      dimensions: ${TXGY_SEARCH_VECTOR_DIMENSIONS:768}
+      embedding-batch-size: 10
+      top-k: 5
+      similarity-threshold: 0.5
+      request-timeout-seconds: 60
+      max-answer-tokens: 1200

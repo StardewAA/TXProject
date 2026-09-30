@@ -1,0 +1,32 @@
+# syntax=docker/dockerfile:1
+FROM node:22-bookworm-slim AS builder
+
+WORKDIR /workspace/txgy-mall-uniapp
+
+COPY txgy-mall-uniapp-master/ ./
+
+ENV NODE_OPTIONS=--max-old-space-size=3072
+ENV UNI_INPUT_DIR=/workspace/txgy-mall-uniapp
+ENV SHOPRO_BASE_URL="" SHOPRO_API_PATH=/app-api SHOPRO_STATIC_URL=""
+ENV SHOPRO_TENANT_ID=1 SHOPRO_H5_URL="" SHOPRO_WEBSOCKET_PATH=/infra/ws
+
+RUN corepack enable && corepack prepare pnpm@11.5.2 --activate \
+    && pnpm install --frozen-lockfile --registry=https://registry.npmjs.org
+
+ARG AMAP_BUILD_REV=local
+RUN --mount=type=secret,id=amap_key \
+    --mount=type=secret,id=amap_security_code \
+    --mount=type=secret,id=amap_env,target=/workspace/txgy-mall-uniapp/.env.local \
+    echo "map build revision: ${AMAP_BUILD_REV}" && \
+    if [ -f /run/secrets/amap_key ]; then export SHOPRO_AMAP_KEY="$(cat /run/secrets/amap_key)"; fi && \
+    if [ -f /run/secrets/amap_security_code ]; then export SHOPRO_AMAP_SECURITY_CODE="$(cat /run/secrets/amap_security_code)"; fi && \
+    npm run build:h5
+
+FROM nginx:1.27-alpine
+
+COPY deploy/uniapp/nginx-mall.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /workspace/txgy-mall-uniapp/dist/build/h5 /usr/share/nginx/html
+
+EXPOSE 80
+
+HEALTHCHECK --interval=15s --timeout=5s --retries=10 CMD wget -q -O /dev/null http://127.0.0.1/ || exit 1

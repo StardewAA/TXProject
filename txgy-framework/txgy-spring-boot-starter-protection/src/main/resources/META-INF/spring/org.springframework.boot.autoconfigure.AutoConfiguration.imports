@@ -1,0 +1,4 @@
+cn.iocoder.txgy.framework.idempotent.config.TxgyIdempotentConfiguration
+cn.iocoder.txgy.framework.lock4j.config.TxgyLock4jConfiguration
+cn.iocoder.txgy.framework.ratelimiter.config.TxgyRateLimiterConfiguration
+cn.iocoder.txgy.framework.signature.config.TxgyApiSignatureAutoConfiguration

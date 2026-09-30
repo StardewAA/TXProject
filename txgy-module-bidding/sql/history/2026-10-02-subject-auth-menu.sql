@@ -1,0 +1,61 @@
+-- ============================================================================
+-- 主体授权落位 + 本轮数据修复（2026-10-02，已在本地库执行并验证）
+-- 适用：本库（多租户；system_menu 无 tenant_id，system_role_menu 有 tenant_id）
+-- ----------------------------------------------------------------------------
+-- 【口径（用户 2026-10-02 定）】授权**不新开菜单页**：
+--   平台授权 UI 并入既有「主体档案（企业自维护）」页（菜单 6760）
+--   —— 权限点 60006300 bidding:subject-auth:query / 60006301 bidding:subject-auth:update
+--      本就挂在 6760 下（原设计即如此），前端在该页补「平台授权（管理员）」区块即可。
+--   前端文件：apps/web-antd/src/views/bidding/subjectProfile/index.vue
+--   ⇒ 本脚本**不做任何菜单/权限结构变更**（无需执行 SQL 即可用界面授权）。
+-- ----------------------------------------------------------------------------
+-- 背景（实锤）：
+--   1) 投标资格门 SubjectEligibilityServiceImpl#assertBidderEligible 按**租户**校验
+--      bidding_subject_auth 的 BIDDER 授权；无记录 → 1060106031
+--      「主体未经平台授权或授权已停用」，process-track 域（含 /my、/create）全部被拦。
+--   2) 该门不受菜单权限/角色/数据权限控制（与登录人权限无关），因此"挂权限"不解决问题，
+--      必须由**授权数据**（界面/接口）或后端调整。
+--   3) 此前前端无任何页面调用授权 API → 管理员只能手写 SQL；现已在主体档案页补齐 UI。
+-- 接口契约：GET /bidding/subject-auth/page、POST /bidding/subject-auth/authorize、
+--          PUT /bidding/subject-auth/status（权限 bidding:subject-auth:query / update）
+-- ============================================================================
+
+-- ============================================================================
+-- 附一：环境数据修复（本次一并执行，记录备查；非结构变更）
+-- ----------------------------------------------------------------------------
+-- A) 关注列表行被误软删、订阅仍在 FOLLOWING 的恢复
+--    （2026-09-25 12:42:47 updater='cleanup' 批量软删 bidding_follow_item 8 行，
+--      未同步 bidding_notice_subscription → 门户「投标流程管理」看不到已关注项；
+--      且后端 follow() 幂等分支不重建行，重新关注也恢复不了 —— 见契约文档 §1）
+-- UPDATE bidding_follow_item i
+--   JOIN bidding_notice_subscription s
+--     ON i.user_id=s.user_id AND i.follow_type=s.target_type AND i.follow_key=s.target_key AND s.deleted=0
+--   SET i.deleted=0, i.follow_status='FOLLOWING', i.unfollow_time=NULL, i.updater='recover-2026-09-26'
+--   WHERE CAST(i.deleted AS UNSIGNED)=1 AND s.follow_status='FOLLOWING';
+--   → 实际恢复 3 行（user 1 的 PROJECT 0866-26D2SXQY0628 / 0866-26E3SXQY0822 / 0866-26D2SXQY0627）
+-- B) 恢复行补标题快照（否则门户列表只显示编号）
+-- UPDATE bidding_follow_item i
+--   JOIN (SELECT project_code, MIN(title) t, MIN(issuer_name) iss
+--           FROM bidding_notice_external WHERE deleted=0 GROUP BY project_code) e
+--     ON e.project_code = i.follow_key
+--   SET i.display_name=e.t, i.issuer_name=e.iss, i.updater='recover-2026-09-26'
+--   WHERE i.follow_type='PROJECT' AND CAST(i.deleted AS UNSIGNED)=0 AND i.display_name=i.follow_key;
+--   → 实际更新 3 行
+-- C) 租户 1（西安鸥鹏互联科技有限公司）BIDDER 授权
+--    → 走 POST /bidding/subject-auth/authorize（= 主体档案页「授权企业主体」按钮同路径），
+--      已授权 auth_status=ENABLED，档案完善 profileComplete=true。
+-- D) 验证：POST /bidding/process-track/create（外部公告 0866-26D2SXQY0628）→ code=0；
+--    GET /bidding/process-track/my → 返回该公告 INTENTION 流程行。
+-- ============================================================================
+
+-- ============================================================================
+-- 附二：回滚记录（同日短暂新建的独立菜单，已撤销，勿再执行）
+-- ----------------------------------------------------------------------------
+-- 曾新建 60006610「主体授权管理」(type=2, parent=60005000, component=bidding/subjectAuth/index)，
+-- 并把 60006300/60006301 迁到其下；按用户口径「不新开页面」已回滚：
+--   DELETE FROM system_role_menu WHERE menu_id = 60006610;
+--   DELETE FROM system_menu       WHERE id      = 60006610;
+--   UPDATE system_menu SET parent_id=6760, name='主体认证查询' WHERE id=60006300;
+--   UPDATE system_menu SET parent_id=6760, name='主体认证审核' WHERE id=60006301;
+-- 现状（已核对）：6760 主体档案（企业自维护）；6761/60006300/60006301 均挂 6760 下；60006610 不存在。
+-- ============================================================================
